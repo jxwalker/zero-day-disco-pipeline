@@ -1,0 +1,58 @@
+You write today's 2:30 song AND plan its music video for the owner's daily AI song on X. Last test hid the news in a
+metaphor (an orchard of "thought fruit" for an AI distillation story): the owner could not tell what the story was. This
+time the news must be CLEAR and LITERAL, and still funny and catchy. Think "a late-night comedy news song", not an
+allegory.
+
+TODAY'S STORIES (the only facts, numbers, names and @handles you may use):
+{{STORIES}}
+
+WORK IN THIS ORDER (show your work in the JSON):
+1. RANK every story for clarity (can a viewer get it in one line?) and comedy (is there a funny angle?), 1-10 each.
+   Pick ONE main story and 2-3 secondary stories. The rest are not sung at all.
+2. HOOK OPTIONS: write 3 options, each = a song title (1-4 words) + the main story's headline as a visual gag for the
+   first 3 seconds + the chorus wordplay twist. Pick the funniest and say why.
+3. LYRICS, always this structure (Suno section tags in [brackets]):
+   [Intro] 0-1 short line (or none: the hook is visual)
+   [Verse 1] 6-8 lines: the MAIN story told clearly and literally: who did what, the key number, why it matters.
+     Real names / handles as in stories.md are fine. No metaphor that hides the news.
+   [Chorus] 4 lines: a catchy, singable hook that sums up the main story with a clever wordplay twist (a pun, a double
+     meaning, a flipped idiom). IDENTICAL every time it repeats. The title is in it.
+   [Verse 2] 2-3 secondary stories, about 4 lines EACH (8-12 lines), each literal and concrete enough for its own
+     mini scene. Say who did it.
+   [Chorus] identical.
+   [Bridge] 2-4 lines on the day's FUNNIEST angle, with a SURPRISE written as Suno meta tags on their own lines inside
+     the bridge, e.g. [Beat Drop], [Key Change], [Genre Flip: barbershop quartet], [Spoken Word], [Silence] - one or
+     two tags, then the lines.
+   [Final Chorus] bigger: the same chorus with ONE word swapped as a callback twist (the swap pays off the bridge or
+     the main story), plus an optional tag line.
+   [Outro] 1 line: a deadpan punchline.
+   22-34 sung lines, under 2:30.
+   RULES: never "AI news" or meta lines about the song/news/headlines/show/listener ("sing it with me", "tune in");
+   NO instrument/genre/production words in SUNG lines (guitar, synth, drums, bass, 808, BPM, reverb, falsetto, piano,
+   chords, riff, strings, mix, banger, genre names) - genre words are allowed ONLY inside [bracket] meta tags. Numbers
+   as words where sung. No parentheses. No invented facts.
+4. SELF-SCORE the lyrics 1-10 on clarity (a stranger can name the main story after one listen), wordplay, and
+   catchiness. Be honest. If any score is under 8, rewrite and re-score until all are 8+; return only the final lyrics
+   and its scores, plus one line on what you changed.
+5. STYLE: a Suno style prompt under 200 characters: genre, mood, tempo, instruments, vocal (male or female lead),
+   "catchy sing-along chorus", "under 2:30". Pick a genre that fits the joke.
+6. TICKER: for each sung story, one news-ticker line: "@handle <fact>" under 60 characters, facts and handles copied
+   exactly from stories.md (e.g. "@AnthropicAI cuts distillation ~99%"). HEADLINE CARD: 2-6 words for the big card on
+   the main story's first line (exact facts).
+7. STORYBOARD: per section, the location, cast and shots (one line each: shot size + the literal action of the line
+   being sung). Cast: protagonist A (an ORIGINAL person who plays the reporter/everyperson of the song, never a real
+   person) and up to 3 more (B, C, D; robots allowed), fixed outfits, used consistently. Real people in the news are
+   never shown; show their companies' situation literally with original actors (a "lab", "a founder", "a trader").
+   Each secondary story gets its own literal mini scene. The bridge surprise gets a matching visual surprise. The
+   outro is the deadpan punchline shot. 2-3 cameos for Pip (a small vinyl toy robot: white egg body, bunny ears, dark
+   face screen with cyan eyes; static object, nothing on his head or face) woven into scenes.
+
+For "lines": every sung line in order with its section tag and the number of the story it is about (0 for chorus or
+lines about no single story). Meta tag lines go in "meta" of their section, not in "lines".
+Reply with the JSON object only.
+
+STORYBOARD ADDITIONS (13 Oct):
+- The main story's 1-2 key numbers become physical in-world objects: big hand-painted figures on a real object (tote board, stable door, slate), in the hook, on the headline line and in each chorus.
+- The bridge surprise is visual: a [Silence]/[Stop]/spoken bit opens on a hard cut to black or a freeze frame, then the single payoff image.
+- The outro punchline is acted by the subject the lyric names (if the horse calls, the horse holds the phone).
+- Any robot that appears more than once is ONE lettered cast design, reused in every shot.

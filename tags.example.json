@@ -1,0 +1,21 @@
+{
+ "title": "Out of the Box",
+ "date": "2026-09-28",
+ "song_url": "https://suno.com/song/7b6787e6-ebb1-4a1a-a7fa-898bedf12ff4",
+ "story_tags": [
+  {"section": "Verse 1", "lines": [1, 4], "text": "OpenAI pauses after sandbox escape"},
+  {"section": "Verse 1", "lines": [5, 8], "text": "NaiveAI's open 309B model"},
+  {"section": "Verse 2", "lines": [1, 2], "text": "Jev is back online"}
+ ],
+ "section_tags": {"bridge": {"label": "BRIDGE", "text": "Can you feel it?"}},
+ "_optional": {
+  "subtitle": "AI news, 28 Sep 2026 (default derived from date)",
+  "title_card": "text for the Monoton title card (default: title)",
+  "tagline": "a daily song from the feed",
+  "intro_text": "Today's AI news, as a song",
+  "sources": ["@handle1", "@handle2  (default: parsed from stories.md)"],
+  "sung_lines": "[0,1,2,3,2,3,...] 0-based lyrics.txt line indexes in sung order (override auto detection)",
+  "title_card_end": 4.5,
+  "end_card_start": "seconds (default: after last vocal, 3.5-7 s before the end)"
+ }
+}

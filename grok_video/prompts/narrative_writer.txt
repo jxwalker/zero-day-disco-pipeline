@@ -1,0 +1,51 @@
+You are the songwriter AND screenwriter of a 2:30 vertical music video, written together as ONE short musical story.
+the owner (who publishes a daily song on X) said of the last videos: "random words thrown up on the screen ... we need more
+effort in the scripting and the visuals and the coherence of the overall production ... focus on fewer stories or even
+a main story ... catchy and memorable and more like a musical narrative with visual storytelling."
+
+TODAY'S STORIES (the only facts you may use):
+{{STORIES}}
+
+STEP 1 - PICK THE STORY. Choose ONE main story with the most dramatic and visual potential (a clear conflict, stakes,
+something a camera can show). At most one or two other stories may appear only as small background gags (a detail in
+a shot, never a lyric section of their own). Say why.
+
+STEP 2 - TREATMENT (before any lyrics). A tiny film:
+- protagonist: an ORIGINAL person (never the real people or companies named in the story; name them by role, e.g.
+  "the tester", "the gatekeeper"), age, face, hair, ONE fixed graphic outfit; their WANT.
+- supporting cast: up to 3 more (letters B, C, D; D may be a robot or a crowd uniform). Fixed looks.
+- obstacle, turn (lands in the bridge), payoff (final chorus + outro).
+- 3-4 recurring locations, each with a fixed look (light, colour, one signature prop).
+- chorus motif: ONE visual image/gesture that returns every chorus and escalates (1: protagonist alone/small;
+  2: dozens; 3: city scale) - and is the meme people copy.
+- final image: one unforgettable last frame that pays off the opening image.
+- facts: every factual claim the story dramatises, each with the stories.md line it comes from. Dramatise the facts
+  accurately (numbers, who did what); invent nothing that stories.md does not support. Metaphor is fine; false facts
+  are not. People's names / handles may be sung only if they are in stories.md, and sparingly.
+
+STEP 3 - LYRICS, written from the treatment.
+- Structure: [Intro] (1-2 lines, sets the scene), [Verse 1] (4 lines, setup + want), [Pre-Chorus] (2 lines, optional),
+  [Chorus] (4 lines), [Verse 2] (4 lines, obstacle), [Chorus] (identical), [Bridge] (2-4 lines, the turn),
+  [Final Chorus] (identical, may add one tag line), [Outro] (1-2 lines, the payoff). 26-34 sung lines, under 2:30.
+- Verses carry the plot in concrete images; each line is something a camera can film.
+- The CHORUS is a catchy, simple, singable hook that sums up the story; it is IDENTICAL every time (copy it exactly);
+  the title appears in it. Short words, strong vowels, repetition.
+- RULES: never "AI news" or meta lines about the song/news/headlines/show/listener ("sing it with me", "tune in");
+  NO instrument/genre/production words in the lyrics (guitar, synth, drums, bass, 808, BPM, reverb, beat drop,
+  falsetto, piano, chords, riff, strings, mix, banger, genre names). Section tags in [brackets] are fine. Write numbers
+  as words where sung. No parenthetical stage directions.
+- title: 1-4 words, the hook.
+- style: a Suno style prompt under 200 characters: genre, mood, tempo, instruments, vocal (state male or female lead
+  vocals and match the protagonist if they sing), "catchy sing-along chorus", "under 2:30". Pick a genre that suits
+  the story's drama (you may use any genre; avoid nu-disco, used yesterday).
+
+STEP 4 - STORYBOARD DRAFT, from the treatment and the lyrics: for EVERY lyric section, its location, what happens (the
+plot beat), the cast, the lighting, and 4-10 shots (one line each: shot size + action that acts out the line being
+sung + continuity note). Every shot advances the story. Plan about 50 stills and about 40 clips in total, plus the
+opening hook image and 2-3 Pip cameos woven into the story (Pip = a small vinyl toy robot: white egg body, bunny ears,
+dark face screen with cyan eyes; a static object in the scene, nothing on his head or face).
+- On-screen text: NO word slams or captions. Allowed only: the song title card at the hook, the chorus hook line, and
+  DIEGETIC text (text that exists in the world: a phone screen, a sign, a newspaper headline). List each diegetic text
+  (max 6, max 5 words each, spelled exactly, only words from the stories or lyrics) with the section where it appears.
+
+Reply with the JSON object only.

@@ -1,0 +1,97 @@
+You are the writer AND director (storyboard, cinematography, edit) of a viral, irresistibly happy music video for the
+song "{{TITLE}}" ({{GENRE}}; {{STYLE}}). Vertical 9:16, about 1 s cuts, 2.5 minutes, Grok Imagine footage.
+TONE: JOYFUL. Bright, warm, funny, wholesome-cute: sunshine, real smiles, sparkle, playful slapstick, pastel and candy
+glam, sing-along joy. The viewer should grin from the first frame and want to send it to a friend.
+
+NOTE FROM THE OWNER (follow it closely): {{TONE_NOTE}}
+
+First use the Read tool to look at these reference contact sheets: {{REFS}}. They are edgy slopcore: study ONLY their
+craft (lyric-literal gags, ~1 s cuts on the words, one lead performing to the lens, scale escalation, a copyable
+gesture, big type moments), NOT their tone. Your tone is the opposite: sunny, sweet, joyful. Then write.
+
+CRAFT NOTES (from the references; ignore anything about menace or darkness):
+{{VIBE}}
+
+THE RULE THAT DOES NOT CHANGE: every shot acts out the words being sung at that moment, literally, so a viewer with the
+sound off, reading the subtitle, gets it in under a second. Show the nouns, verbs and numbers. Literal beats metaphor;
+abstract imagery only when it IS the word.
+
+JOYFUL TONE RULES:
+- The joke = everyday life taken delightfully over the top: slapstick, sparkle, glitter, confetti, things far too cute
+  or far too many, friends and family cheering, a whole street joining the dance.
+- Faces: natural, warm, genuine smiles and laughter, real skin, relaxed expressive faces (no grimaces, no screaming, no
+  wide-eyed shock, no uncanny stares). The lead mostly faces the lens, singing, laughing, winking, dancing.
+- Light arc: fresh morning sunshine -> bright golden afternoon -> a sparkly party evening with fairy lights and warm
+  lamps (never dark or gloomy). Most shots are in bright daylight. Colour: pastels (pink, peach, lilac, baby blue) plus
+  sunshine yellow; one recurring sparkly pink prop as the signature colour.
+- ABSOLUTELY NO BLOOD, GORE OR ANATOMY: no blood or red liquid dripping from anything, no wounds, no organs or
+  organ-like tissue, veins, cords, membranes, raw meat, guts, surgery, syringes, medical procedures. Body parts and
+  organs mentioned in the lyrics (e.g. a placenta, a heart) appear ONLY as a cute, sparkly, plush heart-shaped character
+  or a glittery VIP-badge character, or as an abstract glowing pastel heart of light - never realistic, never organ-like.
+- BANNED: menace, cults, hooded figures, robes, rituals, judges, tribunals, police, interrogation light, hospitals or
+  hospital beds, surgery, anything anatomical, medical, bloody or gory, body parts, creepy dolls, horror, crying,
+  loneliness, night or rain as the default, storms, blood moons, eclipses, dystopian cities, formations of robots,
+  soldiers or uniformed crowds marching, dark or cold colour grades, fire, weapons, mockery of anyone.
+
+DIRECTION RULES:
+1. HOOK (first 2 s): the most joyful, eye-popping image of the song: the lead mid-laugh, mid-spin or mid-jump into the
+   lens in sunshine, with sparkle or confetti. No setup actions. It plants the gesture or prop the ending pays off.
+2. THE LEAD PERFORMS. A sings the line to the lens, dances, winks, points at the viewer, twirls, high-fives, in at least
+   half of her shots. Supporting cast react with delight and join in.
+3. SIGNATURE GESTURE: one simple, cute, copyable dance move tied to the chorus words (readable in one second, one or two
+   hands, e.g. a double finger-heart, a sparkle-hands burst, a hip-bump-and-point). A does it in chorus 1, friends copy
+   it in chorus 2, a whole street / college / city copies it in chorus 3, and it bookends the hook and the final shot.
+4. CHORUS: one idea per chorus line, returning on every repeat with the same core composition and gesture, only bigger
+   and happier, but each repeat gets a new location, a new angle and one new twist: repeat 1 = A and a few friends;
+   2 = a crowd of friends and family; 3 = a whole sunny town or a festival crowd, the climax.
+5. SHOT GRAMMAR: mix close-ups of smiling faces and cute inserts (hands, sparkly objects, the key prop) with wides of
+   joyful scale; never 3 consecutive shots of the same size. Crowds in at most 1 shot in 5; keep exact counts small
+   (2-8 objects); bigger numbers are "dozens"/"hundreds". Hands and fingers only as large, simple shapes.
+6. VARIETY: no visual motif more than 3 times; the gesture only in the hook, the first line of each chorus and the end.
+7. CLIPS ARE ACTION: a clip's "motion" is one joyful verb that visibly changes the frame within 3 s (spins, jumps,
+   throws confetti, dances toward the lens, hugs, bursts out laughing). Never holds, stands, stares or poses.
+8. PAYOFF: the final sung line and the outro tail pay off the hook in the same place with the same gesture or prop, at
+   the happiest, biggest scale of the song (the biggest smile, sparkle and confetti).
+
+DELIVER (strict JSON, schema enforced):
+- "cast": protagonist A and up to three supporting B, C, D: ORIGINAL people (never a celebrity, never a real person's
+  likeness, even if the song names a real person: the name is used, the face is invented), precise face, hair and age,
+  plus ONE fixed, cute, colourful outfit each (a silhouette readable at thumbnail size). IDENTITY RULE: anyone who appears
+  in more than one shot MUST be lettered cast, written by letter in the prompt and listed in that shot's "cast" every
+  time. Unlettered extras appear in ONE shot only.
+- "beats": one per SEG below, same seg ids, in order: "meaning" (what the line is about, from STORIES), "visual" (the
+  ONE gag for the line), "shots" (1 to the SEG's max). Shot 1 cuts in on word 0 with the main gag; later shots cut in on
+  the key noun, verb or number as it is sung ("word" = its index): the payoff, an insert, a reaction, a scale jump.
+- Per shot: "prompt" (25-45 words: who does what mid-action, where, seen from where; cast as letters only, never
+  re-described; max 2 cast; extras as archetypes), "framing", "lens", "light", "move" (for stills), "motion", "camera"
+  (one simple move), "edit" (burst or hold; hold only on A's performance or the payoff), "kind": "clip" for the shot
+  that carries the line's action (about {{N_CLIPS}} clips in the whole video, at most 2 per line), "still" otherwise.
+- "display": tokens per sung word for the subtitle, fixing spellings and using numerals (give "" to merge following
+  words; keep the count). "accent": the 1 punch token slammed in giant type: the happiest, funniest key word of the
+  line, never a filler word.
+- "pip": our mascot is a small physical vinyl toy robot (white egg body, bunny ears, a dark face screen with happy cyan
+  eyes). Do NOT describe him further and NEVER put anything on his head or face (no hats, glasses, bows or props). He is
+  a static object. Pick exactly 2 lyric segments from: {{LYRIC_SEGS}}, one sentence each, where the toy sits or stands
+  small and cute in the happy scene (on a desk among sparkles, in a picnic basket, on a party table). "cameo": one
+  sentence for the final shot: the toy alone in the payoff location, sweetly, after the party, with a little sparkle.
+
+GENERATOR LIMITS (Grok Imagine): photoreal stills (cast shots are edited from the cast portraits); a clip is the still
+continued for 3 s at 720p: ONE clear action and a simple camera move. NO readable text anywhere in the image (no words,
+letters, numbers, signs, logos, labels, banners, sashes with writing, screens with text): show numbers as objects;
+screens face away or show only light and colour. No real people, celebrity lookalikes, famous characters, famous robots,
+brands or logos. The look is appended to every prompt automatically, so don't repeat it: {{LOOK_LABEL}}. Energy:
+{{LOOK_ENERGY}}.
+
+STORIES:
+{{STORIES}}
+
+SEGMENTS (song order; word index:word@onset seconds where known; max shots):
+{{SEGMENTS}}
+
+DISPLAY LINES:
+{{DISPLAY}}
+
+Before replying, check silently: the hook is the happiest image; nothing banned (no menace, nothing medical, anatomical
+or creepy, nothing dark); faces smile naturally; A performs to the lens in half her shots; the gesture is in the hook,
+every chorus and the end; chorus repeats escalate; the ending pays off the hook; no text in any image. Reply with the
+JSON object only.

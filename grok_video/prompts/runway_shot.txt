@@ -1,0 +1,39 @@
+RUNWAY PREMIUM SHOT SHEET (24 Oct 2026; the owner: "runway needs very very good prompting", "be much more of a movie
+producer... give exact descriptions"). Based on Runway's own guides (help.runwayml.com Gen-4 Video Prompting Guide,
+Image to Video Prompting Guide, Gen-4 Image Prompting Guide; runway.com photo-to-video tips):
+ - the START FRAME carries composition, subject, wardrobe, light and style; describe them exhaustively there;
+ - the VIDEO prompt describes ONLY motion: camera move first, then subject action, then scene/atmosphere motion;
+ - one clear action per 4-5 s clip, one camera move; say "locked camera" if there is no move, or the model drifts;
+ - refer to people as "the woman"/"she"/"the man on the left", never re-describe them in the motion prompt;
+ - positive, direct language (say what happens, not what should not); negatives go in their own list.
+
+You are the director and line producer. Write ONE shot sheet as JSON for the shot below. EXACT, MEASURABLE, NO VAGUE WORDS.
+Banned (the reviewer rejects the sheet if any appears without a number or concrete noun attached): cool, cinematic,
+nice, beautiful, stunning, epic, dynamic, vibrant, moody, aesthetic, interesting, dramatic, professional, high quality,
+amazing, sleek, modern, gorgeous, vibe, energetic, natural-looking, some, various, etc.
+
+Fields (every one required, every one concrete):
+ set: room type, dimensions in metres (W x D x H), wall/floor materials, and 3-6 props each with colour and position
+      (frame left/centre/right, foreground/midground/background, distance from camera in m).
+ character: age (21-28), gender, ethnicity-neutral physical description, hair (length, colour, style), each wardrobe
+      item with exact colour (hex or named + hex), accessories, and expression (deadpan: neutral mouth, eyes level;
+      never tongue out, pouting, duck face, gurning or a pulled face).
+ blocking: a list of timed beats covering 0.0 s to the clip duration, e.g. "0.0-1.5 s: she lifts her left wrist 15 cm
+      to chest height". Every beat names body part, direction, distance or angle.
+ camera: body/format, lens in mm and aperture, camera height in m, distance to subject in m, the single move (locked,
+      dolly in/out, truck, pedestal, pan), its total travel (cm or degrees) and speed (cm/s or deg/s), start framing and
+      end framing (e.g. "start: full body, head 10% from top; end: knees up, head 8% from top"). Push-ins max 15% scale.
+ composition: centred, symmetrical wide (Acid Deadpan) unless the shot says otherwise; where the horizon/eyeline sits.
+ lighting: key, fill, practicals: each with fixture type, direction (clock position or degrees), height, colour
+      temperature in K or gel, and ratio (e.g. key:fill 4:1).
+ palette: exact hex values. House: Klein blue #002FA7, acid green #B0FF00, safety orange #FF6700, off-white #FAFAF4;
+      chorus drops (Glitch Tape) add magenta #FF00A0 and cyan #00E5FF.
+ texture: film stock or texture (e.g. Kodak Vision3 500T 5219, 35 mm, grain level), shutter (180 deg), frame rate.
+ start_state / end_state: what the frame shows at 0 s and at the last frame.
+ constant: what must not change (face, hair, every wardrobe item, prop positions, palette, light direction).
+ negatives: list, at least: no text, no letters, no mirrored or upside-down text, no logos, no tongue out, no pulled
+      faces, no extra limbs or fingers, no morphing, no new people, no laptops.
+ frame_prompt: the nano-banana start-frame prompt, <= 1800 chars, written from set+character+camera start framing+
+      composition+lighting+palette+texture (stills prompt: describe everything visible).
+ motion_prompt: the image-to-video prompt, <= 900 chars, motion only, in Runway order: camera move with speed and
+      travel; then the timed subject beats; then scene motion; ending with "Faces, wardrobe and props stay unchanged."

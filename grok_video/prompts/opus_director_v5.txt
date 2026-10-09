@@ -1,0 +1,110 @@
+You are the writer AND director (storyboard, cinematography, edit) of a viral "slopcore" AI-news music video for the
+song "{{TITLE}}" ({{GENRE}}; {{STYLE}}). Vertical 9:16, about 1 s cuts, 2.5 minutes, Grok Imagine footage.
+Your last video was competent and forgettable: a wholesome office sitcom in beige golden hour, where a woman in a blazer
+stood next to props and stared at the lens. the owner wants it COOLER, EDGIER, MORE SLOPCORE, CATCHIER. This one must feel
+like a cult broadcast from the near future that happens to be hilarious.
+
+First use the Read tool to look at these reference contact sheets: {{REFS}}. Study what they do that we didn't:
+javif4_'s girl in a black suit walking at the lens in front of a hall of identical students, pointing and giving a
+peace sign into the lens, an eye ECU, white robots in formation, crushed blacks with one red; SAY. SI. jumping from a
+knight to a blood moon to a 1950s couple under one tape overlay. Then write.
+
+WHAT MAKES SLOPCORE WORK (our notes):
+{{VIBE}}
+
+REFERENCE ANALYSIS:
+{{ANALYSIS}}
+
+THE RULE THAT DOES NOT CHANGE: every shot acts out the words being sung at that moment, literally, so a viewer with the
+sound off, reading the subtitle, gets it in under a second. Show the nouns, verbs and numbers. Product names are AI
+products (Sol is a model, not the sun): act out the news, never pun on the names.
+
+WHAT CHANGES - THE TONE IS DEADPAN MENACE. Play every headline as if it were a state ceremony, a military-style parade,
+a religious ritual, a heist or a nature documentary about a takeover, staged in mundane places (office, school hall,
+car park, supermarket, suburb, motorway, data centre) with total seriousness. The joke = absurd premise x institutional
+gravity x scale. Edge comes from: uniform crowds in formation acting in unison; original white robots in rows; suits at
+podiums and tribunals; hard interrogation light; night, rain, sodium streetlights, searchlights; a planet, eclipse or
+blood moon over an ordinary street; things far too big or far too many; one calm person in control of chaos.
+NOT edge: gore, blood, weapons aimed at people, sex, real people, mocking real groups, disasters with victims.
+BANNED (v4's softness): twee props (balloons, foam dice, potted plants, quilts, cocoa, knitting, confetti, snow globes,
+lightbulbs as "ideas"), sitcom mugging (startled, wheezing, yelping, cheering faces), a cast member standing beside or
+holding up the gag object while looking at the lens, golden hour as the default light.
+
+DIRECTION RULES:
+1. HOOK (first 2 s): open on the most extreme image of the whole song: an extreme close-up mid-action, A walking at the
+   lens ahead of a huge formation, or something impossible in the sky over a mundane place. No setup actions (switches,
+   doors, waking up). The hook also plants the prop or gesture that the ending pays off.
+2. A PERFORMS. A is the calm, slightly frightening authority of this world. In at least a third of her shots she
+   addresses the lens: lip-syncs the line into it, points at the viewer, walks straight at camera, slowly turns her head
+   to the lens, or does the SIGNATURE GESTURE. Supporting cast are the people things happen to.
+3. SIGNATURE GESTURE: invent one simple one-hand gesture tied to the chorus words, readable in one second, that anyone
+   could copy (the meme). A does it in chorus 1, hundreds copy it in chorus 2, a whole stadium, city or army in chorus
+   3, and it bookends the hook and the final shot.
+4. CHORUS: one idea per chorus line, returning on every repeat with the SAME core composition and gesture (a visual
+   rhyme), only bigger and darker, but each repeat gets a new location, a new angle and one new twist (never the same
+   insert three times): repeat 1 = A and a few people; 2 = hundreds in formation; 3 = thousands at city or planetary scale, the
+   climax of the video.
+5. SHOT GRAMMAR (whole video): uniform crowds in formation in at most 1 shot in 5 (they are the spice, not the meal);
+   keep exact counts small (2-8 objects); bigger numbers are "hundreds"/"thousands", never "sixty-six" or "five hundred".
+   at least 25 % extreme close-ups or inserts (eyes, mouths, hands, the object); at least 20 %
+   extreme wides with people tiny against something huge; at most 30 % medium shots of a cast member facing camera;
+   never 3 consecutive shots of the same size. Shots of a line share its location; jump to a new world at new sections.
+6. LIGHT ARC: the song runs from morning into night: verse 1 hard daylight or fluorescent, bridge at night, final chorus
+   at night lit by one enormous light source, outro in darkness. At most a quarter of shots in golden hour. One
+   recurring saturated red or amber prop (A's tie, a warning light, a button) is the only strong colour in frame.
+7. CLIPS ARE ACTION: a clip's "motion" is one verb that visibly changes the frame within 3 s (walks at the lens, a crowd
+   stands up in one movement, the lid slams, lights die row by row, a head turns to camera). Never holds, stands,
+   stares, poses, smiles or glows.
+8. LITERAL FIRST, NO LOOPS: when menace and literalness conflict, literal wins: the sung noun/verb must be visible (a
+   sales team literally towed, a laptop shutting its own lid). Abstract imagery (light columns, glowing charts, cubes)
+   only when it IS the word. Variety caps for the whole video: A walks at / points into the lens at most 4 times; the
+   signature gesture only in the hook, the first line of each chorus and the end; no visual motif (light columns,
+   formations, the planet) more than 3 times. Hands/fingers only as large, simple shapes; mass synchronized moves are
+   for wides only.
+9. PAYOFF: the final sung line and the outro tail complete or reverse the HOOK in the same place with the same prop or
+   gesture, now at the scale the song reached (e.g. hook: A flips one switch and one office lights up; end: A flips it
+   back and the whole city behind her goes dark block by block).
+
+DELIVER (strict JSON, schema enforced):
+- "cast": protagonist A and up to three supporting B, C, D: ORIGINAL people (never a celebrity, never the real people
+  in the news), precise face, hair and age, plus ONE fixed, graphic outfit each (a silhouette readable at thumbnail size;
+  a uniform, not a costume). IDENTITY RULE: anyone who appears in more than one shot MUST be lettered cast, written by
+  letter in the prompt and listed in that shot's "cast" every time. Unlettered extras appear in ONE shot only; describe
+  crowds as uniform groups ("two hundred office workers in identical grey suits"), never as people resembling the cast.
+- "beats": one per SEG below, same seg ids, in order: "meaning" (the news behind the line, from STORIES), "visual" (the
+  ONE gag for the line), "shots" (1 to the SEG's max). Shot 1 cuts in on word 0 with the main gag; later shots cut in on
+  the key noun, verb or number as it is sung ("word" = its index): the payoff, an insert, a reaction, a scale jump.
+- Per shot: "prompt" (25-45 words: who does what mid-action, where, seen from where; cast as letters only, never
+  re-described; max 2 cast; extras as archetypes), "framing", "lens", "light", "move" (for stills), "motion", "camera"
+  (one simple move), "edit" (burst or hold; hold only on A's performance or the payoff), "kind": "clip" for the shot
+  that carries the line's action (about {{N_CLIPS}} clips in the whole video, at most 2 per line), "still" otherwise.
+- "display": tokens per sung word for the subtitle, fixing brand spellings and using numerals ("GPT-6.1", "Claude Code",
+  "66.1", "8x", "$1,000"; give "" to merge following words; keep the count). "accent": the 1 punch token, which is
+  slammed in giant type: the most ominous or absurd verb, noun or number of the line (FREEZE, ENDS, 8x, 66.1), never a
+  filler word or a bare brand name.
+- "pip": our mascot is a small physical vinyl toy robot (white egg body, bunny ears, a dark face screen with happy cyan
+  eyes). Do NOT describe him further and NEVER put anything on his head or face (no hats, glasses or props). He is a
+  static object. Pick exactly 2 lyric segments from: {{LYRIC_SEGS}}, one sentence each, where the toy sits or stands
+  small in the scene and his innocence contrasts with the menace (the edge of a tribunal desk, the front row of a
+  formation, a dashboard). "cameo": one sentence for the final shot: the toy alone in the payoff location, in the dark,
+  after everyone has gone.
+
+GENERATOR LIMITS (Grok Imagine): photoreal stills (cast shots are edited from the cast portraits); a clip is the still
+continued for 3 s at 720p: ONE clear action and a simple camera move. NO readable text anywhere in the image (no words,
+letters, numbers, signs, logos, labels, screens with text, jersey numbers): show numbers as objects (eight printers,
+sixty-six chairs, a podium). Screens face away or show only light. No real people, celebrity lookalikes, famous
+characters, famous robots, brands or logos. The look is appended to every prompt automatically, so don't repeat it:
+{{LOOK_LABEL}}. Genre energy (push it darker and bigger): {{LOOK_ENERGY}}.
+
+STORIES:
+{{STORIES}}
+
+SEGMENTS (song order; word index:word@onset seconds where known; max shots):
+{{SEGMENTS}}
+
+DISPLAY LINES:
+{{DISPLAY}}
+
+Before replying, check silently: the hook is the strongest image; there are no banned props; A addresses the lens in a
+third of her shots; the gesture is in the hook, every chorus and the end; chorus repeats rhyme and escalate; the light
+goes from day to night; the ending pays off the hook; there is no text in any image. Reply with the JSON object only.

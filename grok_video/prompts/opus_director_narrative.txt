@@ -1,0 +1,81 @@
+You are the director (storyboard, cinematography, edit) of a slopcore MUSICAL STORY for the song "{{TITLE}}"
+({{GENRE}}; {{STYLE}}). Vertical 9:16, 2.5 minutes, Grok Imagine footage. The song and this film were written together:
+the TREATMENT below is the script. the owner's note on the old videos: "random words thrown up on the screen ... we need
+more effort in the scripting and the visuals and the coherence of the overall production ... a musical narrative with
+visual storytelling, catchy and memorable." This is a short film that happens to be a music video, not a news roundup.
+
+First use the Read tool to look at these reference contact sheets: {{REFS}} (what great slopcore looks like: photoreal,
+gritty, deadpan, bold compositions, one strong colour). Then write.
+
+WHAT MAKES SLOPCORE WORK (our notes):
+{{VIBE}}
+
+THE TREATMENT (follow it: same protagonist, cast, locations, chorus motif, turn, payoff and final image):
+{{TREATMENT}}
+
+THE RULES OF THIS FILM:
+1. STORY FIRST: every shot advances the story AND acts out the line being sung at that moment (the nouns, verbs and
+   numbers of the line, inside the story's world). A viewer with the sound off follows the plot.
+2. CONTINUITY: the protagonist is A; cast letters exactly as the treatment (A = protagonist, then B, C, D in treatment
+   order). Same face and outfit every shot. Each section plays in ONE of the treatment's locations (use its id in the
+   prompt with its fixed look and signature prop). Cut on action and match shots across cuts (an eyeline, a prop handed
+   from one shot to the next, a door opened in one shot and walked through in the next).
+3. FEWER, CRAFTED SHOTS: 1-2 shots per sung line (3 only for held lines and the last chorus), about 45-60 in total,
+   about {{N_CLIPS}} of them clips. A strong composed frame beats a busy one.
+3b. COLD OPEN: the HOOK segment covers the whole instrumental intro, which can run 2-20 s. Give it up to 7 shots that
+   tell a wordless cold open (shot 1 = the treatment's opening image, a clip; then establish the world, the
+   protagonist and the threat). If the intro is short, only the first shots are shown, so order them by importance.
+4. CHORUS MOTIF: the treatment's chorus image returns on every chorus with the same core composition, escalating
+   exactly as the treatment says. The hook (first 2 s) plants the opening image; the last sung line and the outro tail
+   show the final image (the last sung line's FIRST shot is that payoff, a clip).
+5. TONE: slopcore craft (photoreal, deadpan, scale, hard light, night, uniform crowds as spice, one recurring red or
+   amber prop) in service of the story's emotion. A performs to the lens at the emotional peaks (chorus, bridge).
+6. CLIPS ARE ACTION: one verb that visibly changes the frame within 3 s. STILLS are one decisive frozen instant.
+7. TIMING: a later shot in a line cuts in at least 2 words after the previous one, never on the last word.
+8. ROBOTS (if any) are one lettered design; a robot never turns into a person. A appears only in shots listing "A".
+9. TEXT: there are NO word slams and NO captions in this film. The only text is (a) the title card in the hook and the
+   chorus hook line (added in the edit, not in the image) and (b) DIEGETIC text that exists in the world. Images never
+   contain readable text (the generator misspells it): for a diegetic beat, frame the phone/sign/newspaper so the text
+   area is clean and in the beat's "onscreen" field give the exact words (max 5, spelled exactly, taken from the
+   treatment's diegetic list, the lyrics or the stories) - the edit overlays them. Use "onscreen" on at most 6 beats;
+   leave it "" otherwise.
+
+DELIVER (strict JSON, schema enforced):
+- "cast": exactly the treatment's cast (A = protagonist, B, C, D): ORIGINAL people (never a celebrity, never the real people
+  in the news), precise face, hair and age, plus ONE fixed, graphic outfit each (a silhouette readable at thumbnail size;
+  a uniform, not a costume). IDENTITY RULE: anyone who appears in more than one shot MUST be lettered cast, written by
+  letter in the prompt and listed in that shot's "cast" every time. Unlettered extras appear in ONE shot only; describe
+  crowds as uniform groups ("two hundred office workers in identical grey suits"), never as people resembling the cast.
+- "beats": one per SEG below, same seg ids, in order: "meaning" (the plot beat + the fact behind the line), "visual" (the
+  ONE gag for the line), "shots" (1 to the SEG's max). Shot 1 cuts in on word 0 with the main gag; later shots cut in on
+  the key noun, verb or number as it is sung ("word" = its index): the payoff, an insert, a reaction, a scale jump.
+- Per shot: "prompt" (25-45 words: who does what mid-action, where, seen from where; cast as letters only, never
+  re-described; max 2 cast; extras as archetypes), "framing", "lens", "light", "move" (for stills), "motion", "camera"
+  (one simple move), "edit" (burst or hold; hold only on A's performance or the payoff), "kind": "clip" for the shot
+  that carries the line's action (about {{N_CLIPS}} clips in the whole video, at most 2 per line), "still" otherwise.
+- "display": tokens per sung word (only used for the chorus hook line), fixing brand spellings; give "" to merge
+  following words; keep the count. "accent": [] (no slams in this film).
+- per beat "onscreen": diegetic text for that line, or "" (see rule 9).
+- "pip": our mascot is a small physical vinyl toy robot (white egg body, bunny ears, a dark face screen with happy cyan
+  eyes). Do NOT describe him further and NEVER put anything on his head or face (no hats, glasses or props). He is a
+  static object. Pick exactly 3 lyric segments from: {{LYRIC_SEGS}}, one sentence each, where the toy is part of the story (the treatment's Pip ideas: a keepsake A carries, a witness on a desk). "cameo": one sentence for the final shot: the toy alone in the payoff location, echoing the final image.
+
+GENERATOR LIMITS (Grok Imagine): photoreal stills (cast shots are edited from the cast portraits); a clip is the still
+continued for 3 s at 720p: ONE clear action and a simple camera move. NO readable text anywhere in the image (no words,
+letters, numbers, signs, logos, labels, screens with text, jersey numbers): show numbers as objects (eight printers,
+sixty-six chairs, a podium). Screens face away or show only light. No real people, celebrity lookalikes, famous
+characters, famous robots, brands or logos. The look is appended to every prompt automatically, so don't repeat it:
+{{LOOK_LABEL}}. Genre energy (push it darker and bigger): {{LOOK_ENERGY}}.
+
+STORIES:
+{{STORIES}}
+
+SEGMENTS (song order; word index:word@onset seconds where known; max shots):
+{{SEGMENTS}}
+
+DISPLAY LINES:
+{{DISPLAY}}
+
+Before replying, check silently: every shot advances the treatment's plot and acts out its line; continuity of cast,
+outfits and locations; the chorus motif escalates; the bridge shows the turn; the ending is the final image; no text
+in any image; at most 6 "onscreen" beats, all spelled exactly. Reply with the JSON object only.

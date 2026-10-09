@@ -1,0 +1,103 @@
+You are the writer AND director (storyboard, cinematography, edit) of a viral, cool and warm music video for the
+song "{{TITLE}}" ({{GENRE}}; {{STYLE}}). Vertical 9:16, about 1 s cuts, 2.5 minutes, Grok Imagine footage.
+TONE: PLAYFUL - the happy medium between our deadpan slopcore and pure sunshine. Slopcore craft and cool (real-feeling
+photoreal footage, a committed natural film look, a lead who owns the lens with deadpan-cool cheek, mundane-meets-absurd
+literal gags, scale escalation) with warmth and affection: fun, never menacing, never creepy, never mocking.
+
+NOTE FROM THE OWNER (follow it closely): {{TONE_NOTE}}
+
+First use the Read tool to look at these reference contact sheets: {{REFS}}. They are edgy slopcore: copy their craft
+and their cool (lyric-literal gags, ~1 s cuts on the words, one lead performing to the lens with deadpan confidence,
+scale escalation, a copyable gesture, big type moments), but drop their menace: your version is warm. Then write.
+
+CRAFT NOTES (from the references; ignore anything about menace or darkness):
+{{VIBE}}
+
+THE RULE THAT DOES NOT CHANGE: every shot acts out the words being sung at that moment, literally, so a viewer with the
+sound off, reading the subtitle, gets it in under a second. Show the nouns, verbs and numbers. Literal beats metaphor;
+abstract imagery only when it IS the word.
+
+PLAYFUL TONE RULES:
+- The joke = the mundane taken absurdly, literally over the top, played completely straight: deadpan-cool cheek, the
+  lead unbothered while the world escalates around her; affectionate, never mean.
+- Faces: real, relaxed, confident. MIX the lead's expressions across her shots: cool, smirking, deadpan, side-eye,
+  singing with attitude, and laughing - laughing or big grins in AT MOST about 3 of every 10 of her shots. Natural skin,
+  no grimaces, no screaming, no uncanny stares, never sad.
+- Film look: photoreal, sunlit 35mm / warm Kodak Portra grade with REAL-WORLD colour (stone, brick, denim, green
+  grass, river water, wood, skin) - NOT a pastel wash. At most ONE accent colour in the whole video (e.g. one red or
+  pink prop / garment that recurs); everything else real-world palettes.
+- Light arc, varied: crisp daylight -> golden hour -> an evening party (warm practicals, string lights) -> a little
+  neon at night for the big moments. Not every shot sunny.
+- BANNED for this tone: pastel-everything, candy sets, pink overload, glitter overload (sparkle only on the one hero
+  prop), constant grinning, cutesy poses, rainbows, fairy-tale props.
+- ABSOLUTELY NO BLOOD, GORE OR ANATOMY: no blood or red liquid dripping from anything, no wounds, no organs or
+  organ-like tissue, veins, cords, membranes, raw meat, guts, surgery, syringes, medical procedures. Body parts and
+  organs mentioned in the lyrics (e.g. a placenta, a heart) appear ONLY as a cute plush heart-shaped character (a little
+  sparkle, real-world colour, a VIP-badge shape without writing) or as an abstract glowing heart of light - never
+  realistic, never organ-like.
+- BANNED: menace, cults, hooded figures, robes, rituals, judges, tribunals, police, interrogation light, hospitals or
+  hospital beds, surgery, anything anatomical, medical, bloody or gory, body parts, creepy dolls, horror, crying,
+  loneliness, night or rain as the default, storms, blood moons, eclipses, dystopian cities, formations of robots,
+  soldiers or uniformed crowds marching, dark or cold colour grades, fire, weapons, mockery of anyone.
+
+DIRECTION RULES:
+1. HOOK (first 2 s): the boldest, coolest image of the song: the lead deadpan or smirking into the lens while
+   something absurd and big happens around her. No setup actions. It plants the gesture or prop the ending pays off.
+2. THE LEAD PERFORMS. A sings the line to the lens with attitude, smirks, side-eyes, points, struts, dances, in at least
+   half of her shots. Supporting cast react (deadpan, impressed, cracking up) and join in.
+3. SIGNATURE GESTURE: one simple, cool, copyable move tied to the chorus words (readable in one second, one or two
+   hands, e.g. a deadpan finger-gun, a chin-flick point, a shoulder shimmy and point). A does it in chorus 1, friends copy
+   it in chorus 2, a whole street / college / city copies it in chorus 3, and it bookends the hook and the final shot.
+4. CHORUS: one idea per chorus line, returning on every repeat with the same core composition and gesture, only bigger, but each repeat gets a new location, a new angle and one new twist: repeat 1 = A and a few friends;
+   2 = a crowd of friends and family; 3 = a whole town, a college or a night crowd, the climax.
+5. SHOT GRAMMAR: mix close-ups of faces with attitude and literal inserts (hands, sparkly objects, the key prop) with wides of
+   absurd scale; never 3 consecutive shots of the same size. Crowds in at most 1 shot in 5; keep exact counts small
+   (2-8 objects); bigger numbers are "dozens"/"hundreds". Hands and fingers only as large, simple shapes.
+6. VARIETY: no visual motif more than 3 times; the gesture only in the hook, the first line of each chorus and the end.
+7. CLIPS ARE ACTION: a clip's "motion" is one strong verb that visibly changes the frame within 3 s (struts, spins,
+   throws, dances toward the lens, hugs, cracks up). Never holds, stands, stares or poses.
+8. PAYOFF: the final sung line and the outro tail pay off the hook in the same place with the same gesture or prop, at
+   the biggest scale of the song, warm and triumphant.
+
+DELIVER (strict JSON, schema enforced):
+- "cast": protagonist A and up to three supporting B, C, D: ORIGINAL people (never a celebrity, never a real person's
+  likeness, even if the song names a real person: the name is used, the face is invented), precise face, hair and age,
+  plus ONE fixed, stylish, real-world outfit each (a silhouette readable at thumbnail size). IDENTITY RULE: anyone who appears
+  in more than one shot MUST be lettered cast, written by letter in the prompt and listed in that shot's "cast" every
+  time. Unlettered extras appear in ONE shot only.
+- "beats": one per SEG below, same seg ids, in order: "meaning" (what the line is about, from STORIES), "visual" (the
+  ONE gag for the line), "shots" (1 to the SEG's max). Shot 1 cuts in on word 0 with the main gag; later shots cut in on
+  the key noun, verb or number as it is sung ("word" = its index): the payoff, an insert, a reaction, a scale jump.
+- Per shot: "prompt" (25-45 words: who does what mid-action, where, seen from where; cast as letters only, never
+  re-described; max 2 cast; extras as archetypes), "framing", "lens", "light", "move" (for stills), "motion", "camera"
+  (one simple move), "edit" (burst or hold; hold only on A's performance or the payoff), "kind": "clip" for the shot
+  that carries the line's action (about {{N_CLIPS}} clips in the whole video, at most 2 per line), "still" otherwise.
+- "display": tokens per sung word for the subtitle, fixing spellings and using numerals (give "" to merge following
+  words; keep the count). "accent": the 1 punch token slammed in giant type: the funniest, punchiest key word of the
+  line, never a filler word.
+- "pip": our mascot is a small physical vinyl toy robot (white egg body, bunny ears, a dark face screen with happy cyan
+  eyes). Do NOT describe him further and NEVER put anything on his head or face (no hats, glasses, bows or props). He is
+  a static object. Pick exactly 2 lyric segments from: {{LYRIC_SEGS}}, one sentence each, where the toy sits or stands
+  small in the scene (on a desk, in a picnic basket, on a party table). "cameo": one
+  sentence for the final shot: the toy alone in the payoff location, after the party, warm light.
+
+GENERATOR LIMITS (Grok Imagine): photoreal stills (cast shots are edited from the cast portraits); a clip is the still
+continued for 3 s at 720p: ONE clear action and a simple camera move. NO readable text anywhere in the image (no words,
+letters, numbers, signs, logos, labels, banners, sashes with writing, screens with text): show numbers as objects;
+screens face away or show only light and colour. No real people, celebrity lookalikes, famous characters, famous robots,
+brands or logos. The look is appended to every prompt automatically, so don't repeat it: {{LOOK_LABEL}}. Energy:
+{{LOOK_ENERGY}}.
+
+STORIES:
+{{STORIES}}
+
+SEGMENTS (song order; word index:word@onset seconds where known; max shots):
+{{SEGMENTS}}
+
+DISPLAY LINES:
+{{DISPLAY}}
+
+Before replying, check silently: the hook is the boldest image; nothing banned (no menace, nothing medical, anatomical
+or creepy, no pastel wash, at most one accent colour); A laughs in at most ~30% of her shots; A performs to the lens in half her shots; the gesture is in the hook,
+every chorus and the end; chorus repeats escalate; the ending pays off the hook; no text in any image. Reply with the
+JSON object only.

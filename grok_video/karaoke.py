@@ -1,0 +1,726 @@
+"""karaoke mode: the daily video in the ONUG "No Window" format (default since 20 Oct 2026). See README.md "karaoke".
+usage: karaoke.py DAY_DIR [--out FILE] [--work DIR] [--skip-gen] [--replan] [--no-fallback] [--stills N] [--clips N]
+                  [--time-limit MIN] [--max-pct P] [--no-16x9]  (+ any grok_video.py args, passed to the fallback)
+Writes <day>/video_karaoke.mp4 (1080x1920, posted), video_karaoke_chat.mp4 (<45 MB), video_karaoke_16x9.mp4.
+On any failure (not exit 6 instrumental / 7 auth) it runs grok_video.py (the Claudia/slopcore chain) with the same args.
+Last stdout line: GROK_VIDEO_STATUS=... out=<mp4> chat=<mp4> (same contract as grok_video.py)."""
+import argparse, json, math, os, re, shutil, subprocess, sys, threading, time, traceback
+from multiprocessing import Pool
+HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
+import common_gv as G
+
+FPS = 30
+MAX_SHOT = float(os.environ.get('GV_KARAOKE_MAX_SHOT', 3.6))
+PLAN_VER = 'karaoke-1'
+SCHEMA = {"type": "object", "required": ["scenes", "lines", "intro", "breaks", "outro", "story_text", "credit"],
+          "properties": {
+              "scenes": {"type": "array", "items": {"type": "object", "required": ["id", "prompt", "motion"],
+                         "properties": {"id": {"type": "string"}, "prompt": {"type": "string"}, "motion": {"type": "string"}}}},
+              "lines": {"type": "array", "items": {"type": "object", "required": ["i", "v"],
+                        "properties": {"i": {"type": "integer"}, "v": {"type": "array", "items": {"type": "object"}}}}},
+              "intro": {"type": "array", "items": {"type": "object"}},
+              "breaks": {"type": "array", "items": {"type": "object"}},
+              "outro": {"type": "array", "items": {"type": "object"}},
+              "story_text": {"type": "array", "items": {"type": "object", "required": ["from_line", "to_line", "kicker", "text"],
+                             "properties": {"from_line": {"type": "integer"}, "to_line": {"type": "integer"},
+                                            "kicker": {"type": "string"}, "text": {"type": "string"}}}},
+              "credit": {"type": "string"}}}
+LOOK = (" Photorealistic cinematic film still, shot on ARRI Alexa, 35mm lens, shallow depth of field, natural skin texture, "
+        "motivated practical lighting, subtle film grain, vertical 9:16 composition. Cast are young adults aged 21-28, "
+        "attractive, natural balanced expressions. No robots, no text, no logos, no readable writing, no famous people.")
+
+
+def norm(s): return re.sub(r'[^a-z0-9]+', ' ', s.lower()).strip()
+
+
+def lyric_lines(day):
+    out = []
+    for l in G.read(os.path.join(day, 'lyrics.txt')).splitlines():
+        l = l.strip()
+        if l and not (l.startswith('[') and l.endswith(']')):
+            out.append(l)
+    return out
+
+
+# ---------------------------------------------------------------- alignment (ONUG method)
+DEMUCS = os.environ.get('DEMUCS', '/home/box/venvs/align/bin/demucs')
+ALIGN_PY = os.environ.get('PY', '/home/box/venvs/align/bin/python')
+_ALIGN_SRC = r"""
+import stable_whisper, sys
+m = stable_whisper.load_model(sys.argv[4] if len(sys.argv) > 4 else 'medium.en')
+r = m.align(sys.argv[1], open(sys.argv[2]).read(), language='en', original_split=True)
+r.save_as_json(sys.argv[3])
+"""
+
+
+def lyric_sections(day):
+    """[(text, section, kind, section_occ, line_no)] for the sung lines of lyrics.txt."""
+    out, sec, occ, cnt, ln = [], 'Verse', {}, {}, 0
+    for l in G.read(os.path.join(day, 'lyrics.txt')).splitlines():
+        l = l.strip()
+        if not l: continue
+        if l.startswith('[') and l.endswith(']'):
+            name = l[1:-1].strip()
+            k = norm(name)
+            if any(x in k for x in ('verse', 'chorus', 'bridge', 'intro', 'outro', 'hook', 'pre', 'refrain', 'break')):
+                sec = name; occ[sec] = occ.get(sec, 0) + 1; ln = 0
+            continue
+        ln += 1; k = norm(sec)
+        kind = ('chorus' if 'chorus' in k or 'hook' in k or 'refrain' in k else 'bridge' if 'bridge' in k else
+                'outro' if 'outro' in k else 'intro' if 'intro' in k else 'verse')
+        out.append((l, sec, kind, occ.get(sec, 1), ln))
+    return out
+
+
+def vocal_activity(stem):
+    import numpy as np, soundfile as sf
+    y, sr = sf.read(stem, dtype='float32'); y = y.mean(1) if y.ndim > 1 else y
+    hop = int(sr * 0.05); n = len(y) // hop
+    db = 20 * np.log10(np.sqrt(np.mean(np.square(y[:n * hop].reshape(n, hop)), axis=1)) + 1e-9)
+    return db > (np.percentile(db, 95) - 28), 0.05
+
+
+def line_score(ln, act, hop):
+    """1 = the line's words sit on audible vocals and look plausible; 0 = suspect."""
+    w = ln.get('words') or []
+    if not w: return 0.0
+    if any(b[2] < b[1] - 0.01 or b[2] - b[1] > 4.0 for b in w): return 0.0
+    if len(w) >= 4 and (w[-1][2] - w[0][1]) < 0.18 * len(w): return 0.0          # squeezed
+    tot = on = 0
+    for b in w:
+        i0, i1 = int(b[1] / hop), max(int(b[1] / hop) + 1, int(b[2] / hop))
+        seg = act[i0:i1]; tot += len(seg); on += int(seg.sum())
+    return on / tot if tot else 0.0
+
+
+def align_karaoke(day, work, status):
+    """demucs vocals -> stable-ts forced alignment of lyrics.txt (the ONUG method, ~1-5 min on the box CPU) ->
+    per-line sanity score. Returns (L, report)."""
+    aw = os.path.join(work, 'kalign'); os.makedirs(aw, exist_ok=True)
+    audio = G.audio_path(day); t0 = time.time()
+    secs = lyric_sections(day)
+    open(os.path.join(aw, 'lines.txt'), 'w').write('\n'.join(x[0] for x in secs) + '\n')
+    stem = os.path.join(aw, 'sep', 'htdemucs', os.path.splitext(os.path.basename(audio))[0], 'vocals.wav')
+    logf = open(os.path.join(aw, 'align.log'), 'a')
+    if not (os.path.exists(stem) and os.path.getmtime(stem) >= os.path.getmtime(audio)):
+        subprocess.run([DEMUCS, '-n', 'htdemucs', '--two-stems', 'vocals', '-o', os.path.join(aw, 'sep'), audio],
+                       check=True, stdout=logf, stderr=subprocess.STDOUT, timeout=900)
+    G.log(f"karaoke align: demucs done ({time.time() - t0:.0f}s)")
+    import grok_video as GV
+    vm = GV.vocal_metrics(stem, stem.replace('vocals.wav', 'no_vocals.wav')); G.save_json(vm, os.path.join(aw, 'vocal_check.json'))
+    aj = os.path.join(aw, 'align.json')
+    if not (os.path.exists(aj) and os.path.getmtime(aj) >= os.path.getmtime(stem)):
+        sp_ = os.path.join(aw, 'align_run.py'); open(sp_, 'w').write(_ALIGN_SRC)
+        subprocess.run([ALIGN_PY, sp_, stem, os.path.join(aw, 'lines.txt'), aj, os.environ.get('GV_KARAOKE_ALIGN_MODEL', 'medium.en')],
+                       check=True, stdout=logf, stderr=subprocess.STDOUT, timeout=1200)
+    G.log(f"karaoke align: stable-ts done ({time.time() - t0:.0f}s)")
+    segs = G.load_json(aj)['segments']
+    L = []
+    for i, sg in enumerate(segs):
+        words = [[w['word'].strip(), round(w['start'], 3), round(w['end'], 3)] for w in sg.get('words', []) if w['word'].strip()]
+        meta = secs[i] if i < len(secs) else (sg['text'].strip(), 'Verse', 'verse', 1, 1)
+        L.append({'n': i, 'text': meta[0] if norm(meta[0]) == norm(sg['text']) else sg['text'].strip(), 'section': meta[1],
+                  'kind': meta[2], 'section_occ': meta[3], 'line_no': meta[4], 'words': words,
+                  'start': words[0][1] if words else sg['start'], 'end': words[-1][2] if words else sg['end'], 'src_timing': 'stable-ts-direct'})
+    act, hop = vocal_activity(stem)
+    sc = [round(line_score(ln, act, hop), 2) for ln in L]
+    for ln, x in zip(L, sc): ln['sync_score'] = x
+    bad = [i for i, x in enumerate(sc) if x < 0.45]
+    rep = {'method': 'stable-ts-direct', 'lines': len(L), 'expected_lines': len(secs), 'suspect_lines': bad, 'scores': sc,
+           'mean_score': round(sum(sc) / max(1, len(sc)), 3), 'secs': round(time.time() - t0)}
+    G.save_json(rep, os.path.join(aw, 'sync_check.json')); G.save_json(L, os.path.join(aw, 'timings.json'))
+    return L, rep, vm
+
+
+# ---------------------------------------------------------------- planning
+def plan_opus(day, work, nscenes, nclips):
+    import slop_opus as SO
+    lines = lyric_lines(day)
+    st = G.read(os.path.join(day, 'stories.md'))
+    txt = open(os.path.join(HERE, 'prompts', 'karaoke_plan.txt')).read()
+    for k, v in dict(SCENES_MAX=nscenes, CLIPS_MAX=nclips, INTRO_S='8-15', TITLE=G.read(os.path.join(day, 'title.txt')).strip(),
+                     STYLE=G.read(os.path.join(day, 'style.txt')).strip()[:300], STORIES=st[:9000],
+                     LINES='\n'.join(f"{i}: {l}" for i, l in enumerate(lines))).items():
+        txt = txt.replace('{' + k + '}', str(v))
+    od = os.path.join(work, 'opus'); os.makedirs(od, exist_ok=True)
+    pf = os.path.join(od, 'plan_prompt.txt'); open(pf, 'w').write(txt)
+    last = None
+    for attempt in (1, 2):
+        try:
+            plan, meta = SO.run_claude(pf, od, SCHEMA, int(os.environ.get('GV_KARAOKE_OPUS_S', 480)), tools='', effort='medium')
+            G.save_json({k: v for k, v in meta.items() if k != 'raw'}, os.path.join(od, f'meta{attempt}.json'))
+            if plan and plan.get('lines'):
+                plan['planner'] = 'opus'; return plan
+            last = 'empty plan'
+        except Exception as e:
+            last = repr(e)[:300]
+        G.log(f"karaoke: opus plan attempt {attempt} failed: {last}")
+    raise RuntimeError('opus plan failed: ' + str(last))
+
+
+def plan_template(day):
+    """No-LLM fallback plan: story headlines, post cards and figures straight from stories.md, no Grok scenes."""
+    stories = G.story_list(day); lines = lyric_lines(day)
+    pool = []
+    for s in stories:
+        h = (s.get('handles') or [''])[0]
+        pool.append({'kind': 'gfx', 'g': 'headline', 'p': {'kicker': f"STORY {s['idx']}" + (f" · @{h}" if h else ''), 'text': s['text']}})
+        if h:
+            body = re.sub(r'https?://\S+', '', s['detail'].split('. ', 1)[-1]).strip()
+            pool.append({'kind': 'gfx', 'g': 'post', 'p': {'handle': h, 'name': h, 'text': body[:140]}})
+        for n in re.findall(r'\b\d[\d,]*\b', s['detail'].split('http')[0])[:2]:
+            if n not in ('2026',):
+                pool.append({'kind': 'gfx', 'g': 'bignum', 'p': {'top': f"STORY {s['idx']}", 'value': n, 'sub': s['text'][:60]}})
+    P = {'planner': 'template', 'scenes': [], 'lines': [{'i': i, 'v': [pool[i % len(pool)]]} for i in range(len(lines))],
+         'intro': pool[:2], 'breaks': pool[2:6] or pool, 'outro': pool[:1],
+         'story_text': [{'from_line': 0, 'to_line': len(lines) - 1, 'kicker': 'MAIN STORY', 'text': stories[0]['text'][:70]}] if stories else [],
+         'credit': stories[0]['text'][:70] if stories else ''}
+    return P
+
+
+def fact_lint(P, day):
+    """Every token with a digit and every @handle shown in a GFX must exist in stories/lyrics/title. Bad visuals are
+    replaced by a story headline card. Returns warnings."""
+    src = norm(G.read(os.path.join(day, 'stories.md')) + ' ' + G.read(os.path.join(day, 'lyrics.txt')) + ' ' +
+               G.read(os.path.join(day, 'title.txt'))).replace(' ', '')
+    raw = G.read(os.path.join(day, 'stories.md')).lower()
+    stories = G.story_list(day); warns = []
+    safe = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0s', '200', '404', '100', '0.0', '1.0'}
+
+    def strings(o):
+        if isinstance(o, str): yield o
+        elif isinstance(o, dict):
+            for v in o.values(): yield from strings(v)
+        elif isinstance(o, list):
+            for v in o: yield from strings(v)
+
+    def bad(v):
+        if v.get('kind') != 'gfx': return None
+        for s in strings(v.get('p', {})):
+            # figures (numbers with 2+ digits) and CVE ids; identifiers like mx1 / noc-01 / v4.2 are fine
+            for tok in re.findall(r'CVE-\d{4}-\d+|(?<![A-Za-z\-.])\d[\d,.]*\d(?![A-Za-z\d])', s):
+                t = norm(tok).replace(' ', '')
+                if t and t not in safe and t not in src and not re.fullmatch(r'\d{1,2}(:\d\d)+', tok) \
+                        and v.get('g') not in ('code', 'countdown'):
+                    return f"figure {tok!r} not in sources"
+            for h in re.findall(r'(?<![\w.])@(\w+)', s):
+                if h.lower() not in raw: return f"handle @{h} not in sources"
+        if v.get('g') == 'post' and v['p'].get('handle', '').lower().lstrip('@') not in raw:
+            return f"post handle {v['p'].get('handle')!r} not in sources"
+        return None
+
+    def fix(v, where):
+        b = bad(v)
+        if not b: return v
+        warns.append(f"{where}: {v.get('g')} replaced ({b})")
+        s = stories[0] if stories else {'idx': 1, 'text': G.read(os.path.join(day, 'title.txt'))}
+        return {'kind': 'gfx', 'g': 'headline', 'p': {'kicker': f"STORY {s['idx']}", 'text': s['text']}}
+    for ln in P.get('lines', []):
+        ln['v'] = [fix(v, f"line {ln['i']}") for v in ln.get('v', [])][:2]
+    for k in ('intro', 'breaks', 'outro'):
+        P[k] = [fix(v, k) for v in P.get(k, [])]
+    import kgfx
+    for v in [v for ln in P['lines'] for v in ln['v']] + P['intro'] + P['breaks'] + P['outro']:
+        if v.get('kind') == 'gfx' and v.get('g') not in kgfx.R:
+            warns.append(f"unknown gfx {v.get('g')!r} -> headline"); v['g'] = 'headline'; v['p'] = {'text': str(v.get('p', {}).get('text') or G.read(os.path.join(day, 'title.txt')))}
+    return warns
+
+
+# ---------------------------------------------------------------- media
+def dup_halves(png):
+    """Grok sometimes returns a 9:16 picture that is two copies of the same frame stacked (seen 20 Oct)."""
+    try:
+        import numpy as np
+        from PIL import Image
+        a = np.asarray(Image.open(png).convert('L').resize((90, 160)), dtype=float)
+        return float(np.corrcoef(a[:80].ravel(), a[80:].ravel())[0, 1]) > 0.6
+    except Exception:
+        return False
+
+
+def generate(P, work, a, deadline, status):
+    import real_gen as R
+    gdir = os.path.join(work, 'grok'); os.makedirs(gdir, exist_ok=True)
+    scenes = P.get('scenes', [])[:a.stills]
+    if not scenes or a.skip_gen:
+        return
+    used = {}
+    for v in [v for ln in P['lines'] for v in ln['v']] + P['intro'] + P['breaks'] + P['outro']:
+        if v.get('kind') == 'scene': used[v.get('id')] = used.get(v.get('id'), 0) + 1
+    jobs = [{'id': s['id'], 'kind': 'gen', 'prompt': s['prompt'].strip() + LOOK, 'aspect': '9:16', 'out': f"{gdir}/{s['id']}.png"}
+            for s in scenes]
+    b = R.Batcher(gdir, {'gen': len(jobs) + 3}, batch_size=5, max_parallel=3, deadline=deadline - 9 * 60, tag='stills')
+    b.run(jobs)
+    dups = [j for j in jobs if os.path.exists(j['out']) and dup_halves(j['out'])]
+    if dups and time.time() < deadline - 10 * 60:          # one reroll for stacked-duplicate pictures
+        G.log(f"karaoke: rerolling {len(dups)} stacked-duplicate stills: {[j['id'] for j in dups]}")
+        for j in dups: os.replace(j['out'], j['out'] + '.dup.png')
+        b3 = R.Batcher(gdir, {'gen': len(dups)}, batch_size=5, max_parallel=2, deadline=deadline - 9 * 60, tag='reroll')
+        b3.no_salvage = True; b3.run(dups)
+    status['stills_made'] = sum(1 for j in jobs if os.path.exists(j['out']))
+    mv = sorted([s for s in scenes if s.get('motion') and os.path.exists(f"{gdir}/{s['id']}.png") and not dup_halves(f"{gdir}/{s['id']}.png")],
+                key=lambda s: -used.get(s['id'], 0))[:a.clips]
+    cj = [{'id': 'v_' + s['id'], 'kind': 'i2v', 'image': f"{gdir}/{s['id']}.png", 'duration': 6,
+           'prompt': s['motion'] + " Realistic natural motion, cinematic, no text.", 'out': f"{gdir}/{s['id']}.mp4"} for s in mv]
+    if cj and time.time() < deadline - 6 * 60:
+        b2 = R.Batcher(gdir, {'i2v': len(cj) + 2}, batch_size=3, max_parallel=3, timeout=900, deadline=deadline, tag='clips')
+        b2.run(cj)
+
+
+# ---------------------------------------------------------------- timeline
+def map_lines(P, L, day):
+    """plan line index (lyrics.txt order) -> timings entry (sequential text match)."""
+    lines = lyric_lines(day); out = {}; j = 0
+    for i, t in enumerate(lines):
+        for k in range(j, min(len(L), j + 4)):
+            if norm(L[k]['text']) == norm(t) or (norm(t)[:20] and norm(L[k]['text']).startswith(norm(t)[:20])):
+                out[i] = k; j = k + 1; break
+    return out
+
+
+def timeline(P, L, dur, day, gdir):
+    m = map_lines(P, L, day); inv = {v: k for k, v in m.items()}
+    pv = {ln['i']: ln['v'] for ln in P['lines']}
+    timed = [ln for ln in L if ln.get('words')]
+    pools = {k: list(P.get(k) or []) or list(P.get('breaks') or []) for k in ('intro', 'breaks', 'outro')}
+    # fill pool for splitting long shots: alternate live-action scenes with the break graphics (less repetition)
+    sc_ = [{'kind': 'scene', 'id': x['id']} for x in P.get('scenes', [])]
+    br_ = list(P.get('breaks') or [])
+    pools['fill'] = [v for pair in zip(sc_[::-1], (br_ * 4)[:len(sc_)]) for v in pair] or br_
+    fallback = [{'kind': 'gfx', 'g': 'headline', 'p': {'kicker': 'TODAY', 'text': G.read(os.path.join(day, 'title.txt')).strip()}}]
+    ctr = {'intro': 0, 'breaks': 0, 'outro': 0, 'fill': 0}
+
+    def take(k):
+        p = pools[k] or fallback; v = p[ctr[k] % len(p)]; ctr[k] += 1; return v
+    end_t = max(dur - 5.5, (timed[-1]['end'] + 0.6) if timed else dur - 5.5); end_t = min(end_t, dur - 3.5)
+    cuts = []                                     # (t, visual)
+    first = timed[0]['start'] - 0.08 if timed else end_t
+    n_in = max(1, min(len(pools['intro']) or 2, int(first / 2.6)))
+    for k in range(n_in):
+        cuts.append((first * k / n_in, take('intro')))
+    for idx, ln in enumerate(timed):
+        n = L.index(ln); vis = pv.get(inv.get(n), None) or [take('breaks')]
+        t0 = max(0.0, ln['start'] - 0.08)
+        cuts.append((t0, vis[0]))
+        if len(vis) > 1 and len(ln['words']) >= 4:
+            mid = ln['words'][len(ln['words']) // 2][1] - 0.05
+            if mid - t0 > 1.0 and ln['end'] - mid > 0.8: cuts.append((mid, vis[1]))
+        nxt = timed[idx + 1]['start'] - 0.08 if idx + 1 < len(timed) else end_t
+        gs = ln['end'] + 0.25
+        if nxt - gs > 2.6:                        # instrumental gap: fill with break visuals every ~2.4 s
+            k = int((nxt - gs) / 2.4)
+            for q in range(k):
+                cuts.append((gs + (nxt - gs) * q / k, take('breaks' if idx + 1 < len(timed) else 'outro')))
+    cuts = sorted([c for c in cuts if c[0] < end_t - 0.4], key=lambda c: c[0])
+    # merge too-short shots (< 0.7 s) and split long ones (> 4.6 s) so the cut rate stays fast
+    out = []
+    for c in cuts:
+        if out and c[0] - out[-1][0] < 0.7: out[-1] = (out[-1][0], c[1]) if c[0] - out[-1][0] < 0.3 else out[-1]; continue
+        out.append(c)
+    fin = []
+    for i, (t, v) in enumerate(out):
+        t1 = out[i + 1][0] if i + 1 < len(out) else end_t
+        fin.append({'t0': t, 't1': t1, 'v': v})
+    shots = []
+    for s in fin:
+        d = s['t1'] - s['t0']
+        if d > MAX_SHOT:                          # keep the cut rate fast (the owner: fast cuts, ONUG avg ~2.3 s)
+            n = int(math.ceil(d / 2.6)); step = d / n
+            for q in range(n):
+                shots.append({'t0': s['t0'] + q * step, 't1': s['t0'] + (q + 1) * step, 'v': s['v'] if q == 0 else take('fill')})
+        else:
+            shots.append(s)
+    shots.append({'t0': end_t, 't1': dur, 'v': {'kind': 'gfx', 'g': 'endcard', 'p': {}}})
+    # resolve scenes: clip > still > gfx headline; vary clip offsets on reuse
+    seen = {}
+    for s in shots:
+        v = s['v']
+        if v.get('kind') == 'scene':
+            sid = v.get('id'); clip, png = f"{gdir}/{sid}.mp4", f"{gdir}/{sid}.png"
+            k = seen.get(sid, 0); seen[sid] = k + 1
+            if os.path.exists(clip) and os.path.getsize(clip) > 10000:
+                s['src'] = ('clip', clip, [0.0, 2.6, 1.2][k % 3])
+            elif os.path.exists(png) and not dup_halves(png):
+                s['src'] = ('still', png, k)
+            else:                                  # missing/bad picture: another scene that exists, else a headline card
+                alt = [f for f in sorted(os.listdir(gdir)) if f.endswith('.png') and not dup_halves(os.path.join(gdir, f))] if os.path.isdir(gdir) else []
+                if alt:
+                    s['src'] = ('still', os.path.join(gdir, alt[(len(seen) * 5 + k) % len(alt)]), k + 1)
+                else:
+                    s['src'] = ('gfx', 'headline', {'kicker': 'TODAY', 'text': G.read(os.path.join(day, 'title.txt')).strip()})
+        else:
+            s['src'] = ('gfx', v.get('g'), dict(v.get('p') or {}))
+    return shots
+
+
+# ---------------------------------------------------------------- rendering
+def _fill(img, W, H):
+    from PIL import Image
+    sw, sh = img.size; sc = max(W / sw, H / sh); img = img.resize((int(sw * sc) + 1, int(sh * sc) + 1), Image.LANCZOS)
+    x = (img.width - W) // 2; y = (img.height - H) // 2; return img.crop((x, y, x + W, y + H))
+
+
+def _vf_fill(W, H):
+    if H > W: return f"scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H}"
+    return (f"split[a][b];[a]scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},boxblur=30:3,eq=brightness=-0.15[bg];"
+            f"[b]scale=-2:{H}[fg];[bg][fg]overlay=(W-w)/2:0")
+
+
+ENC = ['-c:v', 'libx264', '-preset', 'veryfast', '-crf', '18', '-pix_fmt', 'yuv420p', '-r', str(FPS)]
+
+
+def render_seg(job):
+    s, W, H, out, endp = job
+    import kgfx
+    from PIL import Image
+    nfr = max(1, round(s['t1'] * FPS) - round(s['t0'] * FPS)); dur = nfr / FPS
+    kind, src, x = s['src']
+    if kind == 'clip':
+        spd = min(1.0, max(0.4, (6.0 - x) / dur))
+        subprocess.run(['ffmpeg', '-v', 'error', '-y', '-ss', str(x), '-i', src, '-filter_complex',
+                        f"setpts=PTS/{spd},{_vf_fill(W, H)},eq=contrast=1.05:saturation=1.05,fps={FPS}", '-frames:v', str(nfr), '-an'] + ENC + [out], check=True)
+        return out
+    if kind == 'still':
+        zin = x % 2 == 0
+        z = (f"zoompan=z='{'1+0.0016*on' if zin else '1.12-0.0016*on'}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d={nfr}:s={W}x{H}:fps={FPS}")
+        pre = (f"scale={W * 2}:{H * 2}:force_original_aspect_ratio=increase,crop={W * 2}:{H * 2}," if H > W else
+               f"split[a][b];[a]scale={W*2}:{H*2}:force_original_aspect_ratio=increase,crop={W*2}:{H*2},boxblur=40:3,eq=brightness=-0.15[bg];[b]scale=-2:{H*2}[fg];[bg][fg]overlay=(W-w)/2:0,")
+        subprocess.run(['ffmpeg', '-v', 'error', '-y', '-loop', '1', '-i', src, '-filter_complex', pre + z, '-frames:v', str(nfr)] + ENC + [out], check=True)
+        return out
+    p = dict(x)
+    if src == 'endcard':
+        p.update(endp)
+        if p.get('bg'): p['bg'] = _fill(Image.open(p['bg']).convert('RGB'), W, H)
+    f = kgfx.R.get(src, kgfx.R['headline'])
+    pr = subprocess.Popen(['ffmpeg', '-v', 'error', '-y', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-s', f'{W}x{H}', '-r', str(FPS),
+                           '-i', '-'] + ENC + [out], stdin=subprocess.PIPE)
+    for k in range(nfr):
+        try:
+            im = f(W, H, k / FPS, dur, p)
+        except Exception:
+            im = kgfx.R['headline'](W, H, k / FPS, dur, {'text': str(p.get('text') or p.get('title') or '')})
+        if im.size != (W, H): im = im.resize((W, H))
+        pr.stdin.write(im.convert('RGB').tobytes())
+    pr.stdin.close(); pr.wait()
+    if pr.returncode: raise RuntimeError(f'gfx encode failed {out}')
+    return out
+
+
+def band_png(W, H, path):
+    from PIL import Image
+    im = Image.new('RGBA', (W, H), (0, 0, 0, 0)); px = im.load()
+    y0 = int(H * (0.60 if H > W else 0.62))
+    for y in range(y0, H):
+        a = int(min(1, (y - y0) / (H * 0.10)) * 175)
+        for xx in range(W): px[xx, y] = (0, 0, 0, a)
+    im.save(path)
+
+
+# ---------------------------------------------------------------- lyrics (ASS)
+def _ts(x):
+    x = max(0, x); return f"{int(x // 3600)}:{int(x % 3600 // 60):02d}:{x % 60:05.2f}"
+
+
+def _esc(s): return s.replace('{', '(').replace('}', ')').replace('\\', '/')
+
+
+def line_ok(ln):
+    w = ln.get('words') or []
+    if not w: return False
+    if any(b[2] < b[1] - 0.01 or b[2] - b[1] > 4.0 for b in w): return False
+    if any(w[i + 1][1] < w[i][1] - 0.05 for i in range(len(w) - 1)): return False
+    return ln['end'] - ln['start'] < 14
+
+
+def sanitize(L):
+    """Sanity repairs on the aligner output: a word run after a > 4 s gap inside a line, or words past the next line's
+    start, are re-spread right after the last good word (the aligner sometimes parks the tail of a line on a later
+    line). Returns the list of repaired line texts."""
+    fixed = []
+    T = [ln for ln in L if ln.get('words')]
+    for i, ln in enumerate(T):
+        w = ln['words']; nxt = T[i + 1]['start'] if i + 1 < len(T) else 1e9
+        for j in range(1, len(w)):
+            if w[j][1] - w[j - 1][2] > 4.0 or w[j][2] > nxt + 0.05:
+                t0 = w[j - 1][2] + 0.08; n = len(w) - j; t1 = min(nxt - 0.1, t0 + 0.38 * n)
+                step = max(0.08, (t1 - t0) / n)
+                for q in range(n):
+                    w[j + q] = [w[j + q][0], round(t0 + q * step, 2), round(t0 + (q + 1) * step - 0.02, 2)]
+                ln['end'] = w[-1][2]; fixed.append(ln['text']); break
+    return fixed
+
+
+def build_ass(path, L, W, H, dur, story, sync_ok):
+    v = H > W; fs = 92 if v else 80; cx = W // 2; ycur = int(H * (0.745 if v else 0.80)); ynext = ycur + int(fs * 0.35)
+    hdr = f"""[Script Info]
+ScriptType: v4.00+
+PlayResX: {W}
+PlayResY: {H}
+WrapStyle: 0
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Cur,Poppins Black,{fs},&H0040FFB0,&H00FFFFFF,&H00100A05,&H96000000,0,0,0,0,100,100,1,0,1,7,4,2,60,60,0,1
+Style: Next,Poppins Black,{int(fs * 0.68)},&H70FFFFFF,&H70FFFFFF,&H70100A05,&HB4000000,0,0,0,0,100,100,1,0,1,5,0,8,60,60,0,1
+Style: Chip,Poppins Bold,{46 if v else 36},&H00FFFFFF,&H00FFFFFF,&H00000000,&H50000000,0,0,0,0,100,100,0,0,3,10,0,7,40,40,40,1
+Style: Kick,IBM Plex Mono,{34 if v else 28},&H0028BEFF,&H0028BEFF,&H00000000,&H50000000,1,0,0,0,100,100,1,0,3,8,0,7,40,40,40,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+"""
+    ev = []; pend = 0.0; T = [ln for ln in L if ln.get('words') or ln.get('start') is not None]
+    nline_level = 0
+    for i, s in enumerate(T):
+        st = s['start']; nx = T[i + 1]['start'] if i + 1 < len(T) else dur
+        end = min(s['end'] + 0.8, nx - 0.05) if nx - s['end'] < 2.5 else s['end'] + 0.8
+        end = min(end, nx - 0.02, dur); a = min(st, max(st - 0.35, pend + 0.01)); pend = end
+        parts = [f"{{\\an2\\pos({cx},{ycur})\\fad(60,0)"]
+        words = s.get('words') or []
+        if sync_ok and line_ok(s) and s.get('sync_score', 1) >= 0.45:
+            parts[0] += f"\\k{round((words[0][1] - a) * 100)}}}"
+            inpar = False
+            for j, w in enumerate(words):
+                nxt = words[j + 1][1] if j + 1 < len(words) else w[2]
+                d = min(nxt, max(w[2], w[1] + 0.12)) - w[1]          # wipe over the word itself...
+                gap = nxt - w[1] - d                                  # ...then hold (no 10 s crawl across a gap)
+                tok = _esc(w[0])
+                if '(' in tok: inpar = True
+                parts.append(f"{{\\kf{max(1, round(d * 100))}" + ("\\i1\\c&H0028BEFF&\\2c&H0060D0FF&\\fscx85\\fscy85" if inpar else "") + "}" + tok + " ")
+                if gap > 0.25: parts.append(f"{{\\k{round(gap * 100)}}}")
+                if ')' in tok: inpar = False; parts.append("{\\r}")
+        else:                                      # line-level fallback: one smooth wipe over the sung line
+            nline_level += 1
+            parts[0] += f"\\k{round((st - a) * 100)}}}"
+            parts.append(f"{{\\kf{max(1, round((s['end'] - st) * 100))}}}" + _esc(s['text']))
+        ev.append(f"Dialogue: 1,{_ts(a)},{_ts(end)},Cur,,0,0,0,,{''.join(parts).strip()}")
+        if i + 1 < len(T) and T[i + 1]['start'] - end < 1.5:
+            ev.append(f"Dialogue: 0,{_ts(a)},{_ts(end)},Next,,0,0,0,,{{\\an8\\pos({cx},{ynext})\\fad(80,0)}}{_esc(T[i + 1]['text'])}")
+    # story text layer (main + secondary stories), top-left chip
+    for c in story:
+        y = 40 if v else 24
+        ev.append(f"Dialogue: 2,{_ts(c['t0'])},{_ts(c['t1'])},Kick,,0,0,0,,{{\\an7\\pos(40,{y})\\fad(150,150)}}{_esc(c['kicker'].upper())}")
+        ev.append(f"Dialogue: 2,{_ts(c['t0'])},{_ts(c['t1'])},Chip,,0,0,0,,{{\\an7\\pos(40,{y + (60 if v else 50)})\\fad(150,150)}}{_esc(c['text'])}")
+    open(path, 'w').write(hdr + '\n'.join(ev) + '\n')
+    return nline_level
+
+
+def story_events(P, L, day, dur, end_t):
+    m = map_lines(P, L, day); out = []
+    for c in P.get('story_text', [])[:5]:
+        a, b = m.get(c.get('from_line')), m.get(c.get('to_line'))
+        if a is None or b is None or not L[a].get('start') or not L[b].get('end'): continue
+        out.append({'t0': max(0.5, L[a]['start'] - 0.3), 't1': min(end_t, L[b]['end'] + 0.6), 'kicker': c.get('kicker', ''), 'text': c.get('text', '')[:80]})
+    out.sort(key=lambda c: c['t0'])
+    for i in range(len(out) - 1):                  # never two chips at once
+        out[i]['t1'] = min(out[i]['t1'], out[i + 1]['t0'] - 0.05)
+    return [c for c in out if c['t1'] - c['t0'] > 1.0]
+
+
+# ---------------------------------------------------------------- checks
+TECH_WORDS = ('grok bot poc cve cves dev devs grep oneline sudo kubectl kpatch livepatch ssh cbl cob cobol fortran repo '
+              'diff stdout stderr cron nginx localhost api apis gpu gpus cpu llm llms sdk cli tcp dns http https json yaml '
+              'oss url urls src lib bin usr etc var tmp tls mx admin npm pip infosec sysadmin devops noc soc init')
+
+
+def spelling(texts, day):
+    try:
+        from spellchecker import SpellChecker
+    except ImportError:
+        return ['pyspellchecker not installed']
+    sp = SpellChecker(); srcw = set(norm(G.read(os.path.join(day, 'stories.md')) + ' ' + G.read(os.path.join(day, 'lyrics.txt'))).split())
+    allow = set(TECH_WORDS.split())
+    bad = set()
+    for t in texts:
+        for w in re.findall(r"[A-Za-z][A-Za-z']+", t):
+            lw = w.lower().strip("'")
+            if len(lw) < 3 or lw in allow or lw in srcw or lw.replace("'s", '') in srcw or not sp.unknown([lw]): continue
+            bad.add(w)
+    return sorted(bad)
+
+
+def all_texts(shots, story, endp):
+    out = []
+    def walk(o):
+        if isinstance(o, str): out.append(o)
+        elif isinstance(o, dict): [walk(v) for k, v in o.items() if k not in ('bg', 'color', 'mode', 'kind')]
+        elif isinstance(o, (list, tuple)): [walk(v) for v in o if v not in ('cmd', 'out', 'err', 'warn', 'dim')]
+    for s in shots:
+        if s['src'][0] == 'gfx': walk(s['src'][2])
+    walk([c['text'] for c in story] + [c['kicker'] for c in story]); walk({k: v for k, v in endp.items() if k != 'bg'})
+    return out
+
+
+# ---------------------------------------------------------------- main
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument('day'); ap.add_argument('--out'); ap.add_argument('--work')
+    ap.add_argument('--skip-gen', action='store_true'); ap.add_argument('--replan', action='store_true')
+    ap.add_argument('--no-fallback', action='store_true'); ap.add_argument('--no-16x9', action='store_true')
+    ap.add_argument('--stills', type=int, default=int(os.environ.get('GV_KARAOKE_STILLS', 14)))
+    ap.add_argument('--clips', type=int, default=int(os.environ.get('GV_KARAOKE_CLIPS', 8)))
+    ap.add_argument('--time-limit', type=float, default=float(os.environ.get('GV_KARAOKE_LIMIT_MIN', 40)))
+    ap.add_argument('--whisper-model', default='medium')
+    a, passthru = ap.parse_known_args()
+    t_start = time.time(); day = os.path.abspath(a.day)
+    out = os.path.abspath(a.out or os.path.join(day, 'video_karaoke.mp4'))
+    base_ = os.path.splitext(out)[0]; chat, wide = base_ + '_chat.mp4', base_ + '_16x9.mp4'
+    work = os.path.abspath(a.work or os.path.join(day, 'work_karaoke')); os.makedirs(work, exist_ok=True)
+    gdir = os.path.join(work, 'grok'); os.makedirs(gdir, exist_ok=True)
+    deadline = t_start + a.time_limit * 60
+    status = {'style': 'karaoke', 'day': day, 'out': out, 'started': time.strftime('%Y-%m-%d %H:%M:%S %Z'), 'warnings': []}
+    sp = os.path.join(work, 'status.json')
+    import grok_video as GV
+    try:
+        audio = G.audio_path(day); dur = G.duration(audio)
+        for f in ('lyrics.txt', 'stories.md'):
+            if not os.path.exists(os.path.join(day, f)): raise RuntimeError(f'missing {f}')
+        if not a.skip_gen:
+            ok, how, msg = GV.grok_auth_ok()
+            if not ok:
+                print(f"GROK_VIDEO_STATUS=failed code=7 style=karaoke reason='grok CLI not signed in - run grok login --device-auth'", flush=True)
+                sys.exit(7)
+        try:
+            from real_gen_usage import usage_pct
+            status['usage_before'] = usage_pct()
+        except Exception as e:
+            status['usage_before'] = None
+        tres = {}
+        def tj():
+            try:
+                L, rep, vm = align_karaoke(day, work, status)
+                tres.update(L=L, rep=rep, vm=vm)
+                if len(L) != rep['expected_lines'] or len(rep['suspect_lines']) > 0.3 * max(1, len(L)):
+                    raise RuntimeError(f"direct alignment suspect ({len(rep['suspect_lines'])}/{len(L)} lines)")
+            except Exception as e:
+                G.log(f"karaoke align: {e!r}; trying the old alignment pipeline (lyric_timings)")
+                tres['direct_err'] = repr(e)[:200]
+                try:
+                    path = GV.lyric_timings(day, work, a.whisper_model)
+                    L2 = G.load_json(path)
+                    stem = os.path.join(work, 'kalign', 'sep', 'htdemucs', os.path.splitext(os.path.basename(G.audio_path(day)))[0], 'vocals.wav')
+                    if os.path.exists(stem):
+                        act, hop = vocal_activity(stem)
+                        for ln in L2: ln['sync_score'] = round(line_score(ln, act, hop), 2)
+                        m2 = sum(ln['sync_score'] for ln in L2) / max(1, len(L2))
+                    else:
+                        m2 = 1.0
+                    if 'L' not in tres or m2 > tres['rep']['mean_score']:
+                        tres['L'] = L2; tres['rep'] = {'method': 'lyric_timings', 'mean_score': round(m2, 3),
+                                                       'suspect_lines': [i for i, ln in enumerate(L2) if ln.get('sync_score', 1) < 0.45]}
+                        tres['vm'] = G.load_json(os.path.join(work, 'align', 'vocal_check.json'), {}) or tres.get('vm') or {}
+                except Exception as e2:
+                    if 'L' not in tres: tres['err'] = repr(e2)
+        th = threading.Thread(target=tj, daemon=True); th.start()
+        pp = os.path.join(work, 'plan.json')
+        P = G.load_json(pp) if os.path.exists(pp) and not a.replan else None
+        if not P or P.get('ver') != PLAN_VER:
+            t0 = time.time()
+            try:
+                P = plan_opus(day, work, a.stills, a.clips)
+            except Exception as e:
+                status['warnings'].append(f'opus planner failed ({str(e)[:120]}); template plan, no Grok scenes')
+                P = plan_template(day)
+            P['ver'] = PLAN_VER; P['plan_s'] = round(time.time() - t0)
+            G.save_json(P, os.path.join(work, 'plan_raw.json'))
+            status['warnings'] += fact_lint(P, day)
+            G.save_json(P, pp)
+        G.log(f"karaoke: plan ready ({P.get('planner')}, {len(P.get('scenes', []))} scenes) at {time.time() - t_start:.0f}s")
+        gt = time.time(); generate(P, work, a, t_start + 26 * 60, status); status['gen_s'] = round(time.time() - gt)
+        G.log(f"karaoke: media done at {time.time() - t_start:.0f}s")
+        th.join(timeout=max(60, deadline - time.time() - 8 * 60))
+        if 'L' not in tres: raise RuntimeError('lyric timing failed: ' + tres.get('err', 'timeout'))
+        L, sync, vc = tres['L'], tres['rep'], tres.get('vm') or {}
+        if vc and GV.stem_is_low(vc) and sync.get('mean_score', 1) < 0.5:
+            print("GROK_VIDEO_STATUS=failed code=6 style=karaoke reason='song looks instrumental (vocal stem low)'", flush=True); sys.exit(6)
+        sync_ok = len(sync.get('suspect_lines', [])) <= 0.3 * max(1, len(L)) and sum(1 for ln in L if ln.get('words')) >= len(L) * 0.7
+        G.log(f"karaoke: timings via {sync.get('method')} mean sync score {sync.get('mean_score')} suspect lines {sync.get('suspect_lines')}")
+        if not sync_ok: status['warnings'].append(f'word sync weak {sync} -> line-level karaoke')
+        rep = sanitize(L)
+        if rep: status['warnings'].append(f"timing sanity: re-spread the tail of {len(rep)} line(s): {rep}")
+        shots = timeline(P, L, dur, day, gdir)
+        end_t = shots[-1]['t0']
+        story = story_events(P, L, day, dur, end_t)
+        stills = sorted(f for f in os.listdir(gdir) if f.endswith('.png'))
+        endp = {'title': G.read(os.path.join(day, 'title.txt')).strip(), 'credit': (P.get('credit') or '')[:80],
+                'sub': 'Grok Bot · ' + time.strftime('%-d %b %Y', time.strptime(os.path.basename(day)[:10], '%Y-%m-%d')) if re.match(r'\d{4}-\d\d-\d\d', os.path.basename(day)) else '',
+                'bg': os.path.join(gdir, stills[-1]) if stills else None}
+        if P.get('scenes') and stills:                # prefer the outro scene as the end-card background
+            for v in P.get('outro', [])[::-1]:
+                if v.get('kind') == 'scene' and os.path.exists(os.path.join(gdir, f"{v['id']}.png")):
+                    endp['bg'] = os.path.join(gdir, f"{v['id']}.png"); break
+        G.save_json({'shots': [{'t0': round(s['t0'], 2), 't1': round(s['t1'], 2), 'src': [s['src'][0], s['src'][1]]} for s in shots],
+                     'story': story}, os.path.join(work, 'timeline.json'))
+        sizes = [(1080, 1920)] + ([] if a.no_16x9 else [(1920, 1080)])
+        jobs = []
+        for W, H in sizes:
+            sd = os.path.join(work, f'seg_{W}x{H}'); os.makedirs(sd, exist_ok=True)
+            jobs += [(s, W, H, os.path.join(sd, f'{i:03d}.mp4'), endp) for i, s in enumerate(shots)]
+        rt = time.time()
+        with Pool(min(8, os.cpu_count() or 4)) as pool:
+            segs = pool.map(render_seg, jobs, chunksize=1)
+        results = {}
+        texts = all_texts(shots, story, endp) + [ln['text'] for ln in L]
+        for W, H in sizes:
+            tag = f'{W}x{H}'; sd = os.path.join(work, f'seg_{tag}')
+            lst = os.path.join(sd, 'list.txt')
+            open(lst, 'w').write(''.join(f"file '{s}'\n" for s in segs if f'/seg_{tag}/' in s))
+            bg = os.path.join(work, f'bg_{tag}.mp4')
+            subprocess.run(['ffmpeg', '-v', 'error', '-y', '-f', 'concat', '-safe', '0', '-i', lst, '-c', 'copy', bg], check=True)
+            assf = os.path.join(work, f'lyrics_{tag}.ass'); bandf = os.path.join(work, f'band_{tag}.png')
+            ll = build_ass(assf, L, W, H, dur, story, sync_ok); band_png(W, H, bandf)
+            status['line_level_lines'] = ll
+            dst = out if H > W else wide
+            tmp = dst + '.part.mp4'
+            subprocess.run(['ffmpeg', '-v', 'error', '-y', '-i', bg, '-i', bandf, '-i', audio, '-filter_complex',
+                            f"[0:v][1:v]overlay=0:0,ass='{assf}':fontsdir=/usr/share/fonts/truetype/sand-box/google[v]",
+                            '-map', '[v]', '-map', '2:a', '-c:v', 'libx264', '-preset', 'medium', '-crf', '20', '-pix_fmt', 'yuv420p',
+                            '-profile:v', 'high', '-r', str(FPS), '-c:a', 'aac', '-b:a', '192k', '-t', f'{dur:.3f}', '-movflags', '+faststart', tmp], check=True)
+            os.replace(tmp, dst); results[tag] = dst
+        # chat copy < 45 MB
+        kbps = int((40 * 8 * 1024) / dur) - 160
+        subprocess.run(['ffmpeg', '-v', 'error', '-y', '-i', out, '-c:v', 'libx264', '-preset', 'medium', '-b:v', f'{kbps}k',
+                        '-maxrate', f'{int(kbps * 1.4)}k', '-bufsize', f'{kbps * 2}k', '-c:a', 'aac', '-b:a', '128k',
+                        '-movflags', '+faststart', chat + '.part.mp4'], check=True)
+        os.replace(chat + '.part.mp4', chat)
+        status['render_s'] = round(time.time() - rt)
+        vr = GV.verify(out, audio, L, {}, os.path.join(work, 'verify_frames'))
+        cs = os.path.join(work, 'contact_sheet.jpg')
+        subprocess.run(['ffmpeg', '-v', 'error', '-y', '-i', out, '-vf', f"fps=16/{dur:.1f},scale=270:-2,tile=8x2", '-frames:v', '1', cs])
+        bad = spelling(texts, day)
+        status.update(ok=vr['ok'], verify=vr['checks'], sync=sync, sync_ok=sync_ok, spelling_unknown=bad, contact_sheet=cs,
+                      shots=len(shots), avg_shot=round(end_t / max(1, len(shots) - 1), 2),
+                      scenes=sum(1 for s in shots if s['src'][0] in ('clip', 'still')), clips_used=sum(1 for s in shots if s['src'][0] == 'clip'),
+                      planner=P.get('planner'), wide=results.get('1920x1080'), chat=chat,
+                      chat_mb=round(os.path.getsize(chat) / 1048576, 1), elapsed_s=round(time.time() - t_start))
+        try:
+            from real_gen_usage import usage_pct
+            status['usage_after'] = usage_pct()
+        except Exception:
+            pass
+        if bad: status['warnings'].append(f"spelling check: unknown words {bad}")
+        G.save_json(status, sp)
+        if not vr['ok']: raise RuntimeError(f"verification failed {vr['checks']}")
+        print(f"GROK_VIDEO_STATUS=ok code=0 style=karaoke planner={P.get('planner')} out={out} chat={chat} wide={status['wide']} "
+              f"elapsed={status['elapsed_s']}s shots={len(shots)} avg_shot={status['avg_shot']}s scenes={status['scenes']} "
+              f"clips={status['clips_used']} sync_ok={int(sync_ok)} line_level={status.get('line_level_lines')}"
+              + (f" warnings={len(status['warnings'])}: {' | '.join(status['warnings'])[:600]}" if status['warnings'] else ''), flush=True)
+        sys.exit(0)
+    except SystemExit:
+        raise
+    except Exception as e:
+        why = f'{type(e).__name__}: {e}'
+        G.log('karaoke error:\n' + traceback.format_exc()[-2000:])
+        status.update(ok=False, error=why, elapsed_s=round(time.time() - t_start)); G.save_json(status, sp)
+        for f in (out, chat, wide):
+            if os.path.exists(f) and os.path.getmtime(f) >= t_start:
+                os.replace(f, os.path.splitext(f)[0] + '.failed.mp4')
+        if a.no_fallback or a.skip_gen:
+            print(f"GROK_VIDEO_STATUS=failed code=3 style=karaoke reason={why[:300]!r}", flush=True); sys.exit(3)
+        G.log(f"karaoke FAILED ({why[:200]}); falling back to grok_video.py (Claudia/slopcore chain)")
+        sys.stdout.flush()
+        os.execv(sys.executable, [sys.executable, os.path.join(HERE, 'grok_video.py'), day] + passthru)
+
+
+if __name__ == '__main__':
+    main()

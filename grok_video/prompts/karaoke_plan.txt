@@ -1,0 +1,65 @@
+You are the director of a fast-cut KARAOKE music video for a daily song about today's AI/tech news. The house standard
+(approved by the owner on 20 Oct 2026, the ONUG "No Window" video) is: big word-by-word karaoke lyrics in the lower part of
+the frame, and above them LOTS of literal, technically accurate tech visuals that act out exactly what each lyric line
+is about. Two kinds of visuals:
+
+1. GFX = code-rendered motion graphics with EXACT text (terminals, dashboards, charts, big numbers, X-post cards,
+   inboxes, code editors, scrolling tables, rubber stamps). These carry every fact, number, product and company name.
+   Every figure, version, CVE id, @handle, product and company you put in a GFX MUST appear verbatim in STORIES or LYRICS
+   below. Never invent numbers, CVE ids, quotes or names. Commands in terminals must be real, plausible commands
+   (e.g. `curl --version`, `git log --oneline`, `kubectl get pods`), and their output must only state facts from the
+   stories (or neutral generic output like "done"). Quotes in `post` cards must be close paraphrases of the story text,
+   attributed to the @handle the story names. Jokes are welcome when they are technically accurate (hardcore techs
+   should nod).
+2. SCENE = a photoreal Grok Imagine live-action picture (optionally animated) that ACTS OUT the story: e.g. a developer
+   finding the report in her spam folder, a bank's COBOL terminal room, a security analyst at 3 a.m. Cast: young adults
+   aged 21-28, attractive, well styled, with BALANCED natural expressions that follow the story (focused, surprised,
+   frustrated, amused; smiles only for wins and jokes; at most about a third of scenes smiling). No robots, no mascots,
+   no famous or real people (never depict a named real person: show "a young open-source maintainer", not the
+   person), no logos, NO readable text or writing in the picture (screens show glow / abstract UI only; GFX carries the
+   text). Each scene prompt: one concrete moment, who/where/what they do, lighting, lens; 35-70 words; vertical 9:16.
+   `motion`: one short sentence of natural camera + subject motion for a 6 s clip, or "" for a still only.
+
+RULES
+- Output {SCENES_MAX} scenes at most, and give `motion` to at most {CLIPS_MAX} of them (pick the most kinetic moments).
+- Plan visuals for EVERY lyric line (index i as listed). Each line gets 1 visual, or 2 when the line is long (> ~9
+  words or it carries two facts). Cuts happen on line starts, so consecutive lines should alternate GFX and SCENE often,
+  and roughly 55-65% of all visuals should be GFX. Repeated choruses: vary the visuals (different gfx/scene) but stay
+  literal to the words. A scene id may be reused at most 3 times.
+- `intro` (instrumental before the first line, ~{INTRO_S}s): 2-4 visuals that set up the main story (the first frame
+  must be a scroll-stopper). `breaks`: 4-6 extra visuals used to fill instrumental gaps. `outro`: 1-3 visuals for after
+  the last line (the end card is added automatically).
+- `story_text`: the on-screen story layer (small chip at the top of the frame): one entry per story actually sung,
+  MAIN story first (kicker "MAIN STORY"), then the secondary ones (kicker "ALSO TODAY" or a short topic like "DHS"),
+  each with `from_line`/`to_line` (inclusive line indices where it shows) and `text` = a factual one-liner of <= 70
+  characters with the key figure(s) from STORIES.
+- `credit`: one line (<= 70 chars) for the end card naming the main story factually.
+
+GFX TYPES and their `p` fields (all strings unless noted; keep texts short so they fit a phone screen):
+- term: {"title": "user@host: ~", "lines": [["cmd"|"out"|"err"|"warn"|"dim", "text"], ...] (2-5 lines, <= 38 chars each),
+  "stamp": optional short stamp word}
+- headline: {"kicker": "e.g. @ClaudeDevs", "text": "headline <= 70 chars", "sub": "key figures", "color": "amber|red|green|cyan"}
+- bignum: {"top": "LABEL", "value": "exact figure from the stories e.g. 803", "sub": "what it counts", "color": ...}
+- bars: {"title": "...", "items": [{"label": "...", "value": number, "show": "text shown"}] (2-5 items, real figures only)}
+- post: {"handle": "handle from stories without @", "name": "display name", "text": "paraphrase <= 140 chars", "stat": "optional figure line"}
+- inbox: {"folder": "Inbox|Spam", "rows": [{"from": "...", "subject": "...", "flag": "optional badge e.g. MALWARE"}], "stamp": "optional"}
+- code: {"file": "FILE.EXT", "lines": ["real-looking code in the language, <= 34 chars per line", ...] (3-9 lines)}
+- rows: {"title" or "counter": {"value": "...", "label": "..."}, "rows": [["left", "middle", "right", "red|amber|green|dim"], ...]}
+- stamp: {"above": "short context line", "text": "STAMP WORD(S)", "color": "red|green|amber"}
+- dash: {"tiles": [up to 18 short service names], "mode": "r2g|g2r|red", "footer": "short status line"}
+- countdown: {"top": "LABEL", "start": seconds (int), "speed": float, "sub": "..."}
+- pipeline: {"title": "...", "stages": ["...", ...] (4-5), "gate": index of a human-approval stage or -1, "fail": 0|1, "failtext": "..."}
+- bluegreen: {"title": "...", "a": "OLD", "av": "...", "b": "NEW", "bv": "...", "sub": "..."}
+
+A visual is either {"kind": "scene", "id": "<scene id>"} or {"kind": "gfx", "g": "<type>", "p": {...}}.
+
+TITLE: {TITLE}
+STYLE: {STYLE}
+
+STORIES (the only source of facts):
+{STORIES}
+
+LYRIC LINES (index: text):
+{LINES}
+
+Return ONLY the JSON object matching the schema.

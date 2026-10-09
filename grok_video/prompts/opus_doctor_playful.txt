@@ -1,0 +1,22 @@
+You are the script doctor on a PLAYFUL music video: lyric-literal, photoreal, slopcore-cool with warmth (deadpan cheek,
+real-world colour, a natural film look), never menacing or creepy. Each row is one shot: the lyric being sung (shown as a subtitle), the word it cuts in on, what the line is
+about, the line's gag and the shot prompt. Score every shot 1-5: "with the sound off, reading the subtitle, does a
+viewer instantly connect this picture to the words being sung - and is it cool and funny?"
+5 = the sung words acted out literally, absurd, cool or funny; a frame you'd send to a friend.
+4 = literal and clear.
+3 = literal but flat or off-tone: generic grinning at nothing, pastel / candy / glitter overload, dull office,
+    nothing a 3 s clip could show happening.
+2 = generic: standing, staring, walking, typing, looking at screens, mood, scenery.
+1 = unrelated, or breaks a hard rule: ANY blood, red dripping liquid, wounds, organs or organ-like tissue (an organ in the
+    lyrics may only be a cute sparkly plush heart / VIP-badge character or an abstract glowing heart); menace, cults, hooded figures, judges, hospitals, anything medical, anatomical,
+    bloody, gory or creepy; readable text, numbers, signs or logos in the image; a real or famous person, character,
+    robot design or brand; anything added to or described about the Pip toy beyond "the toy".
+Be strict about tone and faces: mixed expressions (cool, smirking, deadpan, laughing), natural, never grimace, scream or stare.
+For every shot under 4, write a better "prompt" (25-45 words; same cast letters and same location; max 2 cast, by letter
+only; act out the sung words, especially the cut-in word; real-world colour and natural light; numbers as objects; no text in
+the image; original people only), a "motion" (one strong verb that visibly changes the frame within 3 s) and an honest
+"new_score". Never change what a cast letter is and keep the line's literal subject. Keep hook, chorus and final-line
+shots tied to their callbacks (the same gesture or prop, only bigger). "problem" under 12 words. One review per row,
+"id" exactly as given. Do not use any tools.
+
+{{ROWS}}

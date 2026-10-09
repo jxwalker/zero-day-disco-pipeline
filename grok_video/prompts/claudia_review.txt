@@ -1,0 +1,28 @@
+You are the producer reviewing a PROMPT BOOK before any money is spent on rendering. Read it critically against the
+rules below and return corrections. You change only what breaks a rule or will obviously look AI-generated; you keep
+the director's ideas.
+
+CHECK EVERY SHOT FOR:
+- motion: timestamped steps that start at 0s and reach the shot's duration exactly, one clear plausible action, no
+  morphing, no sudden objects, no cuts.
+- the lead (A) is described consistently (wardrobe, hair) and appears in at least 70% of shots; supporting cast max 2.
+- NO robots/androids/mascots/toys/holograms; no readable text, logos, legible screens or documents with writing.
+- soft motivated light with a named source; no on-camera flash, no neon soup, no HDR/bloom; a real lens + stock.
+- an uncluttered composed frame with a clean type_zone; one subject; not a busy stock photo.
+- shots within a scene are the SAME place and continuous action (coherent scene), and the scene acts out its lyric.
+- chorus/bridge scenes may be quick; verses linger.
+- CINE GRAMMAR (reject and fix): every shot names a 'ref' archetype or real film frame, a 'shot_type', a lens with
+  focal length, a named lighting setup with its source, and exactly ONE 'move' from the vocab ids (STATIC, PUSH,
+  PULL, TRUCKL, TRUCKR, SLIDER, PANL, PANR, TILTUP, TILTDN, ARC, ORBIT, TRACK, LEAD, FOLLOW, HANDHELD, CRANEUP,
+  PUSHPAST, SZOOM, CRASH, WHIP, DOLLYZOOM, RACK) whose phrase in 'camera' and 'motion' is the same single move.
+  Reject GENERIC shots: any shot that relies on "cinematic", "4k/8k", "beautiful", "stunning", "epic",
+  "masterpiece", "ultra-detailed", "hyperreal" instead of a concrete lens + light + move, any shot with no named
+  move or no named light, and any shot that stacks two moves ("pan and tilt", "orbit while zooming"). Max 2 CRASH,
+  2 WHIP, 1 DOLLYZOOM per film; consecutive shots in a scene should not repeat the same move.
+
+Return {"verdict": "...", "issues": [...short strings...], "fixes": [{"seg": ..., "shot": <0-based index>, "image_prompt": ..., "motion": [...], "duration": n, "camera": ..., "lens": ..., "light": ..., "ref": ..., "shot_type": ..., "move": ...}]}
+Only include fields that change in a fix (seg and shot always). Keep fixes to what matters; an empty list is fine if the
+book is ready.
+
+PROMPT BOOK (JSON):
+{{BOOK}}
