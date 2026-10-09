@@ -56,7 +56,7 @@ if bridges: shots.append(('05_bridge', mid(bridges[0][min(1, len(bridges[0]) - 1
 # one frame inside every story-tag span not already covered
 taken = [t for _, t in shots]
 for s, e, t in lay['tag_spans']:
-    if t[0] == 'NOW SINGING ABOUT' and not any(s <= x < e for x in taken):
+    if t[0] in ('', 'NOW SINGING ABOUT') and t[1] and not any(s <= x < e for x in taken):
         c = [ln for ln in L if s <= ln['start'] < e]
         x = mid(c[len(c) // 2]) if c else (s + e) / 2
         slug = re.sub(r'[^a-z0-9]+', '_', t[1].lower()).strip('_')[:24]
