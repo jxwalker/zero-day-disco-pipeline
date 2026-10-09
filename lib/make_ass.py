@@ -135,7 +135,7 @@ story = T.get('story_tags', [])
 sec_over = T.get('section_tags', {})
 defaults = {
     'intro': (f"AI NEWS \u00b7 {date.day} {date:%b %Y}".upper(), T.get('intro_text', "Today's AI news, as a song"), 'cyan'),
-    'verse': ('NOW SINGING ABOUT', None, 'pink'),
+    'verse': ('', None, 'pink'),
     'prechorus': ('PRE-CHORUS', 'Here it comes\u2026', 'purple'),
     'chorus': ('CHORUS', 'Sing along!', 'yellow'),
     'postchorus': ('POST-CHORUS', 'Sing along!', 'yellow'),
@@ -147,11 +147,11 @@ def tag_for(ln):
     for s in story:
         if s['section'].lower() == ln['section'].lower() and s['lines'][0] <= ln['line_no'] <= s['lines'][-1] \
                 and ('occurrence' not in s or s['occurrence'] == ln['section_occ']):
-            return (s.get('label', 'NOW SINGING ABOUT'), s['text'], s.get('color', 'pink' if story.index(s) % 2 == 0 else 'cyan'))
+            return (s.get('label', ''), s['text'], s.get('color', 'pink' if story.index(s) % 2 == 0 else 'cyan'))
     lab, txt, c = defaults.get(ln['kind'], defaults['other'])
     if ln['kind'] == 'chorus' and 'final' in ln['section'].lower(): lab = 'FINAL CHORUS'
     o = sec_over.get(ln['section']) or sec_over.get(ln['kind']) or {}
-    lab = o.get('label', lab or ln['section'].upper()); txt = o.get('text', txt if txt is not None else ln['section'])
+    lab = o.get('label', lab if (lab or ln['kind'] == 'verse') else ln['section'].upper()); txt = o.get('text', txt if txt is not None else ln['section'])
     return (lab, txt, o.get('color', c))
 groups = []
 for ln in L:
@@ -187,13 +187,13 @@ for s, e, (lab, txt, c) in spans:
     size = 64
     tw = width(txt, F_BLACK, size)
     while tw > 920 and size > 40: size -= 2; tw = width(txt, F_BLACK, size)
-    lw = width(lab, F_XB, 34) + 4 * len(lab)
-    bw = int(max(tw, lw) + 90); bh = 132 if txt else 80; x = (W - bw) // 2; y = 64
+    lw = (width(lab, F_XB, 34) + 4 * len(lab)) if lab else 0
+    bw = int(max(tw, lw) + 90); bh = (132 if lab else 100) if txt else 80; x = (W - bw) // 2; y = 64
     fad = "\\fad(250,200)"
     D(4, s, e, 'Box', f"{{\\pos({x},{y})\\p1\\1c{col(cc)}\\1a&H70&\\blur14{fad}\\bord0\\shad0}}{rrect(bw, bh, 32)}")
     D(5, s, e, 'Box', f"{{\\pos({x},{y})\\p1\\1c{col(INK)}\\1a&H28&\\3c{col(cc)}\\bord4\\shad0{fad}}}{rrect(bw, bh, 32)}")
-    D(6, s, e, 'TagL', f"{{\\pos({W//2},{y+14 if txt else 22})\\an8\\1c{col(cc)}{fad}}}{esc(lab)}")
-    if txt: D(6, s, e, 'TagT', f"{{\\pos({W//2},{y+50})\\an8\\fs{size}{fad}}}{esc(txt)}")
+    if lab: D(6, s, e, 'TagL', f"{{\\pos({W//2},{y+14 if txt else 22})\\an8\\1c{col(cc)}{fad}}}{esc(lab)}")
+    if txt: D(6, s, e, 'TagT', f"{{\\pos({W//2},{y+50 if lab else y+16})\\an8\\fs{size}{fad}}}{esc(txt)}")
 
 # ---------- title card
 D(7, 0, TE, 'Box', f"{{\\pos(0,0)\\p1\\1c{col(INK)}\\1a&H20&\\fad(0,500)}}m 0 0 l {W} 0 l {W} {H} l 0 {H}")
