@@ -233,7 +233,10 @@ D(9, ES + 0.9, DUR, 'Small', f"{{\\pos({W//2},{yl})\\fs34\\1c{col(YEL)}\\fad(500
 url = T.get('song_url')
 if url:
     D(9, ES + 0.9, DUR, 'Small', f"{{\\pos({W//2},{yl+60})\\fs28\\1c{col(WHITE)}\\fad(500,0)}}{esc(url.replace('https://', ''))}")
-D(1, TE, ES, 'Foot', f"{esc(title.upper())}  \u00b7  AI NEWS {date:%d.%m.%Y}")
+HANDLE = T.get('handle', '@jxwalker')
+D(1, TE, ES, 'Foot', f"{esc(HANDLE)}  \u00b7  {esc(title.upper())}  \u00b7  AI NEWS {date:%d.%m.%Y}")
+D(1, 0, TE, 'Foot', esc(HANDLE))
+D(1, ES, DUR, 'Foot', esc(HANDLE))
 open(os.path.join(work, 'video.ass'), 'w').write(hdr + '\n'.join(ev) + '\n')
 C.save_json({'title_end': TE, 'end_start': ES, 'tag_spans': [[round(s, 2), round(e, 2), list(t)] for s, e, t in spans]},
             os.path.join(work, 'layout.json'))
