@@ -119,3 +119,6 @@ python3 /home/box/suno-daily/tools/x_post.py --text-file post.txt --video video_
 Video is uploaded in 4 MB chunks (v2 media upload, falls back to v1.1) and waits for processing.
 @jxwalker has X Premium+, so posts can be longer than 280 characters. The daily post @mentions every X account credited on the end card. If a post fails with 403 "oauth1 app permissions",
 the access token is read-only: the owner must regenerate it after setting Read and write.
+
+## Lyric rules (pre-Suno)
+See `LYRICS_RULES.md`. Before pasting lyrics into Suno run `python3 tools/lyrics_lint.py <day>/lyrics.txt` (exit 1 = fix lines first). No sung "AI news"/meta lines; no instrument/genre/production words in sung lines (those live in style.txt only).
