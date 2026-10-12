@@ -1,7 +1,9 @@
 """slopcore style (cine-real v2) pipeline pieces: jobs (cast portraits -> scene stills as image_edit from the cast ->
 short reference_to_video clips), Pip toy cameos from the locked reference, the motion-first edit and the render.
 Dispatched from cine_real.prepare / generate_media / edit_and_render when --style slopcore."""
-import os, random, re, time
+import json
+import subprocess
+import math, os, random, re, time
 import common_gv as G
 import real_plan as RP
 import slop_plan as SP
@@ -11,7 +13,11 @@ import cine_real as CR
 
 NO_TEXT = ("Absolutely no text anywhere: no letters, numbers, writing, signs, labels, captions, logos, documents, receipts "
            "or readable screens. Original people and designs only, no lookalikes of celebrities, real people or famous "
-           "characters or robots. Natural, correct faces and hands.")
+           "characters or robots. Natural, correct faces and hands. Shot as REAL live-action film, never CGI: practical "
+           "props and real materials with wear and dirt (scuffed leather, tarnished brass, dust, mud), robots as "
+           "practical animatronic film props (painted fibreglass and steel panels, seams, screws, scratches, cables), "
+           "imperfect real skin with pores, motivated light from a real source, real lens optics; no plastic sheen, "
+           "no airbrushed faces, no toy-like or video-game look, no bloom.")
 PIP_DESC = ("this exact character as a small physical collectible vinyl toy figure, exactly the same design, proportions "
             "and colours: white egg-shaped body, two tall white bunny ears with pink insides, a thin antenna with a small "
             "yellow ball, a dark-navy face screen with glowing cyan closed happy arc eyes (^ ^) and pink blush, a pink "
@@ -40,17 +46,38 @@ def pip_clip(cid, first, out, seg, sec):
                        "look, no text.")}
 
 
-def scene_prompt(body, who, cast, LK):
+def no_text(body):
+    """NO_TEXT, except the key numbers a shot shows as big physical painted figures (13 Oct: 41 vs 61 never appeared)."""
+    nums = re.findall(r'painted (?:wooden |metal |tin )?(?:numerals?|figures?|numbers?)\s+"?(\d{1,3}%?)"?(?:\s+(?:and|vs\.?)\s+"?(\d{1,3}%?)"?)?', body, re.I)
+    keep = [n for t in nums for n in t if n][:2]
+    if not keep:
+        return NO_TEXT
+    return (f"The ONLY marks allowed are the big hand-painted figures {' and '.join(keep)} exactly as written, crisp and "
+            "physically painted on the object; otherwise " + NO_TEXT[0].lower() + NO_TEXT[1:])
+
+
+def robot_refs(body, who, cast):
+    """13 Oct: robot design drifted when a prompt said 'the robot horse' without its letter: pin the lettered robot."""
+    if not re.search(r'\brobot', body, re.I):
+        return []
+    bots = [k for k, c in cast.items() if re.search(r'\brobot', (c.get('role', '') + ' ' + c.get('description', '')), re.I)]
+    if any(k in who for k in bots):
+        return []
+    return [k for k in bots if re.search(rf'\b{k}\b', body)][:1] or bots[:1]
+
+
+def scene_prompt(body, who, cast, LK, force_gen=False):
     """who: cast ids in this image. Returns (prompt, kind, refs)."""
     who = list(who) + [k for k in cast if k != 'A' and k not in who and re.search(rf'\b{k}\b', body)]  # letter used but not listed
+    who += robot_refs(body, who, cast)
     refs = [k for k in who if k in cast][:2]
-    if refs:
+    if refs and not force_gen:
         names = '; '.join(f"{k} = the person in reference image {i + 1} ({cast[k]['role']})" for i, k in enumerate(refs))
         head = (f"Photoreal new scene with the SAME person(s) from the reference image(s): keep each face, hair, age, build "
                 f"and clothes exactly. {names}. Scene: ")
-        return head + body + f" {LK['prompt']} {NO_TEXT}", 'edit', refs
-    desc = ' '.join(f"{k} = {c['description']}." for k, c in cast.items() if re.search(rf'\b{k}\b', body))
-    return (desc + ' ' if desc else '') + body + f" {LK['prompt']} {NO_TEXT}", 'gen', []
+        return head + body + f" {LK['prompt']} {no_text(body)}", 'edit', refs
+    desc = ' '.join(f"{k} = {c['description']}." for k, c in cast.items() if k in who)   # no regex for A: "A concrete..." is an article
+    return (desc + ' ' if desc else '') + body + f" {LK['prompt']} {no_text(body)}", 'gen', []
 
 
 def load_cast_refs(day):
@@ -133,7 +160,7 @@ def build_jobs(plan, slots, work, LK, sec):
                 body = (im.get('image_prompt') or im['prompt']).strip()
                 prompt, kind, refs = scene_prompt(body, who, cast, LK)
                 j = {'id': f's{si:02d}_{k}', 'kind': kind, 'prompt': prompt, 'out': out, 'aspect': '9:16', 'cast': refs,
-                     'gen_prompt': scene_prompt(body, [], cast, LK)[0]}
+                     'gen_prompt': scene_prompt(body, who, cast, LK, force_gen=True)[0]}
                 if kind == 'edit':
                     j['images'] = [os.path.join(work, 'cast', f'{r}.jpg') for r in refs]
                     if len(refs) == 1 and refs[0] in CAST_REFS:      # real person alone: also show the real photo
@@ -143,14 +170,17 @@ def build_jobs(plan, slots, work, LK, sec):
             stills.append(j)
             if is_clip:
                 mo = im.get('motion') or 'the people keep doing the action; handheld camera pushes in slowly'
+                robot = any('robot' in (cast.get(w) or {}).get('description', '').lower() for w in who)
                 hp = os.path.join(work, 'heroes', f'h{si:02d}_{k}.mp4')
                 sl['clip_files'].append(hp)
                 heroes.append({'id': f'h{si:02d}_{k}', 'kind': 'r2v', 'first_frame': out, 'image': out, 'duration': sec,
                                'resolution': '720p', 'aspect': '9:16', 'out': hp, 'seg': sl['seg'], 'pri': si,
                                'prompt': (f"Continue this exact photoreal shot for {sec} seconds as real live-action "
                                           f"footage: {mo} Keep the same people, faces, clothes, place, light and look "
-                                          f"({LK['label']}, grain). Natural human movement and expressions, handheld "
-                                          "camera, no cuts, no text, no logos"
+                                          f"({LK['label']}, grain). "
+                                          + ("The robot stays a hard-shelled machine with the same blank visor head, it "
+                                             "never becomes a person; " if robot else "Natural human movement and expressions, ")
+                                          + "handheld camera, no cuts, no text, no logos"
                                           + (", keep the real cast's faces exactly." if CAST_REFS else ", no lookalikes of real people.")
                                           + (f" {LK['clip_extra']}" if LK.get('clip_extra') else ''))})
     # Pip: two in-story toy shots (each a still + a clip) and the end cameo
@@ -176,6 +206,45 @@ def build_jobs(plan, slots, work, LK, sec):
                               "still and unchanged (a static toy, it never moves or morphs); the camera slowly pushes in "
                               "by hand, dust in the light. Same look, no text.")})
     return cast_jobs, stills, heroes, cameo
+
+
+def _norm(t):
+    import re
+    return re.sub(r'[^a-z0-9]+', ' ', t.lower()).strip()
+
+
+def headline_overlay(day, h):
+    """render data for headline mode: per sung line (normalised text) -> story, the ticker text per story (verified
+    against stories.md, else '@handle  <story heading>'), the headline card, the chorus hook words."""
+    import headline as H
+    st = {x['n']: x for x in H.stories(day)}
+    voc = H.vocab(day)
+    tick, bad = {}, []
+    for t in h.get('ticker') or []:
+        ok, b = H.ticker_ok(t['text'], voc, st.get(t['story'], {}).get('handles', []))
+        if ok:                                         # several lines for one story scroll one after another
+            tick[t['story']] = (tick[t['story']] + '      •      ' + t['text']) if t['story'] in tick else t['text']
+        else:
+            bad.append((t['story'], b))
+    for n in [h['main_story']] + list(h.get('secondary') or []):
+        if n not in tick and n in st:
+            tick[n] = ' · '.join('@' + x for x in st[n]['handles'][:2]) + '  ' + st[n]['title']
+    line_story = {}
+    for sec in h['sections']:
+        for l in sec['lines']:
+            line_story.setdefault(_norm(l['text']), l['story'])
+    card = (h.get('headline_card') or '').strip()
+    cok = all(w.lower().strip(".,':;!?") in voc or w.lower() in H.STOP for w in card.split())
+    return {'title': h['title'], 'line_story': line_story, 'ticker': tick, 'ticker_rejected': bad,
+            'card': card if cok else st.get(h['main_story'], {}).get('title', ''), 'main': h['main_story'],
+            'hook_words': (h.get('hook_words') or '').strip(), 'vocab': sorted(voc)}
+
+
+def narrative_vocab(day):
+    """words allowed in diegetic text (spell check): everything in stories.md, lyrics.txt, title.txt, treatment.json."""
+    import re
+    txt = ' '.join(G.read(os.path.join(day, f)) for f in ('stories.md', 'lyrics.txt', 'title.txt', 'treatment.json'))
+    return sorted({w.lower() for w in re.findall(r"[A-Za-z0-9@%$.'+-]+", txt)} | {w.lower().strip(".'") for w in re.findall(r"[A-Za-z0-9@%$.'+-]+", txt)})
 
 
 def prepare(day, work, look_genre, args, status):
@@ -212,16 +281,53 @@ def prepare(day, work, look_genre, args, status):
     script = planner in ('script', 'opus')
     if script:
         import slop_script as SS
-        pslots = SS.script_slots(plines, n_clips=args.real_heroes, max_images=args.real_images)
+        mx = args.real_images
+        if planner == 'opus' and os.path.exists(os.path.join(day, 'treatment.json')) and not os.environ.get('NARRATIVE_OFF'):
+            mx = min(mx or 999, int(os.environ.get('NARRATIVE_MAX_SHOTS', 66)))     # narrative: fewer, crafted shots
+        pslots = SS.script_slots(plines, n_clips=args.real_heroes, max_images=mx)
+        if mx != args.real_images:                     # narrative: the hook is a cold open that may cover a long
+            for sl in pslots:                          # instrumental intro (13 Oct: 19 s on 1 still, used 19x)
+                if sl['kind'] == 'hook':
+                    sl['images'] = 7
+        intro = intro_seconds(day) if planner == 'opus' else None
+        if planner == 'opus' and intro is None and os.path.exists(os.path.join(day, 'headline.json')):
+            for sl in pslots:                          # intro length unknown at plan time: plan 7 distinct hook shots,
+                if sl['kind'] == 'hook':               # the edit uses as many as the real intro needs (no recycling)
+                    sl['images'] = 7
+                    sl['dur_hint'] = 'unknown (3-20)'
+            G.log("intro: length unknown at plan time -> hook planned with 7 distinct shots; the edit trims to the real intro")
+        if intro:                                      # 13 Oct: time the hook to the REAL intro (plan assumed 3.75 s, was 12 s)
+            for sl in pslots:
+                if sl['kind'] == 'hook':
+                    sl['images'] = max(2, min(8, math.ceil(intro / 1.6)))
+                    sl['dur_hint'] = round(intro, 1)
+            G.log(f"intro: first vocal at ~{intro:.1f}s -> hook planned with {[x['images'] for x in pslots if x['kind'] == 'hook'][0]} shots")
     else:
         pslots = SP.provisional_slots(plines, n_clips=args.real_heroes, max_images=args.real_images)
     G.save_json(pslots, os.path.join(work, 'slots.json'))
     G.log(f"slots (from lyrics.txt): {len(pslots)} segments, {sum(s['images'] for s in pslots)} scenes"
           + (' (max; the script picks 1-3 per line)' if script else f", {sum(s['clips'] for s in pslots)} video clips") + f" of {sec} s (+ Pip)")
     t0 = time.time()
+    cards = {}
     if script:
         if planner == 'opus':
             import slop_opus as SO
+            import story_cards as SC
+            SO.NARRATIVE.clear()
+            SO.HEADLINE.clear()
+            SO.HEADLINE.update(SO.headline(day) or {})
+            if SO.HEADLINE:
+                status['headline'] = SO.HEADLINE.get('title')
+                G.log(f"headline mode: headline.json ({SO.HEADLINE.get('title')!r}); ticker + headline card + hook words only")
+            else:
+                SO.NARRATIVE.update(SO.narrative(day) or {})
+            if SO.NARRATIVE:
+                status['narrative'] = SO.NARRATIVE.get('title')
+                G.log(f"narrative mode: treatment.json ({SO.NARRATIVE.get('title')!r}); no story cards or word slams")
+            if T.is_daily(day) and tn['tone'] == 'edgy' and not SO.NARRATIVE and not SO.HEADLINE:          # news songs only (not the family songs)
+                cards = SC.make(day, work, plines, deadline=getattr(args, 'deadline', None))
+            SO.STORY_NOTE = SC.director_note(cards)
+            status['story_cards'] = len(cards)
             tp = os.path.join(work, 'align', 'timings.json')
             timed = G.load_json(tp) if os.path.exists(tp) else None      # word onsets when already known (re-runs)
             plan = SO.plan(day, work, look, pslots, plines, deadline=getattr(args, 'deadline', None),
@@ -240,6 +346,13 @@ def prepare(day, work, look_genre, args, status):
     status['plan'] = {'secs': round(time.time() - t0), 'segments': len(plan['segments']), 'fallback': bool(plan.get('fallback')),
                       'cast': [c.get('role') for c in plan.get('cast') or []], 'planner': plan.get('planner', SP.PLANNER_VERSION),
                       'review': plan.get('review')}
+    LK['story_cards'] = cards
+    if script and planner == 'opus' and SO.HEADLINE:
+        LK['headline'] = headline_overlay(day, SO.HEADLINE)
+    elif script and planner == 'opus' and SO.NARRATIVE:
+        LK['narrative'] = {'title': G.read(os.path.join(day, 'title.txt')).strip(),
+                           'onscreen': {b['seg']: b.get('onscreen') for b in plan.get('beats') or [] if (b.get('onscreen') or '').strip()},
+                           'vocab': narrative_vocab(day)}
     cast_jobs, stills, heroes, cameo = build_jobs(plan, pslots, work, LK, sec)
     G.log(f"jobs: {len(cast_jobs)} cast portraits, {len(stills)} stills ({sum(1 for j in stills if j['kind']=='edit')} "
           f"from cast/Pip references), {len(heroes)} clips")
@@ -265,12 +378,35 @@ def generate_media(P, args, status):
             if j['kind'] == 'edit' and j.get('cast') and not all(os.path.exists(x) for x in j['images']):
                 j.update(kind='gen', prompt=j['gen_prompt']); j.pop('images', None)
         args.hero_parallel = 5
-        gen.update(CR.generate(P['stills'], P['heroes'], P['cameo'], P['pslots'], work, args, status))
+        import judge as J
+        gated = os.environ.get('GV_REALISM') != '0'
+        if gated:                                      # 13 Oct realism gate: stills -> Opus review/reroll -> clips
+            g1 = CR.generate(P['stills'], [], P['cameo'], P['pslots'], work, args, status)
+            rg = J.realism_gate(P, args, status, g1.get('spent_pct'))
+            blocked = set(rg.get('blocked_clips') or [])
+            u_mid = CR.usage_pct()
+            spent1 = (u_mid - g1['usage_start']) if (u_mid is not None and g1.get('usage_start') is not None) else (g1.get('spent_pct') or 0)
+            import copy
+            a2 = copy.copy(args)
+            a2.real_max_pct = max(0.0, args.real_max_pct - spent1)
+            G.log(f"clips after the gate: {len(P['heroes']) - len(blocked)} of {len(P['heroes'])}, budget {a2.real_max_pct:.1f}%")
+            g2 = CR.generate([], [h for h in P['heroes'] if h['id'] not in blocked], None, P['pslots'], work, a2, status)
+            gen.update(g2)
+            gen.update(usage_start=g1.get('usage_start'), stills_made=g1.get('stills_made'),
+                       spent_pct=(spent1 + (g2.get('spent_pct') or 0)), realism=rg)
+        else:
+            gen.update(CR.generate(P['stills'], P['heroes'], P['cameo'], P['pslots'], work, args, status))
+        try:                                           # P2 judge-and-reroll loop (fail-open, budget/time aware)
+            gen['judge'] = J.loop(P, args, status, gen, stills_done=gated)
+        except Exception as e:
+            G.log(f"WARNING: judge loop not run: {e!r}"[:300])
     status['generation'] = gen
     return gen
 
 
 MAX_STILL_USES = 2
+HOLD_STILL_S = 1.2       # P6: longest single still on screen (s)
+HOLD_CLIP_S = 2.0        # P6: longest single clip window on screen (s)
 TOP = (0.5, 0.32)          # punched-in framing keeps heads in frame (people are the subject)
 
 
@@ -438,7 +574,9 @@ def make_edit_script(segs, cuts, pslots, mapping, ok, ex, work, seed):
             if t is None:
                 continue
             if starts and (t < starts[-1][0] + 0.45 or t > b - 0.45):
-                continue                                     # too tight to show: it stays as an alternate take
+                t = min(max(t, starts[-1][0] + 0.45), b - 0.45)   # nudge a crowded/late planned shot instead of losing it
+                if t < starts[-1][0] + 0.45:
+                    continue                                 # too tight to show: it stays as an alternate take
             starts.append((max(a, t), x))
         if not starts:
             starts = [(a, main[0] if main else own[0])]
@@ -454,8 +592,27 @@ def make_edit_script(segs, cuts, pslots, mapping, ok, ex, work, seed):
             if a + 0.4 < c['t0'] < b - 0.4 and all(abs(c['t0'] - t) >= 0.4 for t in pts):
                 pts.append(round(c['t0'], 3))
         pts = sorted(pts) + [b]
+        # P6 hold caps: no single picture stays on screen longer than HOLD_STILL_S (still) / HOLD_CLIP_S (clip);
+        # a long span is split and the extra pieces rotate in unused shots of the same line (or the next take)
+        split_pts, capped = set(), []
+        for q in range(len(pts) - 1):
+            t0, t1 = pts[q], pts[q + 1]
+            capped.append(t0)
+            cur0 = [x for t, x in starts if t <= t0 + 1e-6]
+            cur0 = cur0[-1] if cur0 else None
+            cap_s = HOLD_CLIP_S if (cur0 and cur0.get('clip')) else HOLD_STILL_S
+            n = int(math.ceil((t1 - t0) / cap_s - 1e-6))
+            for m in range(1, n):
+                tp = round(t0 + (t1 - t0) * m / n, 3)
+                capped.append(tp); split_pts.add(tp)
+        if split_pts:
+            sm['hold_splits'] = sm.get('hold_splits', 0) + len(split_pts)
+        pts = capped + [b]
         used_take = {}
         alt = [x for x in main if x not in [y for _, y in starts]] + [y for _, y in starts]
+        for j in (idx + 1, idx - 1, idx + 2, idx - 2):        # one-shot lines: borrow the neighbours' shots, not a
+            if 0 <= j < len(order):                           # 4-7 s hold of the same picture
+                alt += [y for y in shots_of.get(mapping.get(order[j]['id'])) or [] if not y.get('pip') and y not in alt]
         for q in range(len(pts) - 1):
             t0, t1 = pts[q], pts[q + 1]
             if t1 - t0 < 0.08:
@@ -463,7 +620,11 @@ def make_edit_script(segs, cuts, pslots, mapping, ok, ex, work, seed):
             cur = [x for t, x in starts if t <= t0 + 1e-6][-1]
             n_take = used_take.get(id(cur), 0)
             x = cur
-            if n_take >= 3:                            # this shot is used up: an alternate shot of the same line
+            if t0 in split_pts:                        # a hold-cap split: prefer a shot of this line not seen yet
+                fresh = [y for y in alt if y is not cur and not used_take.get(id(y))]
+                if fresh:
+                    x = fresh[0]; n_take = 0
+            if x is cur and n_take >= 3:                            # this shot is used up: an alternate shot of the same line
                 x = min(alt, key=lambda y: used_take.get(id(y), 0))
                 n_take = used_take.get(id(x), 0)
             used_take[id(x)] = n_take + 1
@@ -658,3 +819,19 @@ def edit_and_render(P, L, out, args, status):
     RR.render(edit, LK, audio, ass, out, dur, seed=seed, hard_deadline=getattr(args, 'deadline', None))
     G.log(f"render: {time.time()-t0:.0f}s")
     return True, {'metrics': metrics, 'look': P['look']}
+
+
+def intro_seconds(day):
+    """Seconds before the first sung word, from an earlier alignment of this same audio (exact) if one exists, else None.
+    (13 Oct: whisper on the full mix gave 13-28 s for a 12.2 s intro, so the plan does not guess.)"""
+    import glob
+    au = os.path.join(day, 'audio.mp3')
+    for f in sorted(glob.glob(os.path.join(day, 'work*', 'align', 'timings.json')), key=os.path.getmtime, reverse=True):
+        try:
+            if os.path.getmtime(f) < os.path.getmtime(au):
+                continue
+            w = json.load(open(f))[0]['words'][0]
+            return float(w[1])
+        except Exception:
+            continue
+    return None

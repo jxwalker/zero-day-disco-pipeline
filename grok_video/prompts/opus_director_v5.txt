@@ -33,13 +33,16 @@ holding up the gag object while looking at the lens, golden hour as the default 
 DIRECTION RULES:
 1. HOOK (first 2 s): open on the most extreme image of the whole song: an extreme close-up mid-action, A walking at the
    lens ahead of a huge formation, or something impossible in the sky over a mundane place. No setup actions (switches,
-   doors, waking up). The hook also plants the prop or gesture that the ending pays off.
+   doors, waking up). The hook segment may be under 1 s and only its FIRST shot is sure to be shown, so that one shot
+   also plants the prop or gesture that the ending pays off.
 2. A PERFORMS. A is the calm, slightly frightening authority of this world. In at least a third of her shots she
    addresses the lens: lip-syncs the line into it, points at the viewer, walks straight at camera, slowly turns her head
    to the lens, or does the SIGNATURE GESTURE. Supporting cast are the people things happen to.
-3. SIGNATURE GESTURE: invent one simple one-hand gesture tied to the chorus words, readable in one second, that anyone
-   could copy (the meme). A does it in chorus 1, hundreds copy it in chorus 2, a whole stadium, city or army in chorus
-   3, and it bookends the hook and the final shot.
+3. SIGNATURE GESTURE: invent one simple one-hand POSE tied to the chorus words that reads in a single frozen frame
+   (most shots are stills): a held shape such as two fingers hooked into an invisible seam at eye level pulling it
+   open, never a movement like a finger dragged down the face (frozen, that reads as "shush" or "thinking"). Anyone
+   could copy it (the meme). A holds it in chorus 1, hundreds hold it in chorus 2, a whole stadium, city or army in
+   chorus 3 (write the pose itself into every crowd prompt), and it bookends the hook and the final shot.
 4. CHORUS: one idea per chorus line, returning on every repeat with the SAME core composition and gesture (a visual
    rhyme), only bigger and darker, but each repeat gets a new location, a new angle and one new twist (never the same
    insert three times): repeat 1 = A and a few people; 2 = hundreds in formation; 3 = thousands at city or planetary scale, the
@@ -64,6 +67,15 @@ DIRECTION RULES:
 9. PAYOFF: the final sung line and the outro tail complete or reverse the HOOK in the same place with the same prop or
    gesture, now at the scale the song reached (e.g. hook: A flips one switch and one office lights up; end: A flips it
    back and the whole city behind her goes dark block by block).
+   The outro tail is often cut short or dropped, so the payoff must also be the FIRST shot (a clip) of the last sung
+   line, never only a still in the tail.
+10. TIMING: at this tempo a sung line lasts 1.5-3 s and a later shot needs about 0.5 s of its own: cut-in words at
+   least 2 words apart, never the line's last word (late shots are dropped), the best gag on word 0. A line or shout
+   held 3 s or longer (outro shouts, final chorus words) gets 2-3 shots, one of them a clip, never one held still.
+11. ROBOTS: every white robot (crews, rows, armies, giants) is D's design: list "D" in that shot's cast so it is
+   edited from D's reference; a robot never turns into a person. A appears only in shots whose cast lists "A".
+12. VOICE MATCH: read the style ({{STYLE}}). If the lead vocal is male, A is a man (or A never lip-syncs and a male
+   cast member sings to the lens); if female, A is a woman. Whoever lip-syncs or screams into the lens matches the voice.
 
 DELIVER (strict JSON, schema enforced):
 - "cast": protagonist A and up to three supporting B, C, D: ORIGINAL people (never a celebrity, never the real people
@@ -80,8 +92,9 @@ DELIVER (strict JSON, schema enforced):
   that carries the line's action (about {{N_CLIPS}} clips in the whole video, at most 2 per line), "still" otherwise.
 - "display": tokens per sung word for the subtitle, fixing brand spellings and using numerals ("GPT-6.1", "Claude Code",
   "66.1", "8x", "$1,000"; give "" to merge following words; keep the count). "accent": the 1 punch token, which is
-  slammed in giant type: the most ominous or absurd verb, noun or number of the line (FREEZE, ENDS, 8x, 66.1), never a
-  filler word or a bare brand name.
+  slammed in giant type: prefer a NUMBER or a NEWS NOUN from the stories (+38%, 100K, 14 DAYS, GHIDRA, MUSE, B300),
+  else the most ominous or absurd verb of the line (FREEZE, ENDS); never a filler word, never an -ING verb (KNOW,
+  RUNNING, LAUGHING, TOPPING), never a bare brand name. Leave "accent" empty rather than slam a weak word.
 - "pip": our mascot is a small physical vinyl toy robot (white egg body, bunny ears, a dark face screen with happy cyan
   eyes). Do NOT describe him further and NEVER put anything on his head or face (no hats, glasses or props). He is a
   static object. Pick exactly 2 lyric segments from: {{LYRIC_SEGS}}, one sentence each, where the toy sits or stands

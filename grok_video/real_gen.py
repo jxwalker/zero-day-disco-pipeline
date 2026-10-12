@@ -225,7 +225,7 @@ class Batcher:
 
     def run(self, jobs):
         t0 = time.time()
-        got = salvage(self.work, jobs)
+        got = 0 if getattr(self, 'no_salvage', False) else salvage(self.work, jobs)   # rerolls must be new pictures
         if got:
             G.log(f"{self.tag}: recovered {got} results from earlier session logs")
         todo = [j for j in jobs if not (os.path.exists(j['out']) and os.path.getsize(j['out']) > 1000)]

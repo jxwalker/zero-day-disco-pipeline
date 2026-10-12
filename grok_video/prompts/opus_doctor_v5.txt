@@ -20,6 +20,11 @@ text in the image; original people only), a "motion" (one verb that visibly chan
 stands, stares, poses or glows) and an honest "new_score". Never change what a cast letter is (a robot stays that robot, a person stays that person) and keep the line's literal
 subject ("robots learn the pour" still shows a robot pouring). Keep hook, chorus and final-line shots tied to their callbacks
 (the same signature gesture or prop, only bigger). "problem" under 12 words. One review per row, "id" exactly as given.
+STILLS: a row with kind "still" becomes ONE photograph shown with a small push or shake; nothing in it moves. Score it
+on that frozen frame alone, and write its rewrite as one decisive frozen instant (the door already mid-air, the moon
+already split in two, the bus already open like a book), never a process ("lurches into motion", "rotates", "pours
+across", "draws itself"). Score 2 any still that only works if something happens over time, and any chorus crowd row
+that does not show the signature gesture held by the whole crowd.
 Do not use any tools.
 
 {{ROWS}}

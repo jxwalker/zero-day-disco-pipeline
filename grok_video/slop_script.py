@@ -16,6 +16,27 @@ N_DROPS = 2
 
 
 # ------------------------------------------------------------------------------------------------ slots
+def _end_slots(segs):
+    """P6: the outro tail, every outro line and every line of the LAST chorus occurrence."""
+    ch = [s for s in segs if s.get('kind') == 'chorus']
+    last = max((s.get('occ') or 1) for s in ch) if ch else None
+    return [s for s in segs if s.get('kind') in ('outro', 'outro_tail')
+            or (s.get('kind') == 'chorus' and (s.get('occ') or 1) == last)]
+
+
+def _force_end_clips(slots, by):
+    """P6: at least one clip on each end slot (outro tail, outro lines, last chorus). Returns clips added; these may go
+    a few over n_clips (the meter budget in cine_real.generate still trims the lowest-priority clips)."""
+    n = 0
+    for sl in _end_slots(slots):
+        shots = (by.get(sl['seg']) or {}).get('shots') or []
+        if shots and not any(sh.get('_clip') for sh in shots):
+            shots[0]['_clip'] = True
+            sl['clips'] = sl.get('clips', 0) + 1
+            n += 1
+    return n
+
+
 def script_slots(lines, n_clips=45, max_images=95):
     """Song order: hook, every sung line (max shots 2-3 by length), drops after the intro / choruses, outro tail.
     'images' here is the MAX; the planner returns 1..max and apply() sets the real counts and the clips."""
@@ -36,10 +57,14 @@ def script_slots(lines, n_clips=45, max_images=95):
     while nd < N_DROPS:
         nd += 1
         segs.append({'seg': f'drop{nd}', 'kind': 'drop', 'text': '', 'section': 'drop', 'images': 2, 'clips': 0})
-    segs.append({'seg': 'outro_tail', 'kind': 'outro_tail', 'text': '', 'section': 'outro', 'images': 1, 'clips': 0})
+    segs.append({'seg': 'outro_tail', 'kind': 'outro_tail', 'text': '', 'section': 'outro', 'images': 3, 'clips': 0})
+    for s in _end_slots(segs):                         # P6: the last chorus and the outro get up to 3 shots each
+        s['images'] = max(s['images'], 3)
     # keep the planner's maximum under the image budget: trim third shots from late lines first
     while sum(s['images'] for s in segs) > max_images:
-        c = max([s for s in segs if s['images'] > 1], key=lambda s: (s['images'], segs.index(s)))
+        end = {id(s) for s in _end_slots(segs)}
+        c = max([s for s in segs if s['images'] > 1 and id(s) not in end] or [s for s in segs if s['images'] > 1],
+                key=lambda s: (s['images'], segs.index(s)))
         c['images'] -= 1
     for s in segs:
         s['hero'] = False
@@ -389,6 +414,7 @@ def apply(plan_, slots, n_clips):
                 b['shots'][k]['_clip'] = True
                 sl['clips'] += 1
                 used += 1
+        used += _force_end_clips(slots, by)
         for sl in slots:
             sl['hero'] = sl['clips'] > 0
         plan_['segments'] = [{'seg': b['seg'], 'location': b.get('visual', ''), 'images': b['shots']} for b in plan_['beats']]

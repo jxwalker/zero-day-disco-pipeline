@@ -219,6 +219,50 @@ test folder:
 A 16:9 master (1920x1080, re-framed from the same stills with landscape type) is possible but not built: Grok's media is
 generated 9:16, so it would need 16:9 stills too (about +1 % per day).
 
+## Judge, story cards and the 12 Oct changes (approved by the owner, 12 Oct 2026)
+From the Opus judge of "Take It Apart" (scored 6/10; report `/workspace/grok-test/judge/2026-10-12_proposals.md`).
+Backup of the code before these changes: `/home/box/suno-daily/tools/grok_video.bak_20261012_judge`.
+
+- **P1 keep planned shots** (`slop_real.make_edit_script`): a planned shot that lands under 0.45 s after the previous
+  one, or too near the end of its line, is nudged instead of dropped. The director prompt gains rules 9 (the payoff is the first clip of
+  the last sung line), 10 (timing) and 11 (every robot uses D's reference; A appears only when listed).
+- **P2 judge-and-reroll loop** (`judge.py`, called from `slop_real.generate_media` after generation): stills are tiled
+  20 per sheet with the cast portraits, and one Opus call (low effort, max 240 s) flags off-model cast, unlisted cast,
+  clones, bad hands, a person wearing another's head, mugging, a chorus crowd without the pose, and text. Up to **15**
+  stills are rerolled (the prompt gets "fix: <reason>"; the original is kept as `*.orig.jpg`) and re-judged. Clips are
+  judged on 3 frames each, up to **4** are rerolled and re-judged, and every clip that still fails goes into
+  `work/qa_exclude.json` (its still stands in). Logs and sheets are in `work/judge/`, and the result is in `status.json` under
+  `judge_loop`. Budget: it rerolls only while spent + cost <= cap - 0.8 %. Time: stills need >= 7 min and clips >= 9 min
+  before the generation stop. **Fail-open:** any Opus error or timeout means the step is skipped, a warning is logged and the run goes on.
+  Switches: `GV_JUDGE=0` (off), `GV_JUDGE_FAIL=opus` (test fail-open).
+- **P3** the article "A" no longer pulls in cast A (`scene_prompt`); robot shots get a "stays a machine" clip prompt.
+- **P4/P5** the signature gesture is a held POSE that reads in a frozen frame; the doctor rewrites stills as frozen instants.
+- **P6 hold caps** (`HOLD_STILL_S` 1.2 s, `HOLD_CLIP_S` 2.0 s in `slop_real.py`): longer spans are split, and the extra
+  pieces rotate in unused shots of the same line. **Outro coverage** (`slop_script`): the outro tail, the outro lines and the last
+  chorus get up to 3 shots and at least one clip each (this may go a few clips over `--real-heroes`; the meter budget
+  still trims). Director rule 12: the lead's gender matches the vocal in the style text.
+- **P7 story cards** (`story_cards.py`, edgy daily songs only): one Opus call (low effort, about 10 s) before the
+  director writes 1-2 news cards per verse section ("@handle" over a 3-6 word headline such as `B300 RENTALS UP 38%`),
+  each on the lyric line that sings that story. **Every card is checked against stories.md**: handles and numbers must
+  appear in it verbatim; words must be spelt as in stories.md or the lyrics, or be ticker glue (UP, NEARLY...). A card that
+  fails is dropped (see `work/story_cards.json` -> `dropped`). The line-to-story map is appended to the director's
+  STORIES block, so those shots show that story literally. The cards render in the `Card` ASS style (top third, boxed,
+  on the line's first sung word, about 2 s) in place of that line's verse slam. Chorus slams stay as the hook words.
+  Slams skip filler and -ING words (`real_render._filler_slam`). Colour code: numbers and news nouns are in the look's
+  accent colour; chorus and hook words are white. Fail-open: no cards means the old verse slams. `GV_STORY_CARDS=0` turns them off.
+- **Post-run judge** (`judge.post_run`, from `grok_video.finish` after a verified slopcore/cine-real video): a
+  detached, niced Opus run writes `<day>/judge_<style>.md` (scores, top 5 gaps, up to 5 proposals with meter cost) and
+  `<day>/judge_<style>.log`. It never blocks the run or the post, and **nothing is applied**: the owner approves. `GV_POST_JUDGE=0` turns it off.
+- **Safety fix:** a `--skip-gen` run no longer starts the cine-real or mascot fallbacks (on 12 Oct a dry run that failed
+  fell back and spent about 3 %).
+- **Tests 12 Oct:** dry run (`--skip-gen`) OK in 430 s; 4 story cards, all passing the stories.md check. Real test
+  (`/workspace/grok-test/judge/real/`, cap 1.5 %): the judge flagged 8/87 stills (mostly the old A leak), rerolled 8 and
+  2 still failed and were left out; it flagged 14/48 clips, rerolled 4 and left out 10. The loop took 193 s and the meter went 14 -> 15 %
+  (about 0.5 %). Fail-open was checked with `GV_JUDGE_FAIL=opus` and `GV_STORY_CARDS_FAIL=1`. The post-run judge writes its report in about 4 min.
+- **Expected cost per run:** about 6.6-7.0 % (it was about 6 %): rerolls are up to 15 stills (about 0.2 %) and 4 clips (about 0.4 %),
+  plus 2-4 outro clips; it is all inside the unchanged 7.5 % cap and time limits. Rollback:
+  `rm -rf /home/box/suno-daily/tools/grok_video && cp -a /home/box/suno-daily/tools/grok_video.bak_20261012_judge /home/box/suno-daily/tools/grok_video`.
+
 ## Tone profiles (9 Oct 2026): the tone follows the song
 
 `tone.py` picks a profile at the start of slopcore (`<work>/tone.json`, `tone=` in the status line):
@@ -455,3 +499,27 @@ grok_video.sh /home/box/suno-daily/2026-10-05 --style mascot --skip-gen --look e
   `tone.txt`). Prompts `prompts/opus_{director,doctor}_playful.txt`; look `sunlit-portra` (35mm, warm Portra, real-world
   colour, one red accent). Mixed expressions (laughing <= ~30%), varied light, no pastel/candy/glitter overload, same gore ban.
 - Messenger copy cap is now 18 MB (MESSENGER_MAX_BYTES) for special folders.
+
+## Narrative mode (13 Oct 2026, test; not yet the daily default)
+the owner: "random words thrown up on the screen ... a musical narrative with visual storytelling". Song and film are
+written together by Opus: `python narrative.py write <day> [--out DIR]` picks ONE main story from stories.md, writes a
+treatment (protagonist/want/obstacle/turn/payoff, 3-4 locations, escalating chorus motif, final image, sourced facts),
+then lyrics.txt / style.txt / title.txt (lyrics_lint clean, identical chorus, title in chorus; one repair call) and
+storyboard_draft.md + treatment.json/.md. When `<day>/treatment.json` exists, grok_video's slopcore Opus planner uses
+prompts/opus_director_narrative.txt + opus_doctor_narrative.txt (treatment as the script, <=66 shots), story cards
+and word slams/subtitles are off, and the type is: title card in the hook, the chorus hook line (same style every
+repeat), diegetic text from beats' "onscreen" (spell-checked against the day's own words; misspelt ones dropped), credits.
+Looks, Pip, judge/reroll, fallbacks and the 7.5 % cap are unchanged. `NARRATIVE_OFF=1` ignores treatment.json.
+Karaoke: tools/build_video.sh now exits 0 (KARAOKE_SKIPPED) for plain YYYY-MM-DD folders unless `--karaoke`.
+
+## Headline mode (13 Oct 2026, the owner-approved plan; test)
+`python headline.py write <day> [--out DIR]` -> lyrics.txt/style.txt/title.txt + headline.json/.md, tags.json
+`sources` = sung stories' handles only. Structure: hook (headline gag + title) / Verse 1 main story literal / identical
+chorus with wordplay / Verse 2 2-3 secondary stories / bridge with Suno meta-tag surprise / final chorus one-word
+callback / outro punchline. Opus ranks stories, writes 3 hook options, self-scores lyrics (clarity, wordplay,
+catchiness >= 8; up to 2 rewrites), ticker lines verified against stories.md. `<day>/headline.json` takes precedence over
+treatment.json (narrative mode kept, unused): prompts/opus_*_headline.txt, no story cards/slams; type = title (0-3 s),
+one headline card on the main story's first line, chorus hook line as sung, bottom news ticker per story span (switches
+on the line where the story changes). `HEADLINE_OFF=1` ignores it. Also 13 Oct: cast lists pruned to letters named in
+the prompt (slop_opus.fix_cast); hold-cap splits borrow neighbouring lines' shots; judge prompt is mode-aware and adds
+a sound-off test in headline mode. Dry run: 2026-10-13-headline/dryrun/.

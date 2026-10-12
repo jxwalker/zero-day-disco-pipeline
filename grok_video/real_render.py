@@ -309,6 +309,136 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     return len(ev)
 
 
+FILLER_SLAMS = {'know', 'go', 'get', 'got', 'it', 'all', 'now', 'yeah', 'oh', 'up', 'out', 'down', 'the', 'and', 'you',
+                'me', 'we', 'this', 'that', 'so', 'just', 'again', 'away', 'right', 'way', 'time', 'thing', 'things'}
+
+
+def _filler_slam(tok):
+    """P7: a weak giant slam word (filler or an -ING verb); numbers are never filler."""
+    t = re.sub(r'[^a-z0-9%$+.]', '', tok.lower())
+    if not t or re.search(r'\d', t):
+        return False
+    return t in FILLER_SLAMS or (t.endswith('ing') and len(t) > 4)
+
+
+def diegetic_ok(text, vocab):
+    """spell check: every word must appear in the day's stories / lyrics / title / treatment."""
+    v = set(vocab or [])
+    ws = re.findall(r"[A-Za-z0-9@%$.'+-]+", text)
+    bad = [w for w in ws if w.lower() not in v and w.lower().strip(".'!?,") not in v]
+    return not bad, bad
+
+
+def narrative_events(NV, sung, display, acc, end_type, dur):
+    ev = []
+    title = (NV.get('title') or '').upper()
+    first = sung[0]['words'][0][1] if sung else 2.0
+    if title:
+        t1 = max(1.6, min(first - 0.1, 3.5))
+        rows = [title] if len(title) <= 14 or ' ' not in title else [title[:title.rfind(' ', 0, len(title) // 2 + 4)], title[title.rfind(' ', 0, len(title) // 2 + 4) + 1:]]
+        size = int(min(220, min(960 / max(text_w(r), 1e-3) for r in rows)))
+        ev.append(f"Dialogue: 6,{ts(0.05)},{ts(t1)},Title,,0,0,0,,{{\\pos(540,900)\\fs{size}\\fscx114\\fscy114\\t(0,140,\\fscx100\\fscy100)\\fad(0,160)}}" + '\\N'.join(esc(r) for r in rows))
+    NV.setdefault('dropped', [])
+    for li, ln in enumerate(sung):
+        lid = f"{ln['section']}#{ln['section_occ']}:{ln['line_no']}"
+        nxt = sung[li + 1]['words'][0][1] if li + 1 < len(sung) else dur
+        toks = line_tokens(ln, display.get(lid))
+        a0 = toks[0][1] - 0.05
+        a1 = min(max(min(toks[-1][2] + 0.5, nxt - 0.06), a0 + 0.6), end_type)
+        if a0 >= end_type:
+            continue
+        if ln['kind'] == 'chorus':                     # the chorus hook line, same style on every repeat
+            ev.append(f"Dialogue: 5,{ts(a0)},{ts(a1)},Hook,,0,0,0,,{{\\fad(80,100)\\3c{acc}}}" + esc(' '.join(t[0] for t in toks).upper()))
+        txt = ((NV.get('onscreen') or {}).get(lid) or '').strip()
+        if txt and a0 < NV.get('_dg_end', -1):          # never two diegetic labels at once (13 Oct QA)
+            NV['dropped'].append({'seg': lid, 'text': txt, 'bad': ['overlap']}); txt = ''
+        if txt:
+            ok, bad = diegetic_ok(txt, NV.get('vocab'))
+            if ok and len(txt.split()) <= 6:
+                NV['_dg_end'] = min(a1 + 0.2, nxt - 0.05, end_type)
+                ev.append(f"Dialogue: 4,{ts(a0)},{ts(NV['_dg_end'])},Diegetic,,0,0,0,,{{\\fad(120,120)}}" + esc(txt))
+            else:
+                NV['dropped'].append({'seg': lid, 'text': txt, 'bad': bad})
+    return ev
+
+
+def _norm(t):
+    return re.sub(r'[^a-z0-9]+', ' ', t.lower()).strip()
+
+
+TICK_Y, TICK_H, TICK_PX_S = 1630, 84, 230      # band top (px), band height, scroll speed (px/s)
+LYR_MV = 1920 - TICK_Y + 26                   # lyric captions sit just above the ticker band
+
+
+def headline_events(HV, sung, display, acc, end_type, dur):
+    """headline mode (13 Oct): the title card in the hook (0-3 s); ONE big headline card on the main story's first sung
+    line; the chorus hook words on chorus lines (one style); a news ticker along the bottom during story lines,
+    scrolling '@handle fact' of the story being sung and changing exactly when the story changes. No other text."""
+    ev = []
+    title = (HV.get('title') or '').upper()
+    first = sung[0]['words'][0][1] if sung else 3.0
+    if title:
+        t1 = max(1.6, min(3.0, first - 0.1))
+        rows = [title] if len(title) <= 14 or ' ' not in title else [title[:title.rfind(' ', 0, len(title) // 2 + 4)], title[title.rfind(' ', 0, len(title) // 2 + 4) + 1:]]
+        size = int(min(220, min(960 / max(text_w(r), 1e-3) for r in rows)))
+        ev.append(f"Dialogue: 6,{ts(0.05)},{ts(t1)},Title,,0,0,0,,{{\\pos(540,900)\\fs{size}\\fscx114\\fscy114\\t(0,140,\\fscx100\\fscy100)\\fad(0,160)}}" + '\\N'.join(esc(r) for r in rows))
+    ls_ = HV.get('line_story') or {}
+    hook = _norm(HV.get('hook_words') or '')
+    spans, card_done = [], False                   # ticker spans [(story, t0, t1)]
+    for li, ln in enumerate(sung):
+        lid = f"{ln['section']}#{ln['section_occ']}:{ln['line_no']}"
+        nxt = sung[li + 1]['words'][0][1] if li + 1 < len(sung) else dur
+        toks = line_tokens(ln, display.get(lid))
+        a0 = toks[0][1] - 0.05
+        a1 = min(max(min(toks[-1][2] + 0.5, nxt - 0.06), a0 + 0.6), end_type)
+        if a0 >= end_type:
+            continue
+        story = ls_.get(_norm(ln.get('text') or ' '.join(t[0] for t in toks)), 0)
+        is_ch = ln['kind'] == 'chorus' or re.fullmatch(r'(final |last )?chorus.*', ln['section'].lower())
+        if not is_ch and story == 0 and ln['kind'] == 'other':  # 13 Oct: a meta tag ([Key Change]) parsed as a section
+            is_ch = True
+        if is_ch:
+            story = 0
+
+        # 13 Oct (the owner: "we might need all the lyrics"): EVERY sung line as a word-synced karaoke caption above the
+        # ticker; chorus lines bigger in the hook style. Words fill in as they are sung (\\kf from the alignment).
+        kf, prev = [], a0
+        for k, (tk, w0, w1) in enumerate(toks):
+            w0 = max(w0, prev)
+            gap = int(round((w0 - prev) * 100))
+            dur_cs = max(1, int(round(((toks[k + 1][1] if k + 1 < len(toks) else w1) - w0) * 100)))
+            kf.append((f"{{\\k{gap}}}" if gap > 0 else '') + f"{{\\kf{dur_cs}}}" + esc(tk if not is_ch else tk.upper()))
+            prev = w0 + dur_cs / 100
+        sty = 'LyricHook' if is_ch else 'Lyric'
+        ev.append(f"Dialogue: 5,{ts(a0)},{ts(a1)},{sty},,0,0,0,,{{\\fad(60,80)\\q0}}" + ' '.join(kf))
+        if story and story == HV.get('main') and not card_done and HV.get('card'):
+            card_done = True
+            c1 = min(a0 + 2.6, end_type)                # 2.6 s: long enough to read 2-6 words
+            ev.append(f"Dialogue: 6,{ts(a0)},{ts(c1)},HCard,,0,0,0,,{{\\fscx110\\fscy110\\t(0,90,\\fscx100\\fscy100)\\fad(0,120)}}" + esc(HV['card'].upper()))
+        if story and story in (HV.get('ticker') or {}):
+            t_end = min(nxt - 0.08, end_type) if li + 1 < len(sung) else min(a1, end_type)
+            if spans and spans[-1][0] == story and a0 - spans[-1][2] < 2.5:
+                spans[-1][2] = t_end
+            else:
+                spans.append([story, a0, t_end])
+    HV['spans'] = [(a, round(b, 2), round(c, 2)) for a, b, c in spans]
+    band = f"m 0 0 l 1080 0 l 1080 {TICK_H} l 0 {TICK_H}"
+    for story, t0, t1 in spans:
+        txt = HV['ticker'][story]
+        unit = esc(txt) + '      •      '
+        fs = 60
+        w_unit = text_w(txt + '      •      ') * fs
+        dur_s = t1 - t0
+        need = 1080 + TICK_PX_S * dur_s
+        reps = max(3, 2 * int(need / max(w_unit, 1)) + 2)      # text_w is Anton; Inter runs wider: double up
+        x0, x1 = 300, int(300 - TICK_PX_S * dur_s)
+        ev.append(f"Dialogue: 2,{ts(t0)},{ts(t1)},Ticker,,0,0,0,,{{\\an7\\pos(0,{TICK_Y})\\p1\\1c&H101010&\\1a&H30&\\fad(120,120)}}{band}")
+        ev.append(f"Dialogue: 3,{ts(t0)},{ts(t1)},Ticker,,0,0,0,,{{\\an4\\move({x0},{TICK_Y + TICK_H // 2},{x1},{TICK_Y + TICK_H // 2})\\clip(270,{TICK_Y},1080,{TICK_Y + TICK_H})\\q2\\fs{fs}\\fad(120,120)}}" + unit * reps)
+        ev.append(f"Dialogue: 4,{ts(t0)},{ts(t1)},TickTag,,0,0,0,,{{\\an7\\pos(0,{TICK_Y})\\p1\\1c{acc}\\fad(120,120)}}m 0 0 l 260 0 l 260 {TICK_H} l 0 {TICK_H}")
+        ev.append(f"Dialogue: 5,{ts(t0)},{ts(t1)},TickTag,,0,0,0,,{{\\an5\\pos(130,{TICK_Y + TICK_H // 2})\\c&H00000000&\\fad(120,120)}}BREAKING")
+    return ev
+
+
 def build_ass_sparse(path, L, display, accent, LK, credits, dur, hook_words, footer='@jxwalker', day_label=None):
     """slopcore type (javif4_ / SAY. SI. style): a small clean subtitle of the whole line with the punch word in the
     accent colour, plus at most one giant single-word slam per line (chorus / punchline words); a found-footage overlay (VHS PLAY /
@@ -327,6 +457,15 @@ Style: Slam,Anton,200,&H00FFFFFF,&H00FFFFFF,&H00000000,&H64000000,0,0,0,0,100,10
 Style: Sub,Inter,66,&H00FFFFFF,&H00FFFFFF,&H00000000,&H78000000,1,0,0,0,100,100,0,0,1,4,3,2,90,90,300,1
 Style: Small,Anton,56,&H00FFFFFF,&H00FFFFFF,&H00000000,&H64000000,0,0,0,0,100,100,2,0,1,4,2,5,40,40,40,1
 Style: VHS,DejaVu Sans Mono,50,&H00F0F0F0,&H00FFFFFF,&H00202020,&H00000000,1,0,0,0,100,100,1,0,1,1.5,2,7,70,70,90,1
+Style: Card,Anton,130,&H00FFFFFF,&H00FFFFFF,&H00000000,&H00000000,0,0,0,0,100,100,1,0,3,14,0,8,50,50,330,1
+Style: Hook,Anton,116,&H00FFFFFF,&H00FFFFFF,&H00000000,&H64000000,0,0,0,0,100,100,2,0,1,5,4,2,70,70,330,1
+Style: Title,Anton,170,&H00FFFFFF,&H00FFFFFF,&H00000000,&H64000000,0,0,0,0,100,100,3,0,1,8,6,5,50,50,40,1
+Style: Diegetic,DejaVu Sans,64,&H00202020,&H00FFFFFF,&H00F2F2F2,&H00F2F2F2,1,0,0,0,100,100,0,0,3,18,0,8,120,120,260,1
+Style: Ticker,Inter,60,&H00FFFFFF,&H00FFFFFF,&H00000000,&H00000000,1,0,0,0,100,100,0,0,1,0,0,4,0,0,0,1
+Style: TickTag,Anton,62,&H00FFFFFF,&H00FFFFFF,&H00000000,&H00000000,0,0,0,0,100,100,1,0,1,0,0,4,0,0,0,1
+Style: Lyric,Inter,62,&H0040D8FF,&H00FFFFFF,&H00000000,&H96000000,1,0,0,0,100,100,0,0,1,4,2,2,80,80,{LYR_MV},1
+Style: LyricHook,Anton,104,&H0040D8FF,&H00FFFFFF,&H00000000,&H96000000,0,0,0,0,100,100,1,0,1,6,3,2,60,60,{LYR_MV},1
+Style: HCard,Anton,120,&H00FFFFFF,&H00FFFFFF,&H00000000,&H00000000,0,0,0,0,100,100,1,0,3,22,0,8,60,60,300,1
 Style: Stamp,DejaVu Sans Mono,58,&H000090FF,&H00FFFFFF,&H00002040,&H00000000,1,0,0,0,100,100,2,0,1,1,1,3,80,80,120,1
 
 [Events]
@@ -335,6 +474,16 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     ev = []
     end_type = credits['t0'] - 0.2
     sung = [ln for ln in L if ln.get('words')]
+    HV = LK.get('headline')
+    if HV:                                             # headline mode: title, ticker, headline card, chorus hook words
+        ev += headline_events(HV, sung, display, acc, end_type, dur)
+        hook_words = None
+        sung = []
+    NV = LK.get('narrative')
+    if NV:                                             # narrative mode: title card, chorus hook line, diegetic text only
+        ev += narrative_events(NV, sung, display, acc, end_type, dur)
+        hook_words = None
+        sung = []
     if hook_words:
         w = esc(hook_words[0].upper())
         _, size = layout([hook_words[0].upper()])
@@ -359,12 +508,33 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         # giant slams at reference density: at most ONE per line, mostly chorus/intro/outro (first accent token, else
         # the last word) and verse punchlines (the accent of the last line of a section, or every other verse line);
         # never within 1.8 s of the previous slam. The small red-keyword subtitle carries the rest.
+        card = (LK.get('story_cards') or {}).get(lid) if ln['kind'] not in ('chorus', 'intro', 'outro') else None
+        if card and toks[0][1] - last_slam >= 0.9:
+            # P7 story card: "@handle" (accent) over a 3-6 word headline, slammed in on the line's first sung word
+            c0 = toks[0][1] - 0.04
+            c1 = min(c0 + 2.2, max(a1 + 0.3, c0 + 1.4), nxt + 0.6, end_type)
+            hl = card['headline'].upper()
+            rows_ = [hl]
+            if len(hl) > 16 and ' ' in hl:                 # two big rows beat one small row
+                sp = [i for i, ch in enumerate(hl) if ch == ' ']
+                cut = min(sp, key=lambda i: abs(i - len(hl) / 2))
+                rows_ = [hl[:cut], hl[cut + 1:]]
+            hs = int(min(165, min(960 / max(text_w(r), 1e-3) for r in rows_)))
+            hl = '\\N'.join(esc(r) for r in rows_)
+            tg = card.get('tag') or ''
+            ts_ = int(min(95, 900 / max(text_w(tg), 1e-3))) if tg else 0
+            body = (f"{{\\fs{ts_}\\c{acc}}}{esc(tg)}\\N" if tg else '') + f"{{\\fs{hs}\\c&H00FFFFFF&}}{hl}"
+            ev.append(f"Dialogue: 5,{ts(c0)},{ts(c1)},Card,,0,0,0,,{{\\fscx112\\fscy112\\t(0,80,\\fscx100\\fscy100)"
+                      f"\\fad(0,90)}}" + body)
+            last_slam = c1
+            continue
         last_of_sec = li + 1 >= len(sung) or sung[li + 1]['section'] != ln['section'] or sung[li + 1]['section_occ'] != ln['section_occ']
         pick = [t for t in toks if t[0].lower() in accs][:1]
         if ln['kind'] in ('chorus', 'outro', 'intro'):
             pick = pick or [toks[-1]]
         elif not (last_of_sec or ln['line_no'] % 2 == 0):
             pick = []
+        pick = [t for t in pick if not _filler_slam(t[0])]      # P7: no KNOW / RUNNING / LAUGHING filler slams
         if pick and pick[0][1] - last_slam < 1.8:
             pick = []
         if pick:
@@ -379,7 +549,10 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             word = tk.upper()
             _, size = layout([word])
             size = min(size, 520)
-            col = acc if slam_n % 3 == 1 else '&H00FFFFFF&'
+            # P7 colour code by word kind: numbers and news nouns (the planner's accent outside the chorus) in the
+            # look's accent colour; chorus / hook words in white
+            news = bool(re.search(r'\d', tk)) or (tk.lower() in accs and ln['kind'] not in ('chorus', 'intro', 'outro'))
+            col = acc if news else '&H00FFFFFF&'
             slam_n += 1
             y = 880 if ln['kind'] == 'chorus' else 960
             ev.append(f"Dialogue: 5,{ts(e0)},{ts(e1)},Slam,,0,0,0,,{{\\pos(540,{y})\\fs{size}\\c{col}"

@@ -217,7 +217,7 @@ def main():
     ap.add_argument('--fallback-args', default='', help='cine-real: extra arguments for the mascot fallback run (tests)')
     a = ap.parse_args()
     v2 = a.style == 'slopcore'
-    for k, d1, d2 in (('real_images', 110, 95), ('real_heroes', 25, 45), ('real_clip_sec', 4, 3), ('real_time_limit', 32, 34)):
+    for k, d1, d2 in (('real_images', 110, 95), ('real_heroes', 25, 45), ('real_clip_sec', 4, 3), ('real_time_limit', 32, 34 if os.environ.get('GV_REALISM') == '0' else 42)):   # 13 Oct: the realism gate runs stills -> review -> clips in sequence
         if getattr(a, k) is None:
             setattr(a, k, d2 if v2 else d1)
     real = a.style in ('cine-real', 'slopcore')
@@ -468,6 +468,13 @@ def finish(a, out, audio, L, status, sp, t_start, look, extra='', exit=True):
             G.log(f"chat copy: {chat} ({os.path.getsize(chat)/1e6:.0f} MB)")
     if vr['ok']:
         messenger_copy(out, status)
+        if status.get('style') in ('slopcore', 'cine-real') and not os.environ.get('CINE_REAL_FAIL'):
+            try:                                       # post-run Opus judge: detached, proposals only, never applied
+                import judge as J
+                status['post_judge_pid'] = J.post_run(status.get('day') or os.path.dirname(os.path.abspath(out)), out, status.get('style'),
+                                                       work=status.get('work'))
+            except Exception as e:
+                G.log(f"WARNING: post-run judge not started: {e!r}"[:200])
         if status.get('messenger_copy'):
             extra = f" messenger={status['messenger_copy']['path']}" + extra
     status.update(verify=vr, ok=vr['ok'], elapsed_s=round(time.time() - t_start))
@@ -565,7 +572,7 @@ def run_real(a, day, work, out, audio, dur, look, status, sp, fail, vocal_gate, 
         pass
     status.update(ok=False, error=why, exit_code=3, fallback='mascot', elapsed_s=round(time.time() - t_start))
     G.save_json(status, sp)
-    if a.no_fallback:
+    if a.no_fallback or a.skip_gen:                    # a --skip-gen test must never fall back into spending
         G.log(f"FAILED: cine-real: {why} (no fallback requested)")
         print(f"GROK_VIDEO_STATUS=failed code=3 style={a.style} reason={why!r}", flush=True)
         sys.exit(3)
@@ -616,7 +623,7 @@ def run_real(a, day, work, out, audio, dur, look, status, sp, fail, vocal_gate, 
 
     # ---- step 1 of the slopcore chain: the cine-real (v1) style, when there is time for it AND its own mascot fallback
     left = t_start + a.hard_stop_min * 60 - time.time()
-    if a.style == 'slopcore' and not a.no_cine_fallback and left >= CINE_FALLBACK_MIN_LEFT * 60:
+    if a.style == 'slopcore' and not a.no_cine_fallback and not a.skip_gen and left >= CINE_FALLBACK_MIN_LEFT * 60:
         spent = (status.get('generation') or {}).get('spent_pct')
         pct = max(2.5, a.real_max_pct - spent) if isinstance(spent, (int, float)) else max(2.5, a.real_max_pct / 2)
         left_min = left / 60

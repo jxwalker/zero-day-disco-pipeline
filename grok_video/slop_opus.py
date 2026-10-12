@@ -14,17 +14,82 @@ PROMPTS_V5 = os.environ.get('OPUS_PROMPTS', 'v5') != 'v4'
 PLANNER_VERSION = 'opus-2' if PROMPTS_V5 else 'opus-1'   # opus-2 = v5 prompts (Opus self-review 9 Oct); OPUS_PROMPTS=v4 -> old prompts
 CLAUDE = os.environ.get('CLAUDE_BIN', '/home/box/.local/bin/claude')
 TOKEN_FILE = os.path.expanduser('~/.claude_oauth_token')
-OPUS_MAIN_S, OPUS_DOCTOR_S, OPUS_TOTAL_S = 450, 150, 600      # v5 prompt measured 316 s (+ doctor ~30-60 s); v4 285 s
+OPUS_MAIN_S, OPUS_DOCTOR_S, OPUS_TOTAL_S = 450, 240, 700   # 13 Oct: doctor timed out at 150 s on 76 shots      # v5 prompt measured 316 s (+ doctor ~30-60 s); v4 285 s
 REFS = ['04_voldemort2x_saysi_sheet01.jpg', '05_javif4_underclass_sheet01.jpg', '06_dvorahfr_theheir_sheet01.jpg',
         '01_donaldjewkes_sheet01.jpg']
 PROMPT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'prompts')
 PROMPTS = os.environ.get('OPUS_PROMPTS', 'v5')
 
 
+STORY_NOTE = ''
+NARRATIVE = {}          # narrative mode (13 Oct): the day's treatment.json, set by slop_real.prepare via narrative()
+
+
+def narrative(day):
+    """treatment.json written by narrative.py (song + film written together) -> dict, else None."""
+    f = os.path.join(day, 'treatment.json')
+    if os.environ.get('NARRATIVE_OFF') or not os.path.exists(f):
+        return None
+    try:
+        return json.load(open(f))
+    except ValueError:
+        return None
+
+
+HEADLINE = {}          # headline mode (13 Oct, the owner-approved): the day's headline.json, set by slop_real.prepare
+
+
+def headline(day):
+    f = os.path.join(day, 'headline.json')
+    if os.environ.get('HEADLINE_OFF') or not os.path.exists(f):
+        return None
+    try:
+        return json.load(open(f))
+    except ValueError:
+        return None
+
+
+def headline_text(h, day):
+    import headline as H
+    return H.md(h, day) + '\nLYRICS WITH STORY TAGS:\n' + '\n'.join(
+        f"[{s['tag']}] " + ' '.join(f"[{m}]" for m in s.get('meta') or []) + '\n' +
+        '\n'.join(f"  (story {l['story']}) {l['text']}" for l in s['lines']) for s in h['sections'])
+
+
+def fix_cast(res):
+    """13 Oct: drop cast letters a shot lists but its prompt never names (a stray 'B' put the distiller on the climax
+    chimney). Conservative: only removes; 'A' as an article still counts as named."""
+    ids = {c.get('id') for c in res.get('cast') or []}
+    n = 0
+    for b in res.get('beats') or []:
+        for sh in b.get('shots') or []:
+            keep = [c for c in sh.get('cast') or [] if c not in ids or re.search(rf'\b{re.escape(c)}\b', sh.get('prompt', ''))]
+            if len(keep) != len(sh.get('cast') or []):
+                n += 1
+                sh['cast'] = keep
+    return n
+
+
+def treatment_text(t):
+    import narrative as N
+    return N.md(t, None) + '\nSTORYBOARD DRAFT (written before the audio; adapt it to the segments and timings):\n' + \
+        '\n'.join(f"{b['section']} @ {b['location']}: {b['beat']} | " + ' / '.join(b['shots']) for b in t.get('storyboard') or []) + \
+        '\nPIP IDEAS: ' + ' / '.join(t.get('pip') or []) + '\nDIEGETIC TEXT LIST: ' + \
+        ' / '.join(f"\"{d['text']}\" ({d['where']}, {d['section']})" for d in t.get('diegetic_text') or [])
+
+
 def _template(name):
     """prompts/opus_<name>_<tone>.txt for a non-edgy tone, else prompts/opus_<name>_<PROMPTS>.txt (edgy = v5), or None
     (-> the built-in v4 prompt)."""
     import tone as T
+    if HEADLINE:
+        f = os.path.join(PROMPT_DIR, f"opus_{name}_headline.txt")
+        if os.path.exists(f):
+            return open(f).read()
+    if NARRATIVE:
+        f = os.path.join(PROMPT_DIR, f"opus_{name}_narrative.txt")
+        if os.path.exists(f):
+            return open(f).read()
     if T.CURRENT.get('tone', 'edgy') != 'edgy':
         f = os.path.join(PROMPT_DIR, f"opus_{name}_{T.CURRENT['tone']}.txt")
         if os.path.exists(f):
@@ -64,6 +129,7 @@ SCHEMA = {"type": "object", "properties": {
         "required": ["id", "role", "description"]}},
     "beats": {"type": "array", "items": {"type": "object", "properties": {
         "seg": {"type": "string"}, "meaning": {"type": "string"}, "visual": {"type": "string"},
+        "onscreen": {"type": "string", "description": "narrative mode: diegetic text overlaid on this line, or empty"},
         "shots": {"type": "array", "items": SHOT}}, "required": ["seg", "meaning", "visual", "shots"]}},
     "display": SP.SCHEMA['properties']['display'],
     "pip": SP.SCHEMA['properties']['pip'],
@@ -113,6 +179,7 @@ def opus_prompt(day, look, slots, L, timed):
     title = G.read(os.path.join(day, 'title.txt'))
     stories = G.story_list(day)
     st = '\n'.join(f"{s['idx']}. {s['text']} (sung in: {s['section']} lines {s['lines']}) :: {s['detail'][:600]}" for s in stories)
+    st += STORY_NOTE                                   # P7 story cards: line -> story map (story_cards.py)
     tl = {RP.line_id(ln): ln for ln in (timed or []) if ln.get('words')}
     rows = []
     for sl in slots:
@@ -123,6 +190,8 @@ def opus_prompt(day, look, slots, L, timed):
             what = {'hook': ('HOOK: instrumental intro, the first frames (scroll-stopper: the most joyful, eye-popping image of the song, planting the payoff)' if joy else 'HOOK: instrumental intro, the first frames (scroll-stopper: the boldest, coolest image of the song, planting the payoff)' if pl else None) or ('HOOK: instrumental intro, the first frames (scroll-stopper: the most extreme image of the song, planting the payoff)' if _template('director') else 'HOOK: instrumental intro, the first frames (scroll-stopper; set up the song and the first story)'),
                     'drop': 'DROP: instrumental break after a chorus (the chorus gag at its most absurd scale)',
                     'outro_tail': ('OUTRO TAIL: instrumental ending (the happiest payoff of the hook: the biggest smile, sparkle and confetti)' if joy else 'OUTRO TAIL: instrumental ending (payoff of the hook at full scale, warm and triumphant)' if pl else None) or ('OUTRO TAIL: instrumental ending (payoff of the hook at full scale)' if _template('director') else 'OUTRO TAIL: instrumental ending (callback to the hook; lights going out)')}[sl['kind']]
+            if sl.get('dur_hint'):
+                what += f" - it runs {sl['dur_hint']} s before the first sung word: give {sl['images']} DIFFERENT shots in priority order (shot 1 = the headline gag with the key numbers; the edit drops the last ones if the intro is short; no shot reused)"
             rows.append(f"SEG {sl['seg']} | {what} | shots: 1-{sl['images']}")
             continue
         ln = tl.get(sl['seg'])
@@ -144,7 +213,8 @@ def opus_prompt(day, look, slots, L, timed):
                            'REFS': ', '.join(f'ref{i}.jpg' for i in range(1, len(REFS) + 1)), 'N_CLIPS': 45,
                            'LYRIC_SEGS': ', '.join(lyr), 'LOOK_LABEL': LK['label'], 'LOOK_ENERGY': LK['energy'],
                            'STORIES': st, 'SEGMENTS': chr(10).join(rows), 'DISPLAY': disp,
-                           'TONE_NOTE': T.CURRENT.get('note') or '(none)'}) + _cast_block()
+                           'TONE_NOTE': T.CURRENT.get('note') or '(none)',
+                           'TREATMENT': headline_text(HEADLINE, day) if HEADLINE else treatment_text(NARRATIVE) if NARRATIVE else ''}) + _cast_block()
     return f"""You are the writer AND director (storyboard, cinematography, edit) of a viral "slopcore" AI-news music video
 for the song "{title}" ({genre or '?'}; {style}). Vertical 9:16, about 1 s cuts, 2.5 minutes.
 
@@ -257,6 +327,10 @@ def plan(day, work, look, slots, L, deadline=None, reserve_s=17 * 60, force=Fals
     key = {'version': PLANNER_VERSION, 'look': look, 'slots': [(s['seg'], s['images']) for s in slots]}
     if T.CURRENT.get('tone', 'edgy') != 'edgy':
         key.update(tone=T.CURRENT['tone'], note=T.CURRENT.get('note', ''))
+    if HEADLINE:
+        key['headline'] = HEADLINE.get('title')
+    if NARRATIVE:
+        key['narrative'] = NARRATIVE.get('title')
     if _cast_block():
         key['cast_refs'] = _cast_block()
     p = G.load_json(path)
@@ -312,6 +386,9 @@ def plan(day, work, look, slots, L, deadline=None, reserve_s=17 * 60, force=Fals
     if res:
         res['planner'] = PLANNER_VERSION
         SS._clean(res, slots)
+        nfc = fix_cast(res)
+        if nfc:
+            G.log(f"opus: cast lists fixed on {nfc} shots (letters not named in the prompt)")
         # keep Opus's own clip/still choice per shot (apply() honours it), and fold the cinematography into the prompt
         for b in res['beats']:
             for s in b['shots']:
@@ -322,21 +399,39 @@ def plan(day, work, look, slots, L, deadline=None, reserve_s=17 * 60, force=Fals
                     s['motion'] = s['motion'].rstrip('. ') + '; camera: ' + s['camera']
         tmo = budget(OPUS_DOCTOR_S)
         if tmo >= 60 and os.environ.get('CINE_REAL_FAIL') != 'opus-doctor':
-            df = os.path.join(od, 'doctor.txt')
-            open(df, 'w').write(doctor_prompt(res, slots))
-            try:
-                rv, meta = run_claude(df, od, DOCTOR_SCHEMA, tmo, tools='', effort='low')
-                meta_all['doctor'] = {k: v for k, v in meta.items() if k != 'raw'}
-                n = SS.apply_reviews(res, (rv or {}).get('reviews') or [])
-                for b in res['beats']:                    # a rewritten shot drops the old cinematography suffix
-                    for s in b['shots']:
-                        if s.get('rewritten'):
-                            s.pop('image_prompt', None)
-                res['review'] = {'secs': meta['secs'], 'n': len((rv or {}).get('reviews') or []), 'rewritten': n, 'by': 'opus'}
-                G.log(f"opus script doctor: {meta['secs']}s, {res['review']['n']} shots scored, {n} rewritten")
-            except Exception as e:
-                res['review'] = {'error': repr(e)[:200]}
-                G.log(f"opus script doctor failed (kept the script): {e!r}"[:300])
+            # 13 Oct: batched + parallel + fail-open (one call on 76+ shots timed out)
+            import concurrent.futures as CF
+            beats = res['beats']; per = int(os.environ.get('GV_DOCTOR_BATCH', '26'))
+            groups, cur, n_sh = [], [], 0
+            for b in beats:
+                cur.append(b); n_sh += len(b['shots'])
+                if n_sh >= per:
+                    groups.append(cur); cur, n_sh = [], 0
+            if cur:
+                groups.append(cur)
+            def one(i, g):
+                df = os.path.join(od, f'doctor_{i}.txt')
+                open(df, 'w').write(doctor_prompt({'beats': g}, slots))
+                return run_claude(df, od, DOCTOR_SCHEMA, tmo, tools='', effort='low')
+            reviews, secs, fails = [], 0, []
+            with CF.ThreadPoolExecutor(max_workers=min(4, len(groups) or 1)) as ex:
+                futs = {ex.submit(one, i, g): i for i, g in enumerate(groups)}
+                for f in CF.as_completed(futs):
+                    try:
+                        rv, meta = f.result()
+                        reviews += (rv or {}).get('reviews') or []
+                        secs = max(secs, meta.get('secs', 0))
+                    except Exception as e:
+                        fails.append(f'batch{futs[f]}: {e!r}'[:120])
+            n = SS.apply_reviews(res, reviews)
+            for b in res['beats']:                    # a rewritten shot drops the old cinematography suffix
+                for s in b['shots']:
+                    if s.get('rewritten'):
+                        s.pop('image_prompt', None)
+            res['review'] = {'secs': secs, 'n': len(reviews), 'rewritten': n, 'by': 'opus', 'batches': len(groups), 'failed': fails}
+            meta_all['doctor'] = {'batches': len(groups), 'failed': len(fails), 'secs': secs}
+            G.log(f"opus script doctor: {len(groups)} batches in parallel, {secs}s, {len(reviews)} shots scored, {n} rewritten"
+                  + (f"; {len(fails)} batch(es) failed, kept those shots" if fails else ''))
         else:
             res['review'] = {'skipped': True}
             G.log(f"opus script doctor skipped ({tmo}s left)")
