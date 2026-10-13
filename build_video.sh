@@ -12,9 +12,16 @@ DAY=""; FORCE=0; KEEP=0; RENDER=1; MODEL=medium; OUT=video.mp4; FRAMES=frames; W
 while [ $# -gt 0 ]; do case "$1" in
   --force) FORCE=1;; --keep-stems) KEEP=1;; --no-render) RENDER=0;;
   --model) MODEL=$2; shift;; --out) OUT=$2; shift;; --frames) FRAMES=$2; shift;; --work) WORKN=$2; shift;;
+  --karaoke) KARAOKE=1;;
   -h|--help) sed -n 2,7p "$0"; exit 0;;
   *) DAY=$1;; esac; shift; done
 [ -n "$DAY" ] || { sed -n 2,3p "$0"; exit 2; }
+# 13 Oct 2026: the owner dropped the karaoke video on 5 Oct. Daily folders (exactly YYYY-MM-DD) skip it unless --karaoke
+# (or KARAOKE=1); grok_video does its own lyric alignment. Special / dated-variant folders are unaffected.
+if [ "${KARAOKE:-0}" != 1 ] && [[ "$(basename "$DAY")" =~ ^20[0-9]{2}-[0-9]{2}-[0-9]{2}$ ]]; then
+  echo "KARAOKE_SKIPPED: the daily karaoke video was dropped on 2026-10-05; post grok_video's out= file. (--karaoke to build anyway)"
+  exit 0
+fi
 DAY=$(cd "$DAY" && pwd); WORK=$DAY/$WORKN; AUDIO=$DAY/audio.mp3; VIDEO=$DAY/$OUT
 for f in "$AUDIO" "$DAY/lyrics.txt"; do [ -f "$f" ] || { echo "missing $f"; exit 2; }; done
 mkdir -p "$WORK"; cd "$DAY"
