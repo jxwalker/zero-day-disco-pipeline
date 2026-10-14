@@ -14,7 +14,7 @@ MAX_STILL_REROLLS = 15
 MAX_CLIP_REROLLS = 4
 PER_SHEET = 20
 FONT = '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'
-FAILS = ("cast off-model (wrong hair, age, gender or face vs the portrait; robot D shown as a human or a different robot); "
+FAILS = ("cast off-model (wrong hair, age, gender or face vs the portrait; ); ANY robot, android, robot animal, mascot or toy character in frame; "
          "a cast member who is not in the shot's cast list (especially A); clones of A in a crowd; mangled hands, gloves "
          "or merged bodies; a person wearing another character's head; mugging / sitcom faces; a chorus crowd shot without "
          "the signature pose; readable or garbled text, logos or captions in the picture; the picture does not show the "
@@ -122,14 +122,13 @@ def judge_stills(P, ids=None, name='stills'):
 
 
 REALISM = ("AI-SLOP TELLS (reject): plastic/waxy sheen on skin, metal or leather; over-smooth airbrushed faces or uncanny "
-           "symmetrical faces; impossible anatomy (extra or fused limbs, legs, hooves, fingers); CGI-toy or video-game "
-           "robots and props (glossy, too clean, rounded toy proportions); over-smooth even lighting with no motivated "
+           "symmetrical faces; impossible anatomy (extra or fused limbs, legs, hooves, fingers); ANY robot, android, humanoid machine, robot animal, mascot or toy figure (always reject); CGI sheen or "
+           "video-game props; uncanny or doll-like faces, dead eyes, identical faces; over-saturated colour; symmetrical "
+           "centred poster framing; props (glossy, too clean, rounded toy proportions); over-smooth even lighting with no motivated "
            "source; HDR glow, bloom halos, fake bokeh; everything brand new and spotless; floating objects; melted or "
-           "mirrored geometry; illustration / 3D-render look; letters or monograms on clothes, saddle cloths or props; wrong or garbled digits where the intent names painted numerals (those exact numerals are allowed); a real animal where the intent says a robot")
+           "mirrored geometry; illustration / 3D-render look; letters or monograms on clothes, saddle cloths or props; wrong or garbled digits where the intent names painted numerals (those exact numerals are allowed)")
 CRAFT = ("REAL FILM CRAFT (rewrite toward): practical props and real materials with wear (scuffed real leather harness, "
-         "brass buckles with tarnish, dust, mud, sweat, fingerprints, frayed straps); robots as practical film props or "
-         "animatronics (painted fibreglass and steel panels, visible screws and seams, scratches, cables, rubber "
-         "joints) never CGI; real people with imperfect skin, pores, stubble, crow's feet, sweat; motivated light from "
+         "brass buckles with tarnish, dust, mud, sweat, fingerprints, frayed straps); no robots at all: replace any robot with real people at real screens, offices, labs or server rooms; real people with imperfect skin, pores, stubble, crow's feet, sweat; motivated light from "
          "a named source (low sun, sodium lamp, flood light, window); a named lens and stock (35mm spherical at f/2.8, "
          "Kodak Vision3 500T, or the look's camcorder); natural imperfect framing; texture in every surface.")
 GSCHEMA = {"type": "object", "properties": {"fails": {"type": "array", "items": {"type": "object", "properties": {

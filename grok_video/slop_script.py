@@ -37,6 +37,9 @@ def _force_end_clips(slots, by):
     return n
 
 
+LONG_SHOTS = __import__('os').environ.get('GV_LONG_SHOTS', '1') == '1'   # 14 Oct: fewer, longer shots
+
+
 def script_slots(lines, n_clips=45, max_images=95):
     """Song order: hook, every sung line (max shots 2-3 by length), drops after the intro / choruses, outro tail.
     'images' here is the MAX; the planner returns 1..max and apply() sets the real counts and the clips."""
@@ -45,7 +48,7 @@ def script_slots(lines, n_clips=45, max_images=95):
     for i, ln in enumerate(lines):
         k = ln['kind']
         nw = len(ln.get('words') or ln['text'].split())
-        mx = 2 if k == 'chorus' or nw <= 4 else 3
+        mx = (1 if k == 'chorus' or nw <= 6 else 2) if LONG_SHOTS else (2 if k == 'chorus' or nw <= 4 else 3)
         segs.append({'seg': RP.line_id(ln), 'kind': k, 'text': ln['text'], 'section': ln['section'],
                      'line_no': ln['line_no'], 'occ': ln['section_occ'], 'images': mx, 'clips': 0,
                      'words': [w[0] for w in (ln.get('words') or [[t] for t in ln['text'].split()])]})
@@ -59,7 +62,7 @@ def script_slots(lines, n_clips=45, max_images=95):
         segs.append({'seg': f'drop{nd}', 'kind': 'drop', 'text': '', 'section': 'drop', 'images': 2, 'clips': 0})
     segs.append({'seg': 'outro_tail', 'kind': 'outro_tail', 'text': '', 'section': 'outro', 'images': 3, 'clips': 0})
     for s in _end_slots(segs):                         # P6: the last chorus and the outro get up to 3 shots each
-        s['images'] = max(s['images'], 3)
+        s['images'] = max(s['images'], 2 if LONG_SHOTS else 3)
     # keep the planner's maximum under the image budget: trim third shots from late lines first
     while sum(s['images'] for s in segs) > max_images:
         end = {id(s) for s in _end_slots(segs)}

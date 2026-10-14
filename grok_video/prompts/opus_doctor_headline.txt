@@ -9,7 +9,7 @@ connect this picture to the words being sung - and is it a frame they would scre
     object while looking at the lens, or nothing a 3 s clip could show happening.
 2 = generic: standing, staring, walking, typing, looking at screens, mood, scenery.
 1 = unrelated, or breaks a hard rule: readable text, numbers, signs or logos in the image; a real or famous person,
-    a famous character, a famous robot design or a brand (ORIGINAL robots are fine and encouraged); a pun on a product name; gore or weapons aimed at people; anything added to or described
+    a famous character, ANY robot, android, robot animal, mascot or toy character; glossy CG, plastic skin, symmetrical poster framing or over-saturated colour; a brand; a pun on a product name; gore or weapons aimed at people; anything added to or described
     about the Pip toy beyond "the toy".
 Be strict. The last draft scored 98 % at 4 or 5 and still looked like an office sitcom; a fair first draft usually has
 20-35 % of shots under 4.
@@ -17,8 +17,7 @@ For every shot under 4, write a better "prompt" (25-45 words; same cast letters 
 only; act out the sung words, especially the cut-in word; one person or crowd doing one big physical thing mid-action,
 using scale, uniform crowds in formation, night or hard light, or A addressing the lens; numbers shown as objects; no
 text in the image; original people only), a "motion" (one verb that visibly changes the frame within 3 s; never holds,
-stands, stares, poses or glows) and an honest "new_score". Never change what a cast letter is (a robot stays that robot, a person stays that person) and keep the line's literal
-subject ("robots learn the pour" still shows a robot pouring). Keep hook, chorus and final-line shots tied to their callbacks
+stands, stares, poses or glows) and an honest "new_score". Never change what a cast letter is and keep the line's literal subject, shown with real people ("robots learn the pour" shows an engineer watching a pour on a monitor). Keep hook, chorus and final-line shots tied to their callbacks
 (the same signature gesture or prop, only bigger). "problem" under 12 words. One review per row, "id" exactly as given.
 STILLS: a row with kind "still" becomes ONE photograph shown with a small push or shake; nothing in it moves. Score it
 on that frozen frame alone, and write its rewrite as one decisive frozen instant (the door already mid-air, the moon
@@ -30,5 +29,7 @@ Do not use any tools.
 {{ROWS}}
 
 Also mark down (score 2) and rewrite: a bridge that alternates close-ups instead of a cut-to-black/freeze then the payoff;
-an outro shot where the wrong character does the punchline action; a robot named without its cast letter or replaced by a
-real animal; a hook or headline shot without the key numbers as painted wooden numerals "41"-style when the story has them.
+an outro shot where the wrong character does the punchline action; any robot or toy at all; a hook or headline shot without the key numbers as painted wooden numerals "41"-style when the story has them.
+
+NO ROBOTS (14 Oct, the owner): no robots, androids, humanoid machines, robot animals, mascots or toy characters anywhere, not even as props. AI is shown through REAL people and the real world: engineers at screens lit by the screen, offices, labs, server rooms, bank branches, phones in hands, cables, whiteboards seen from behind.
+CINEMATIC REALISM (14 Oct): every frame is a believable live-action film still: a named real lens (35mm or 50mm spherical at f/2, 85mm for close-ups), natural or motivated light (window, desk lamp, fluorescent tube, monitor glow, street lamp), visible film grain, true-to-life muted colour, imperfect real skin with pores, worn real locations. Never plastic skin, glossy CG, HDR glow, over-saturation, or symmetrical poster framing; compose off-centre like a cinematographer. Fewer, longer shots: give most lines ONE strong shot that holds, 2 only when the line's action needs a cut. Keep one consistent human cast across the whole video; no uniform crowd formations unless the line literally needs a crowd, and then a natural, varied real crowd.

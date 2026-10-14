@@ -9,4 +9,6 @@ set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
 PY=${PY:-/home/box/venvs/align/bin/python}
 export PYTHONWARNINGS=ignore
+export GV_PIP=${GV_PIP:-0}            # 14 Oct (the owner): no Pip, no robots
+export GV_LONG_SHOTS=${GV_LONG_SHOTS:-1}  # 14 Oct: fewer, longer shots
 exec "$PY" "$HERE/grok_video.py" "$@"

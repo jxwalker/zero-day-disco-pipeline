@@ -13,11 +13,13 @@ import cine_real as CR
 
 NO_TEXT = ("Absolutely no text anywhere: no letters, numbers, writing, signs, labels, captions, logos, documents, receipts "
            "or readable screens. Original people and designs only, no lookalikes of celebrities, real people or famous "
-           "characters or robots. Natural, correct faces and hands. Shot as REAL live-action film, never CGI: practical "
-           "props and real materials with wear and dirt (scuffed leather, tarnished brass, dust, mud), robots as "
-           "practical animatronic film props (painted fibreglass and steel panels, seams, screws, scratches, cables), "
+           "characters. No robots, androids, humanoid machines, robot animals, mascots or toys. Natural, correct faces and "
+           "hands. Shot as REAL live-action cinema on a real 35mm/50mm lens, never CGI: practical props and real "
+           "materials with wear, believable real locations, "
            "imperfect real skin with pores, motivated light from a real source, real lens optics; no plastic sheen, "
-           "no airbrushed faces, no toy-like or video-game look, no bloom.")
+           "no airbrushed faces, no toy-like or video-game look, no bloom, no HDR, no over-saturation, "
+           "muted true-to-life colour, visible film grain, off-centre natural composition, not symmetrical.")
+NO_PIP = os.environ.get('GV_PIP', '0') != '1'          # 14 Oct (the owner): Pip and all robots retired
 PIP_DESC = ("this exact character as a small physical collectible vinyl toy figure, exactly the same design, proportions "
             "and colours: white egg-shaped body, two tall white bunny ears with pink insides, a thin antenna with a small "
             "yellow ball, a dark-navy face screen with glowing cyan closed happy arc eyes (^ ^) and pink blush, a pink "
@@ -145,7 +147,9 @@ def build_jobs(plan, slots, work, LK, sec):
             is_clip = im['_clip'] if '_clip' in im else k < sl.get('clips', 0)
             out = os.path.join(work, 'stills', f"s{si:02d}_{k}.jpg")
             who = [str(x).strip().upper()[:1] for x in (im.get('cast') or [])]
-            if TOY.search(im['prompt']):
+            if NO_PIP and TOY.search(im['prompt']):
+                im = dict(im, prompt=TOY.sub('a desk lamp', im['prompt']))
+            if not NO_PIP and TOY.search(im['prompt']):
                 # the planner put the mascot toy into a scene: make it from the locked reference so it stays on-model
                 j = {'id': f's{si:02d}_{k}', 'kind': 'edit', 'images': [G.PIP_REF], 'out': out, 'aspect': '9:16',
                      'prompt': pip_prompt(TOY.sub('the toy', im['prompt'].strip()), LK), 'cast': [], 'pip': True}
@@ -186,7 +190,7 @@ def build_jobs(plan, slots, work, LK, sec):
     # Pip: two in-story toy shots (each a still + a clip) and the end cameo
     pips = []
     seg_index = {sl['seg']: si for si, sl in enumerate(slots)}
-    for n, p in enumerate((plan.get('pip') or [])[:2], 1):
+    for n, p in enumerate([] if NO_PIP else (plan.get('pip') or [])[:2], 1):
         si = seg_index.get(p.get('seg'))
         if si is None or p.get('seg') in toy_segs:      # that segment already has an on-model toy shot
             continue
@@ -199,12 +203,16 @@ def build_jobs(plan, slots, work, LK, sec):
     cameo = {'id': 'cameo', 'kind': 'edit', 'images': [G.PIP_REF], 'aspect': '9:16',
              'prompt': pip_prompt(plan.get('cameo') or 'alone on an empty office desk at night, a desk lamp still on.', LK),
              'out': os.path.join(work, 'stills', 'cameo.jpg')}
+    if NO_PIP:                                         # 14 Oct: the sign-off is the real, empty payoff location
+        cameo = {'id': 'cameo', 'kind': 'gen', 'aspect': '9:16', 'out': cameo['out'],
+                 'prompt': ("A real photographed film still: " + (plan.get('cameo') or 'an empty office at night, one desk '
+                            'lamp still on, chairs pushed back') + " No people, no toys, no robots. " + LK['prompt'] + ' ' + NO_TEXT)}
     heroes.append({'id': 'hcameo', 'kind': 'r2v', 'first_frame': cameo['out'], 'image': cameo['out'], 'duration': sec,
                    'resolution': '720p', 'aspect': '9:16', 'out': os.path.join(work, 'heroes', 'cameo.mp4'),
                    'seg': 'hook', 'pri': -2,
-                   'prompt': (f"Continue this exact photoreal shot for {sec} seconds: the small vinyl toy stays completely "
-                              "still and unchanged (a static toy, it never moves or morphs); the camera slowly pushes in "
-                              "by hand, dust in the light. Same look, no text.")})
+                   'prompt': (f"Continue this exact photoreal shot for {sec} seconds: " + ("nothing in the room moves; " if NO_PIP else
+                              "the small vinyl toy stays completely still and unchanged (a static toy, it never moves or morphs); ")
+                              + "the camera slowly pushes in by hand, dust in the light. Same look, no text.")})
     return cast_jobs, stills, heroes, cameo
 
 

@@ -109,6 +109,11 @@ def check(res, day):
         ok, bad = ticker_ok(t['text'], voc, st.get(t['story'], {}).get('handles', []))
         if not ok:
             probs.append(f"ticker for story {t['story']} not verbatim from stories.md: {bad}")
+    bots = re.compile(r'\b(robot|robotic|android|cyborg|mascot|toy|pip)s?\b', re.I)     # 14 Oct: no robots
+    vis = json.dumps([res.get('cast'), res.get('storyboard'), res.get('pip'), res.get('outro_punchline_shot'),
+                      [h['visual_gag'] for h in res.get('hook_options', [])]])
+    if bots.search(vis):
+        probs.append(f"robots/mascots are banned in cast and storyboard (found '{bots.search(vis).group(0)}'); show AI through real people, screens, offices, labs")
     sung = {l['story'] for s in res['sections'] for l in s['lines']} - {0}
     if res['main_story'] not in sung:
         probs.append('the main story is not tagged on any sung line')

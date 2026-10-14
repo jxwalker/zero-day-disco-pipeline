@@ -41,11 +41,10 @@ WORK IN THIS ORDER (show your work in the JSON):
    the main story's first line (exact facts).
 7. STORYBOARD: per section, the location, cast and shots (one line each: shot size + the literal action of the line
    being sung). Cast: protagonist A (an ORIGINAL person who plays the reporter/everyperson of the song, never a real
-   person) and up to 3 more (B, C, D; robots allowed), fixed outfits, used consistently. Real people in the news are
+   person) and up to 3 more (B, C, D; real humans only, no robots), fixed outfits, used consistently. Real people in the news are
    never shown; show their companies' situation literally with original actors (a "lab", "a founder", "a trader").
    Each secondary story gets its own literal mini scene. The bridge surprise gets a matching visual surprise. The
-   outro is the deadpan punchline shot. 2-3 cameos for Pip (a small vinyl toy robot: white egg body, bunny ears, dark
-   face screen with cyan eyes; static object, nothing on his head or face) woven into scenes.
+   outro is the deadpan punchline shot. "pip": [] (no Pip, no robots, no mascots).
 
 For "lines": every sung line in order with its section tag and the number of the story it is about (0 for chorus or
 lines about no single story). Meta tag lines go in "meta" of their section, not in "lines".
@@ -55,4 +54,5 @@ STORYBOARD ADDITIONS (13 Oct):
 - The main story's 1-2 key numbers become physical in-world objects: big hand-painted figures on a real object (tote board, stable door, slate), in the hook, on the headline line and in each chorus.
 - The bridge surprise is visual: a [Silence]/[Stop]/spoken bit opens on a hard cut to black or a freeze frame, then the single payoff image.
 - The outro punchline is acted by the subject the lyric names (if the horse calls, the horse holds the phone).
-- Any robot that appears more than once is ONE lettered cast design, reused in every shot.
+- NO ROBOTS (14 Oct, the owner): no robots, androids, humanoid machines, robot animals, mascots or toy characters anywhere, not even as props. AI is shown through REAL people and the real world: engineers at screens lit by the screen, offices, labs, server rooms, bank branches, phones in hands, cables, whiteboards seen from behind.
+- CINEMATIC REALISM (14 Oct): every frame is a believable live-action film still: a named real lens (35mm or 50mm spherical at f/2, 85mm for close-ups), natural or motivated light (window, desk lamp, fluorescent tube, monitor glow, street lamp), visible film grain, true-to-life muted colour, imperfect real skin with pores, worn real locations. Never plastic skin, glossy CG, HDR glow, over-saturation, or symmetrical poster framing; compose off-centre like a cinematographer. Fewer, longer shots: give most lines ONE strong shot that holds, 2 only when the line's action needs a cut. Keep one consistent human cast across the whole video; no uniform crowd formations unless the line literally needs a crowd, and then a natural, varied real crowd.
