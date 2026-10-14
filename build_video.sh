@@ -5,6 +5,7 @@
 # Needs in <day_folder>: audio.mp3, lyrics.txt, tags.json (skeleton auto-created), optional stories.md/title.txt
 # Writes: <day>/<out>, <day>/<frames>/*.jpg, <day>/<work>/{timings.tsv,sync_report.json,verify.json,...}
 set -euo pipefail
+_ORIG_ARGS="$*"
 TOOLS=$(cd "$(dirname "$0")" && pwd); LIB=$TOOLS/lib
 PY=${PY:-/home/box/venvs/align/bin/python}
 DEMUCS=${DEMUCS:-/home/box/venvs/align/bin/demucs}
@@ -18,7 +19,9 @@ while [ $# -gt 0 ]; do case "$1" in
 [ -n "$DAY" ] || { sed -n 2,3p "$0"; exit 2; }
 # 13 Oct 2026: the owner dropped the karaoke video on 5 Oct. Daily folders (exactly YYYY-MM-DD) skip it unless --karaoke
 # (or KARAOKE=1); grok_video does its own lyric alignment. Special / dated-variant folders are unaffected.
-if [ "${KARAOKE:-0}" != 1 ] && [[ "$(basename "$DAY")" =~ ^20[0-9]{2}-[0-9]{2}-[0-9]{2}$ ]]; then
+echo "$(date '+%F %T') pwd=$PWD KARAOKE=${KARAOKE:-} args: $0 $_ORIG_ARGS" >> /home/box/suno-daily/tools/build_video_invocations.log 2>/dev/null || true
+_DAYABS=$(cd "$DAY" 2>/dev/null && pwd -P || echo "$DAY")
+if [ "${KARAOKE:-0}" != 1 ] && [[ "$(basename "$_DAYABS")" =~ ^20[0-9]{2}-[0-9]{2}-[0-9]{2}$ ]]; then
   echo "KARAOKE_SKIPPED: the daily karaoke video was dropped on 2026-10-05; post grok_video's out= file. (--karaoke to build anyway)"
   exit 0
 fi
