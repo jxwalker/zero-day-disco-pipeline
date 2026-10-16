@@ -122,3 +122,14 @@ the access token is read-only: the owner must regenerate it after setting Read a
 
 ## Lyric rules (pre-Suno)
 See `LYRICS_RULES.md`. Before pasting lyrics into Suno run `python3 tools/lyrics_lint.py <day>/lyrics.txt` (exit 1 = fix lines first). No sung "AI news"/meta lines; no instrument/genre/production words in sung lines (those live in style.txt only).
+
+## Suno vocal/style rules (16 Oct 2026)
+the owner called the 16 Oct "Cap in Hand" (comedy news jingle / brassy swing) "auto tuned garbage". Standing rules:
+- Every style.txt ends with "natural raw human lead vocals, no autotune, no vocoder, no pitch correction".
+  headline.py / narrative.py enforce it via `style_lint.fix`; check with `python3 tools/style_lint.py <day>/style.txt`
+  (must print "style lint: clean"; `--fix` repairs). headline_day.sh runs it too.
+- No "jingle" styles of any kind (comedy news jingle, late-night jingle, swing jingle). Real band genres with real
+  vocal performances; the humour stays in the lyrics.
+- **Suno step (computerUse):** in Custom/Advanced mode, open "More Options" under Styles and type
+  `autotune, vocoder, jingle` into **Exclude styles** before Create. If that field is not visible, note it in the
+  log and continue (the style.txt wording still applies). Duration stays 2:30.

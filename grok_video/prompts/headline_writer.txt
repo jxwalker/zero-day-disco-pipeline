@@ -36,6 +36,11 @@ WORK IN THIS ORDER (show your work in the JSON):
    and its scores, plus one line on what you changed.
 5. STYLE: a Suno style prompt under 200 characters: genre, mood, tempo, instruments, vocal (male or female lead),
    "catchy sing-along chorus", "under 2:30". Pick a genre that fits the joke.
+   ALWAYS end the style with: "natural raw human lead vocals, no autotune, no vocoder, no pitch correction".
+   BANNED styles: any "jingle" (comedy news jingle, late-night jingle, swing jingle, TV/radio jingle) - never use the
+   word "jingle". Pick a REAL BAND genre with a real vocal performance (e.g. garage rock, britpop, indie folk, soul,
+   blues rock, country, punk, power pop, funk band, ska, Motown); the humour lives in the LYRICS, not in a novelty
+   sound. Rotate genres; no repeat of the last 3 days.
 6. TICKER: for each sung story, one news-ticker line: "@handle <fact>" under 60 characters, facts and handles copied
    exactly from stories.md (e.g. "@AnthropicAI cuts distillation ~99%"). HEADLINE CARD: 2-6 words for the big card on
    the main story's first line (exact facts).

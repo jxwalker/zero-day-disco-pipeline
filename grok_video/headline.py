@@ -14,6 +14,9 @@ sys.path.insert(0, HERE)
 import slop_opus as SO
 import common_gv as G
 
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
+import style_lint as SL
+
 LINT = os.path.join(os.path.dirname(HERE), 'lyrics_lint.py')
 S = {"type": "string"}; I = {"type": "integer"}
 SCHEMA = {"type": "object", "properties": {
@@ -188,6 +191,7 @@ def write(src, out):
             res, meta = SO.run_claude(rf, od, SCHEMA, 700, tools='', effort='medium')
         except Exception as e:
             print(f"rewrite failed: {e!r}"[:300]); break
+    res['style'] = SL.fix(res['style'])  # 16 Oct: no autotune/vocoder, no jingles
     open(os.path.join(out, 'style.txt'), 'w').write(res['style'].strip() + '\n')
     open(os.path.join(out, 'title.txt'), 'w').write(res['title'].strip() + '\n')
     json.dump(res, open(os.path.join(out, 'headline.json'), 'w'), indent=1, ensure_ascii=False)

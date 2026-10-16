@@ -11,8 +11,9 @@ PY=${PY:-/home/box/venvs/align/bin/python}
 [ -s "$DAY/stories.md" ] || { echo "HEADLINE_DAY_STATUS=fail code=2 reason=no_stories"; exit 2; }
 timeout "${HEADLINE_TIMEOUT:-1500}" "$PY" "$HERE/grok_video/headline.py" write "$DAY" 2>&1 | tee -a "$DAY/headline_day.log"
 rc=${PIPESTATUS[0]}
-if [ "$rc" -eq 0 ] && [ -s "$DAY/lyrics.txt" ] && [ -s "$DAY/headline.json" ] && python3 "$HERE/lyrics_lint.py" "$DAY/lyrics.txt" | grep -q "lint: clean"; then
-  echo "HEADLINE_DAY_STATUS=ok code=0 title=$(cat "$DAY/title.txt")"
+if [ "$rc" -eq 0 ] && [ -s "$DAY/lyrics.txt" ] && [ -s "$DAY/headline.json" ] && python3 "$HERE/lyrics_lint.py" "$DAY/lyrics.txt" | grep -q "lint: clean" \
+   && python3 "$HERE/style_lint.py" "$DAY/style.txt" --fix | tee -a "$DAY/headline_day.log" | grep -q "style lint: clean"; then
+  echo "HEADLINE_DAY_STATUS=ok code=0 title=$(cat "$DAY/title.txt") suno_exclude_styles='autotune, vocoder, jingle'"
   exit 0
 fi
 mkdir -p "$DAY/headline_failed"

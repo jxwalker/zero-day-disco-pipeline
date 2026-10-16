@@ -13,6 +13,8 @@ import json, os, re, shutil, subprocess, sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import slop_opus as SO
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
+import style_lint as SL
 
 LINT = os.path.join(os.path.dirname(HERE), 'lyrics_lint.py')
 S = {"type": "string"}
@@ -147,6 +149,7 @@ def write(src, out):
             res, meta = SO.run_claude(rf, od, SCHEMA, 600, tools='', effort='medium')
         except Exception as e:
             print(f"repair failed: {e!r}"[:300]); break
+    res['style'] = SL.fix(res['style'])  # 16 Oct: no autotune/vocoder, no jingles
     open(os.path.join(out, 'style.txt'), 'w').write(res['style'].strip() + '\n')
     open(os.path.join(out, 'title.txt'), 'w').write(res['title'].strip() + '\n')
     json.dump(res, open(os.path.join(out, 'treatment.json'), 'w'), indent=1, ensure_ascii=False)

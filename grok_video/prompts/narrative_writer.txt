@@ -38,6 +38,11 @@ STEP 3 - LYRICS, written from the treatment.
 - style: a Suno style prompt under 200 characters: genre, mood, tempo, instruments, vocal (state male or female lead
   vocals and match the protagonist if they sing), "catchy sing-along chorus", "under 2:30". Pick a genre that suits
   the story's drama (you may use any genre; avoid nu-disco, used yesterday).
+  ALWAYS end the style with: "natural raw human lead vocals, no autotune, no vocoder, no pitch correction".
+  BANNED styles: any "jingle" (comedy news jingle, late-night jingle, swing jingle, TV/radio jingle) - never use the
+  word "jingle". Pick a REAL BAND genre with a real vocal performance (e.g. garage rock, britpop, indie folk, soul,
+  blues rock, country, punk, power pop, funk band, ska, Motown); the humour lives in the LYRICS, not in a novelty
+  sound. Rotate genres; no repeat of the last 3 days.
 
 STEP 4 - STORYBOARD DRAFT, from the treatment and the lyrics: for EVERY lyric section, its location, what happens (the
 plot beat), the cast, the lighting, and 4-10 shots (one line each: shot size + action that acts out the line being
