@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
-"""Pre-Suno lyric lint. Flags meta/'AI news' lines and style words in sung lines.
+"""Pre-Suno lyric lint. Flags meta/'AI news' lines and style words in sung lines, and (17 Oct) lyric density over
+the BPM/metre limits in lyric_metrics.py (reads style.txt beside lyrics.txt, or --style=PATH; --no-density skips).
 Exit 0 clean, 1 violations (or 0 after --fix removes them)."""
-import re, sys, shutil
+import os, re, sys, shutil
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import lyric_metrics as LM   # 17 Oct: density limits
 META = [r"\bai\s*news\b", r"\bthe\s+news\b", r"\bnews\s+(on\s+fire|ride|tonight|today)\b",
         r"\bheadlines?\b", r"\bsing\s+it\s+with\s+me\b", r"\bsing\s+along\b", r"\bthis\s+song\b",
         r"\bthe\s+show\b", r"\btune\s+in\b", r"\bbreaking\s+news\b", r"\bnews\s*(cast|feed|flash|wire)\b"]
@@ -38,6 +41,19 @@ def main():
         open(path, "w", encoding="utf-8").write("\n".join(out))
         print(f"removed {bad} line(s); backup {path}.prelint — check meter/empty sections")
         sys.exit(0)
+    # 17 Oct 2026 (the owner: 'Sleeping On The Job' too wordy/rushed): hard density limits scaled by BPM/metre in style.txt
+    if "--no-density" not in sys.argv:
+        sp = next((a.split("=", 1)[1] for a in sys.argv if a.startswith("--style=")),
+                  os.path.join(os.path.dirname(os.path.abspath(path)), "style.txt"))
+        style = open(sp, encoding="utf-8").read() if os.path.exists(sp) else ""
+        m, dp = LM.problems("\n".join(out), style)
+        L = dict(LM.LIMITS[m["band"]], **LM.COMMON)
+        print(f"density: {m['band']} (bpm={m['bpm']}, compound={m['compound']}) total_words={m['total_words']}/{L['total_words_max']} "
+              f"avg_syl_line={m['avg_syl_line']} max_syl_line={m['max_syl_line']}/{L['syl_max']} words_per_sec={m['words_per_sec']}")
+        for x in dp: print(f"{path}: density: {x}")
+        bad += len(dp)
+        if dp: print("TRIM: cut whole lines and filler words; keep each story plain and literal but in fewer words; "
+                     "verses 4 lines, chorus 4 short lines with a repeated hook.")
     print("lint: clean" if not bad else f"lint: {bad} violation(s)")
     sys.exit(1 if bad else 0)
 if __name__ == "__main__": main()

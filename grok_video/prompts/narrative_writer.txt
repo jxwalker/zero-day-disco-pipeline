@@ -26,7 +26,17 @@ STEP 2 - TREATMENT (before any lyrics). A tiny film:
 STEP 3 - LYRICS, written from the treatment.
 - Structure: [Intro] (1-2 lines, sets the scene), [Verse 1] (4 lines, setup + want), [Pre-Chorus] (2 lines, optional),
   [Chorus] (4 lines), [Verse 2] (4 lines, obstacle), [Chorus] (identical), [Bridge] (2-4 lines, the turn),
-  [Final Chorus] (identical, may add one tag line), [Outro] (1-2 lines, the payoff). 26-34 sung lines, under 2:30.
+  [Final Chorus] (identical, may add one tag line), [Outro] (1-2 lines, the payoff). about 20-26 short lines, under 2:30.
+LYRIC DENSITY (17 Oct, the owner: "too many words, it felt rushed" - HARD limits, the lint fails over them):
+  - Line length by tempo (BPM/metre from your STYLE): slow (<100 BPM, or 6/8, 12/8, 3/4, waltz, ballad) max 8
+    syllables / 7 words per sung line (aim 6-8); mid (100-119 BPM) max 9 syllables / 8 words; uptempo (120+) max 10
+    syllables / 9 words (aim 8-10).
+  - Total words in the whole song (incl. bridge and outro): slow max 150, mid max 165, uptempo max 180.
+  - Verses 4 lines each. Chorus 4 SHORT lines with a repeated hook (the hook phrase sung on 2+ lines). Final chorus
+    up to 5 lines. Bridge max 4 lines (spoken lines max 12 words). Intro max 1 line, outro 1 line.
+  - Leave room to breathe: one idea per line, short words, no lists of numbers. Keep news plain and literal, just
+    fewer words: one key fact per story, not three.
+
 - Verses carry the plot in concrete images; each line is something a camera can film.
 - The CHORUS is a catchy, simple, singable hook that sums up the story; it is IDENTICAL every time (copy it exactly);
   the title appears in it. Short words, strong vowels, repetition.

@@ -100,8 +100,8 @@ def check(res, day):
         if diff == 0:
             probs.append('the final chorus needs a one-word callback swap')
     n = sum(len(s['lines']) for s in res['sections'])
-    if not 20 <= n <= 36:
-        probs.append(f'{n} sung lines (want 22-34)')
+    if not 16 <= n <= 28:   # 17 Oct: sparser lyrics
+        probs.append(f'{n} lines (want about 20-24; cut lines if over)')
     if not any(s.get('meta') for s in res['sections'] if 'bridge' in s['tag'].lower()):
         probs.append('the bridge has no Suno meta-tag surprise')
     if any(v < 8 for v in res['scores'].values()):
@@ -178,6 +178,7 @@ def write(src, out):
         json.dump(res, open(os.path.join(od, f'reply_{attempt}.json'), 'w'), indent=1, ensure_ascii=False)
         lp = os.path.join(out, 'lyrics.txt')
         open(lp, 'w').write(lyrics_text(res))
+        open(os.path.join(out, 'style.txt'), 'w').write(SL.fix(res['style']).strip() + '\n')  # density lint reads BPM/metre
         ok, msg = lint(lp)
         probs = check(res, out) + ([] if ok else [f'lint: {msg}'])
         if not probs or attempt == 2:
@@ -185,7 +186,9 @@ def write(src, out):
         print('rewrite:', probs)
         rf = os.path.join(od, f'rewrite_{attempt}.txt')
         open(rf, 'w').write("Fix these problems in this song package. Rewrite only what is needed, re-score the lyrics "
-                            "honestly (clarity, wordplay, catchiness; all must reach 8) and return the whole JSON:\n- "
+                            "honestly (clarity, wordplay, catchiness; all must reach 8) and return the whole JSON. If any problem says "
+                            "'density' or 'too many words': TRIM - cut whole lines and filler, make every flagged line "
+                            "shorter, keep the news plain and literal in fewer words, never add lines:\n- "
                             + '\n- '.join(probs) + "\n\nOriginal brief:\n" + open(pf).read() + "\n\nPACKAGE:\n" + json.dumps(res))
         try:
             res, meta = SO.run_claude(rf, od, SCHEMA, 700, tools='', effort='medium')

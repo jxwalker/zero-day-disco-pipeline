@@ -77,8 +77,8 @@ def check_lyrics(lyr, title):
     elif any(c[:len(ch[0])] != ch[0] for c in ch[1:]):
         probs.append('chorus repeats are not identical (a final chorus may only ADD a tag line at the end)')
     n = sum(len(l) for _, l in secs)
-    if not 20 <= n <= 38:
-        probs.append(f'{n} sung lines (want 26-34)')
+    if not 16 <= n <= 30:   # 17 Oct: sparser lyrics
+        probs.append(f'{n} lines (want about 20-26; cut lines if over)')
     if ch and title.lower().split()[0] not in ' '.join(ch[0]).lower():
         probs.append('title not in the chorus')
     if any(re.search(r'\(.*\)', l) for _, ls in secs for l in ls):
@@ -135,6 +135,7 @@ def write(src, out):
     for attempt in range(2):
         lp = os.path.join(out, 'lyrics.txt')
         open(lp, 'w').write(res['lyrics'].strip() + '\n')
+        open(os.path.join(out, 'style.txt'), 'w').write(SL.fix(res['style']).strip() + '\n')  # density lint reads BPM/metre
         ok, msg = lint(lp)
         probs = check_lyrics(res['lyrics'], res['title']) + ([] if ok else [f"lint: {msg}"])
         if not probs or attempt == 1:
@@ -144,7 +145,8 @@ def write(src, out):
         open(rf, 'w').write("Fix ONLY these problems in the lyrics of this song package (keep the story, treatment and "
                             "everything else; rewrite flagged lines keeping the meter) and return the whole JSON:\n- "
                             + '\n- '.join(probs) + "\n\nThe lint rules: no 'AI news'/news/headline/meta lines; no instrument, "
-                            "genre or production words in sung lines.\n\nPACKAGE:\n" + json.dumps(res))
+                            "genre or production words in sung lines. Density problems: TRIM - cut whole lines and filler, shorten flagged "
+                            "lines, never add lines.\n\nPACKAGE:\n" + json.dumps(res))
         try:
             res, meta = SO.run_claude(rf, od, SCHEMA, 600, tools='', effort='medium')
         except Exception as e:

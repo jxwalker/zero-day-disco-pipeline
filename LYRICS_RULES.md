@@ -10,3 +10,11 @@
      python3 /home/box/suno-daily/tools/lyrics_lint.py <day>/lyrics.txt          # exit 1 on violations
      python3 /home/box/suno-daily/tools/lyrics_lint.py <day>/lyrics.txt --fix     # drops offending lines (backs up to lyrics.txt.prelint)
    Prefer rewriting a flagged line by hand (keep meter); --fix only deletes lines.
+
+## Density limits (17 Oct 2026)
+"Sleeping On The Job" (84 BPM 6/8, 305 words, 12 syllables/line) felt rushed. lyrics_lint.py now fails over:
+- slow (<100 BPM or 6/8, 12/8, 3/4): max 8 syllables / 7 words per line, 150 words total
+- mid (100-119 BPM): max 9 / 8, 165 total
+- uptempo (120+ BPM): max 10 / 9, 180 total
+- verses 4 lines, chorus 4 lines with a repeated hook, final chorus 5, bridge 4 (spoken max 12 words/line), intro/outro 1
+See `tools/lyric_metrics.py <lyrics.txt>` for the measurements. BPM/metre come from style.txt next to lyrics.txt.

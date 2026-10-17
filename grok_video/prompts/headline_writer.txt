@@ -8,17 +8,17 @@ TODAY'S STORIES (the only facts, numbers, names and @handles you may use):
 
 WORK IN THIS ORDER (show your work in the JSON):
 1. RANK every story for clarity (can a viewer get it in one line?) and comedy (is there a funny angle?), 1-10 each.
-   Pick ONE main story and 2-3 secondary stories. The rest are not sung at all.
+   Pick ONE main story and 2 secondary stories (17 Oct: sparser lyrics). The rest are not sung at all.
 2. HOOK OPTIONS: write 3 options, each = a song title (1-4 words) + the main story's headline as a visual gag for the
    first 3 seconds + the chorus wordplay twist. Pick the funniest and say why.
 3. LYRICS, always this structure (Suno section tags in [brackets]):
    [Intro] 0-1 short line (or none: the hook is visual)
-   [Verse 1] 6-8 lines: the MAIN story told clearly and literally: who did what, the key number, why it matters.
+   [Verse 1] 4 lines: the MAIN story told clearly and literally: who did what, the key number, why it matters.
      Real names / handles as in stories.md are fine. No metaphor that hides the news.
    [Chorus] 4 lines: a catchy, singable hook that sums up the main story with a clever wordplay twist (a pun, a double
      meaning, a flipped idiom). IDENTICAL every time it repeats. The title is in it.
-   [Verse 2] 2-3 secondary stories, about 4 lines EACH (8-12 lines), each literal and concrete enough for its own
-     mini scene. Say who did it.
+   [Verse 2] 4 lines: 2 secondary stories, 2 lines EACH, each literal and concrete enough for its own mini scene.
+     Say who did it.
    [Chorus] identical.
    [Bridge] 2-4 lines on the day's FUNNIEST angle, with a SURPRISE written as Suno meta tags on their own lines inside
      the bridge, e.g. [Beat Drop], [Key Change], [Genre Flip: barbershop quartet], [Spoken Word], [Silence] - one or
@@ -26,7 +26,16 @@ WORK IN THIS ORDER (show your work in the JSON):
    [Final Chorus] bigger: the same chorus with ONE word swapped as a callback twist (the swap pays off the bridge or
      the main story), plus an optional tag line.
    [Outro] 1 line: a deadpan punchline.
-   22-34 sung lines, under 2:30.
+   About 20-24 short lines in total, under 2:30.
+LYRIC DENSITY (17 Oct, the owner: "too many words, it felt rushed" - HARD limits, the lint fails over them):
+   - Line length by tempo (BPM/metre from your STYLE): slow (<100 BPM, or 6/8, 12/8, 3/4, waltz, ballad) max 8
+     syllables / 7 words per sung line (aim 6-8); mid (100-119 BPM) max 9 syllables / 8 words; uptempo (120+) max 10
+     syllables / 9 words (aim 8-10).
+   - Total words in the whole song (incl. bridge and outro): slow max 150, mid max 165, uptempo max 180.
+   - Verses 4 lines each. Chorus 4 SHORT lines with a repeated hook (the hook phrase sung on 2+ lines). Final chorus
+     up to 5 lines. Bridge max 4 lines (spoken lines max 12 words). Intro max 1 line, outro 1 line.
+   - Leave room to breathe: one idea per line, short words, no lists of numbers. Keep news plain and literal, just
+     fewer words: one key fact per story, not three.
    RULES: never "AI news" or meta lines about the song/news/headlines/show/listener ("sing it with me", "tune in");
    NO instrument/genre/production words in SUNG lines (guitar, synth, drums, bass, 808, BPM, reverb, falsetto, piano,
    chords, riff, strings, mix, banger, genre names) - genre words are allowed ONLY inside [bracket] meta tags. Numbers
