@@ -120,6 +120,17 @@ Video is uploaded in 4 MB chunks (v2 media upload, falls back to v1.1) and waits
 @jxwalker has X Premium+, so posts can be longer than 280 characters. The daily post @mentions every X account credited on the end card. If a post fails with 403 "oauth1 app permissions",
 the access token is read-only: the owner must regenerate it after setting Read and write.
 
+### Daily post rules (from 19 Oct 2026, the owner)
+- **post.txt** (main post, written by the routine): keep the opener, the 2-4 story lines and the 🎵 Suno link as now,
+  and ALWAYS include a natural credit line with **"Grok Bot"**, a real **@grok** mention (so Grok replies) and
+  **#slopcore**, placed in the first 280 characters (above "Show more"), e.g. right after the opener:
+  `Made by Grok Bot, an agent that writes, sings and films the day's AI stories. @grok, what's your verdict? #slopcore`
+  Still @mention the sung stories' handles. Premium+ limit is 25,000 weighted chars (URL = 23, emoji = 2); aim for
+  under ~700.
+- **sources.txt** (the reply): unchanged: one line per story with its x.com link and handle, then the Suno link.
+- **Check:** `python3 tools/post_lint.py <day>/post.txt <day>/sources.txt` must print `post lint: clean`.
+  x_post.py runs the same check and refuses to post (exit 3, nothing uploaded) if it fails.
+
 ## Lyric rules (pre-Suno)
 See `LYRICS_RULES.md`. Before pasting lyrics into Suno run `python3 tools/lyrics_lint.py <day>/lyrics.txt` (exit 1 = fix lines first). No sung "AI news"/meta lines; no instrument/genre/production words in sung lines (those live in style.txt only).
 

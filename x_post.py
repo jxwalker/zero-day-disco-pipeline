@@ -7,6 +7,8 @@ Usage:
   x_post.py --text-file post.txt [--video video.mp4] [--reply-file sources.txt]
       Uploads the video (chunked), posts the text with it, then posts the
       reply under it. Prints JSON: {"url": ..., "id": ..., "reply_url": ...}.
+      Runs post_lint.py first (Grok Bot / @grok / #slopcore above the fold, length, sources
+      links) and refuses to post if it fails; --skip-lint only for non-daily posts the owner OKs.
   x_post.py --delete ID [ID ...]
       Deletes the given posts on the signed-in account (only with the owner's OK).
 
@@ -151,6 +153,7 @@ def main():
     ap.add_argument("--video")
     ap.add_argument("--reply-file")
     ap.add_argument("--in-reply-to", metavar="TWEET_ID", help="post the main post as a reply to this post id")
+    ap.add_argument("--skip-lint", action="store_true", help="skip post_lint.py (non-daily posts only)")
     ap.add_argument("--delete", nargs="+", metavar="TWEET_ID", help="delete these post ids (own account only)")
     a = ap.parse_args()
     c = load_creds()
@@ -165,6 +168,15 @@ def main():
     if not a.text_file:
         ap.error("--text-file required")
     text = open(a.text_file).read().strip()
+    if not a.skip_lint:   # 18 Oct 2026: daily post must credit Grok Bot, tag @grok, carry #slopcore, fit the limit
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import post_lint as PL
+        _, probs = PL.check_post(text)
+        if a.reply_file:
+            probs += PL.check_sources(open(a.reply_file).read().strip())[1]
+        if probs:
+            print(json.dumps({"error": "post_lint failed, nothing posted", "problems": probs}))
+            sys.exit(3)
     mid = upload_video(c, a.video) if a.video else None
     tid = post(c, text, media_id=mid, reply_to=a.in_reply_to)
     me = call(c, "GET", f"{API}/2/users/me")["data"]["username"]
