@@ -144,3 +144,16 @@ the owner called the 16 Oct "Cap in Hand" (comedy news jingle / brassy swing) "a
 - **Suno step (computerUse):** in Custom/Advanced mode, open "More Options" under Styles and type
   `autotune, vocoder, jingle` into **Exclude styles** before Create. If that field is not visible, note it in the
   log and continue (the style.txt wording still applies). Duration stays 2:30.
+
+### Source reply (one extra post per day, approved by the owner 18 Oct 2026)
+After the daily post is up (its URL is in `<day>/log.md`), reply to the MAIN story's source post with the same video:
+```bash
+python3 /home/box/suno-daily/tools/x_source_reply.py /home/box/suno-daily/<day> --dry-run   # check, posts nothing
+python3 /home/box/suno-daily/tools/x_source_reply.py /home/box/suno-daily/<day>
+```
+- Text: `<day>/post/source_reply.txt`, one short human line + `{POST_URL}`, e.g. `Turned this into a song 🎶 {POST_URL}`.
+- Reply with the video. On a 403 or reply restriction: quote post (with the video) tagging @author. X API v2 doesn't
+  allow media with quote_tweet_id, so if that's rejected it posts the video with "@author line <their URL> <our URL>"
+  (mode `quote_link`).
+- Video uploaded once (media_id cached in `post/source_media.json`). It won't run if `post/source_reply_result.json`
+  exists; it writes {mode, url, ...} there and adds a `- source <mode>:` line to log.md.
