@@ -1,5 +1,48 @@
 # grok_video: the daily Grok music video
 
+## karaoke mode: THE DEFAULT since Tue 20 Oct 2026 (the owner approved the ONUG "No Window" video as the standard)
+
+`grok_video.sh <day>` now runs `karaoke.py` (no flags needed). The old chain below (Claudia/slopcore -> cine-real ->
+mascot) is kept as the automatic fallback and can be switched back on:
+- **Switch back for good:** `export GV_KARAOKE=0` in the routine (or `GV_KARAOKE=0 grok_video.sh <day>`).
+- **One-off:** pass any `--style ...` (e.g. `--style slopcore`) and grok_video.sh goes straight to grok_video.py.
+- **Automatic:** if karaoke fails (anything except exit 6 instrumental / 7 not signed in) it exec's grok_video.py with the
+  same arguments, so the status line and `out=` then come from the old chain. `--no-fallback` stops that (tests).
+
+Format: word-by-word karaoke (current line bold lower-middle with a colour wipe, next line dimmer below, (ad-libs)
+italic amber), on a dark band; above it fast cuts on lyric-line starts (~1.5-3 s shots) mixing code-rendered motion
+graphics with exact text (`kgfx.py`: term, headline, bignum, bars, post, inbox, code, rows, stamp, dash, countdown,
+pipeline, bluegreen) and Grok Imagine live-action stills/6 s clips (young adults 21-28, balanced expressions, no robots,
+no real people, no text in pictures). Story text layer: a top-left chip (MAIN STORY, then the secondary stories) over
+the lines that sing each story. End card: title, one-line story credit, "Grok Bot · <date>", and small
+"X: @jxwalker · scorpion-labs.com".
+
+Pipeline: (in parallel) Opus plan (`prompts/karaoke_plan.txt`, ~2 min, 2 tries, else a no-LLM template plan from
+stories.md) + alignment -> fact lint (every 2+ digit figure, CVE id and @handle in a graphic must be in
+stories.md/lyrics/title, else the graphic becomes a story headline) -> Grok: <=14 stills (stacked-duplicate pictures
+are detected and rerolled once), <=8 six-second clips; no new Grok work after 26 min -> timeline (cut on every lyric
+line start, long shots split at 3.6 s, `GV_KARAOKE_MAX_SHOT`) -> render 1080x1920 + 1920x1080 (8 procs) -> ASS burn +
+audio -> chat copy (~40 MB target) -> verify (grok_video.verify) + `work_karaoke/contact_sheet.jpg` + spelling check.
+
+Alignment (the ONUG method, `work_karaoke/kalign/`): demucs htdemucs vocals (~35 s idle box, ~4.5 min when the box is
+busy) -> stable-ts `medium.en` forced alignment of the lyrics.txt lines (~30 s). Sanity: each line gets a score
+(monotonic words, no >4 s words, not squeezed, words on audible vocal-stem frames); if the line count is wrong or >30 %
+of lines are suspect, the old pipeline (`lyric_timings()` in grok_video.py: whisper + stable-ts + repair, ~11 min) runs
+and the better-scoring result wins. Suspect lines get a line-level wipe instead of word-by-word; the whole song goes
+line-level if >30 % of lines are suspect. Tails parked after a >4 s gap or past the next line are re-spread.
+Instrumental gate: vocal stem low (stem_is_low) AND weak alignment -> exit 6.
+Outputs: `<day>/video_karaoke.mp4` (1080x1920, **posted**), `video_karaoke_chat.mp4` (<45 MB, send in chat),
+`video_karaoke_16x9.mp4` (1920x1080); scratch `<day>/work_karaoke/` (plan.json, timeline.json, status.json,
+contact_sheet.jpg, grok/). Status line: `GROK_VIDEO_STATUS=ok code=0 style=karaoke ... out=<mp4> chat=<mp4> wide=<mp4> ...`
+(post `out=` exactly as before; the 5pm routine is unchanged).
+Options: `--stills N` `--clips N` (or GV_KARAOKE_STILLS/CLIPS), `--time-limit MIN` (40), `--replan`, `--skip-gen`
+(re-render from cached media, never spends), `--no-16x9`, `--no-fallback`. Re-render at zero Grok cost:
+`grok_video.sh <day> --skip-gen --no-fallback`.
+Grok usage: about 14 stills + 8 clips per day (measured on the 20 Oct test, see below). Runtime: see below.
+
+---
+
+
 Builds the daily song's video with Grok Imagine, through the signed-in Grok Build CLI on the SuperGrok Heavy
 subscription (**no API key**).
 
@@ -547,3 +590,28 @@ Off switch: `GV_CLAUDIA=0` (back to the 14-18 Oct headline pipeline). Rollback: 
    `claudia.grade()` applies a soft-film 3D LUT (`work/claudia_soft_film.cube`) in ffmpeg.
 Budget: unchanged 7.5 % cap (live meter); the estimate uses the mean planned clip length.
 Test without spending: `grok_video.sh <day> --style slopcore --plan-only --skip-gen --work <abs path>`.
+
+## Cine vocab (19 Oct 2026, from the owner's "reference -> language -> prompt -> polish" list)
+- `prompts/cine_vocab.md`: 60 named shot types / lenses / lights / camera moves with Grok-ready phrases, plus 17 film
+  reference archetypes (ARCH-*). Injected into `claudia_book.txt` via `{{VOCAB}}`.
+- Book schema adds per shot `ref` (ARCH id or real film frame), `shot_type`, `move` (exactly one vocab move id).
+  `claudia.cine_lint()` (deterministic, after the book and after the review) strips filler words ("cinematic, 4k,
+  beautiful..."), normalises/infers the move, caps CRASH/WHIP at 2 and DOLLYZOOM at 1, flags missing ref/light/lens.
+  `_plain()` drops vocab ids before text reaches Grok; the ARCH palette rides as "Colour:" only when a section has
+  no palette. The review prompt rejects generic shots and shots with no named move or light.
+- `GV_CINE=0` -> uses the `*.bak-20261019-cinevocab` book/review prompts and skips the lint (pre-vocab behaviour).
+- `GV_POLISH=1` (default OFF) -> grade adds faint halation (highlights blurred, warmed, screened 18%) + fine temporal
+  grain in the same ffmpeg pass as the LUT; ~+45 s on a 2:29 video. Off until judged on a real Claudia render.
+- Fixed: `plan(reuse=True)` never reused the book (json lists vs tuples in `_key`); now compares as lists.
+- Full rollback: `cd tools/grok_video && for f in claudia.py README.md prompts/claudia_book.txt prompts/claudia_review.txt; do cp -p $f.bak-20261019-cinevocab $f; done`
+
+## Story grounding + story text (19 Oct 2026 evening, the owner: "more of the underlying story in the visuals and the text")
+- `prompts/claudia_book.txt` rules 12-13: >=80% of shots depict a specific element of the story their lyric sings
+  (`story`, `story_element` per shot, recorded in prompt_book.md); each secondary story gets its own identifiable scene;
+  generic office/mood shots banned. Scene rows passed to Opus carry the story number of each lyric line.
+- `prompts/claudia_review.txt`: STORY GROUNDING check (rewrites generic shots), sees stories.md.
+- `claudia.story_grounding()` logs coverage per story; `claudia.story_text()` verifies Opus's card / secondary captions /
+  hook fact word by word against stories.md (falls back to the stories.md headings, else drops). Never invents.
+- `claudia.build_ass(..., story=)`: opening card = plain headline + "via @handle"; "ALSO TODAY" caption box when each
+  secondary story is first sung; "THE STORY" key fact at the first chorus; placed opposite the lyric zone, <=8 words.
+- Off switch: `GV_STORY_TEXT=0` (text layer only). Rollback of everything: the `.bak-20261019-story` copies.

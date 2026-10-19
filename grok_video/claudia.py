@@ -19,7 +19,7 @@ import real_plan as RP
 import slop_plan as SP
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-VERSION = 'claudia-1'
+VERSION = 'claudia-2-story'   # 19 Oct evening: story grounding + story text layer (GV_STORY_TEXT=0 off)
 MIN_SHOTS, MAX_SHOTS = 25, 40
 LEAD_MIN_SHARE = 0.7
 
@@ -125,8 +125,10 @@ def scenes(plines, dur, timed=None):
 S, I = {"type": "string"}, {"type": "integer"}
 SHOT = {"type": "object", "properties": {
     "cast": {"type": "array", "items": S}, "image_prompt": S, "duration": I,
-    "motion": {"type": "array", "items": S}, "camera": S, "lens": S, "light": S},
-    "required": ["cast", "image_prompt", "duration", "motion", "camera", "lens", "light"]}
+    "motion": {"type": "array", "items": S}, "camera": S, "lens": S, "light": S,
+    "ref": S, "shot_type": S, "move": S, "story": I, "story_element": S},
+    "required": ["cast", "image_prompt", "duration", "motion", "camera", "lens", "light", "ref", "shot_type", "move",
+                 "story", "story_element"]}
 BOOK_SCHEMA = {"type": "object", "properties": {
     "lead": {"type": "object", "properties": {"name": S, "age": I, "face": S, "hair": S, "build": S, "wardrobe": S,
                                               "palette": S, "description": S},
@@ -138,15 +140,136 @@ BOOK_SCHEMA = {"type": "object", "properties": {
     "scenes": {"type": "array", "items": {"type": "object", "properties": {
         "seg": S, "location": S, "idea": S, "type_zone": {"type": "string", "enum": ["top", "upper", "lower", "left", "right"]},
         "shots": {"type": "array", "items": SHOT}}, "required": ["seg", "location", "idea", "type_zone", "shots"]}},
-    "cameo": S},
-    "required": ["lead", "support", "sections", "scenes", "cameo"]}
+    "cameo": S,
+    "story_text": {"type": "object", "properties": {
+        "card": S, "hook_fact": S,
+        "captions": {"type": "array", "items": {"type": "object", "properties": {"story": I, "text": S},
+                                                "required": ["story", "text"]}}},
+        "required": ["card", "captions", "hook_fact"]}},
+    "required": ["lead", "support", "sections", "scenes", "cameo", "story_text"]}
 FIX = {"type": "object", "properties": {"seg": S, "shot": I, "image_prompt": S, "duration": I,
-                                        "motion": {"type": "array", "items": S}, "camera": S, "lens": S, "light": S},
+                                        "motion": {"type": "array", "items": S}, "camera": S, "lens": S, "light": S,
+                                        "ref": S, "shot_type": S, "move": S, "story": I, "story_element": S},
        "required": ["seg", "shot"]}
 REVIEW_SCHEMA = {"type": "object", "properties": {"verdict": S, "issues": {"type": "array", "items": S},
                                                   "fixes": {"type": "array", "items": FIX}},
                  "required": ["verdict", "issues", "fixes"]}
 BOT = re.compile(r'\b(robot|robotic|android|cyborg|mascot|toy|pip|hologram)s?\b', re.I)
+
+# 19 Oct (the owner: "reference -> language -> prompt -> polish"): cine vocab grammar. GV_CINE=0 -> pre-vocab prompts.
+CINE = os.environ.get('GV_CINE', '1') != '0'
+VOCAB_PATH = os.path.join(HERE, 'prompts', 'cine_vocab.md')
+MOVES = ['STATIC', 'PUSH', 'PULL', 'TRUCKL', 'TRUCKR', 'SLIDER', 'PANL', 'PANR', 'TILTUP', 'TILTDN', 'ARC', 'ORBIT',
+         'TRACK', 'LEAD', 'FOLLOW', 'HANDHELD', 'CRANEUP', 'PUSHPAST', 'SZOOM', 'CRASH', 'WHIP', 'DOLLYZOOM', 'RACK']
+MOVE_CAP = {'CRASH': 2, 'WHIP': 2, 'DOLLYZOOM': 1}
+MOVE_WORDS = [('DOLLYZOOM', r'dolly[- ]?zoom|vertigo'), ('PUSHPAST', r'push(es|ing)? past'), ('CRASH', r'crash[- ]?zoom'),
+              ('WHIP', r'whip[- ]?pan'), ('SZOOM', r'slow zoom'), ('RACK', r'rack[- ]?focus|pull focus'),
+              ('ORBIT', r'orbit'), ('ARC', r'\barc'), ('CRANEUP', r'crane|jib'), ('LEAD', r'reverse track|backs away|walk-and-talk'),
+              ('FOLLOW', r'follow'), ('TRACK', r'track(ing)? (shot|alongside|beside)|side track'),
+              ('TRUCKL', r'truck(s|ing)? left'), ('TRUCKR', r'truck(s|ing)? right'), ('SLIDER', r'slider'),
+              ('PULL', r'dolly(ing)? (out|back)|pull(s|ing)? (out|back)'), ('PUSH', r'dolly(ing)? in|push(es|ing)? in|push-in'),
+              ('PANL', r'pan(s|ning)? left'), ('PANR', r'pan(s|ning)? right'), ('TILTUP', r'tilt(s|ing)? up'),
+              ('TILTDN', r'tilt(s|ing)? down'), ('HANDHELD', r'handheld'), ('STATIC', r'static|locked[- ]off|tripod, still')]
+GENERIC = re.compile(r',?\s*\b(cinematic|[48]k|ultra[- ]detailed|highly detailed|masterpiece|beautiful|stunning|epic|'
+                     r'hyper-?real(istic)?|award[- ]winning|breathtaking)\b', re.I)
+
+
+def vocab_text():
+    try:
+        return open(VOCAB_PATH).read().strip()
+    except OSError:
+        return ''
+
+
+def archetypes():
+    """ARCH-ID -> its palette/framing note from cine_vocab.md (film title dropped; only the look rides in prompts)."""
+    out, cur = {}, None
+    for line in vocab_text().splitlines():
+        m = re.match(r'- (ARCH-[A-Z]+)\s+(.*)', line)
+        if m:
+            cur = m.group(1); out[cur] = m.group(2).strip(); continue
+        if cur and line.startswith('  ') and line.strip():
+            out[cur] += ' ' + line.strip()
+        else:
+            cur = None
+    for k, v in out.items():
+        v = re.sub(r'^[^:]*\(\d{4}\):\s*', '', v)          # drop "Title (year):"
+        parts = v.rstrip('. ').rsplit('. ', 1)                 # drop the trailing genre hint
+        out[k] = (parts[0] if len(parts) > 1 else v.rstrip('. ')) + '.'
+    return out
+
+
+def move_id(sh):
+    m = re.sub(r'[^A-Z]', '', str(sh.get('move') or '').upper())
+    if m in MOVES:
+        return m
+    for k in MOVES:
+        if m.startswith(k):
+            return k
+    txt = f"{sh.get('move', '')} {sh.get('camera', '')}".lower()
+    for k, rx in MOVE_WORDS:
+        if re.search(rx, txt):
+            return k
+    return ''
+
+
+def _plain(t):
+    """drop vocab ids from text that goes to Grok ('PUSH - slow dolly in' -> 'slow dolly in'; '(ARCH-ENGLAND)' -> '')."""
+    t = str(t or '')
+    if not CINE:
+        return t
+    t = re.sub(r'\s*\(?\bARCH-[A-Z]+\b\)?:?', '', t)
+    t = re.sub(r'(^|[.;]\s+)(?:%s|[A-Z][A-Z0-9]{1,11})\s+[-\u2013\u2014:]\s+' % '|'.join(MOVES), r'\1', t)
+    return re.sub(r'\s{2,}', ' ', t).strip()
+
+
+def cine_lint(book):
+    """deterministic grammar pass after the book and after the review: strip filler words, normalise the move id,
+    cap the loud moves, flag shots with no ref/light/move. Returns notes (never raises)."""
+    notes, used = [], {}
+    if not CINE:
+        return notes
+    for sc in book.get('scenes') or []:
+        prev = None
+        for k, sh in enumerate(sc.get('shots') or []):
+            tag = f"{sc.get('seg')}#{k}"
+            for f in ('image_prompt', 'camera', 'light', 'lens', 'shot_type'):
+                if GENERIC.search(sh.get(f) or ''):
+                    sh[f] = re.sub(r'\s{2,}', ' ', GENERIC.sub('', sh[f])).strip(' ,'); notes.append(f"{tag}: filler words removed")
+            sh['motion'] = [re.sub(r'\s{2,}', ' ', GENERIC.sub('', m)).strip(' ,') for m in sh.get('motion') or []]
+            mv = move_id(sh)
+            if not mv:
+                mv = 'PUSH' if k == 0 else 'STATIC'; notes.append(f"{tag}: no named move -> {mv}")
+                sh['camera'] = (f"{'slow dolly in on a track, real parallax, no zoom' if mv == 'PUSH' else 'locked-off static camera'}"
+                                f"; {sh.get('camera', '')}").strip('; ')
+            if mv in MOVE_CAP:
+                used[mv] = used.get(mv, 0) + 1
+                if used[mv] > MOVE_CAP[mv]:
+                    notes.append(f"{tag}: {mv} over the film cap -> PUSH")
+                    for f in ('camera',):
+                        sh[f] = 'slow dolly in on a track toward the subject, real parallax, no zoom'
+                    sh['motion'] = [re.sub(r'(crash[- ]?zoom|whip[- ]?pan|dolly[- ]?zoom)', 'dolly in', m, flags=re.I)
+                                    for m in sh['motion']]
+                    mv = 'PUSH'
+            sh['move'] = mv
+            if prev and mv == prev and mv != 'STATIC':
+                notes.append(f"{tag}: repeats {mv} from the previous shot")
+            prev = mv
+            if not str(sh.get('ref') or '').strip():
+                notes.append(f"{tag}: no ref")
+            if not re.search(r'\b(window|sun|sky|lamp|practical|tungsten|sodium|fluorescent|overcast|rim|back|screen|stage|'
+                             r'daylight|dusk|dawn|candle|street|haze|golden|blue hour|silhouette|key|neon)\b',
+                             str(sh.get('light') or ''), re.I):
+                notes.append(f"{tag}: light names no source")
+            if not re.search(r'\d+\s?mm', str(sh.get('lens') or '')):
+                notes.append(f"{tag}: lens has no focal length")
+    return notes
+
+
+def _prompt_path(name):
+    p = os.path.join(HERE, 'prompts', name)
+    old = p + '.bak-20261019-cinevocab'
+    return old if not CINE and os.path.exists(old) else p
 
 
 def _book_prompt(day, slots, h):
@@ -155,14 +278,21 @@ def _book_prompt(day, slots, h):
     hl = (f"Main story #{h.get('main_story')}; secondary {h.get('secondary')}. Bridge surprise: {h.get('bridge_surprise', '')}. "
           f"Outro punchline shot: {h.get('outro_punchline_shot', '')}. Hook gag: "
           + next((x['visual_gag'] for x in h.get('hook_options') or [] if x['title'].strip().lower() == h.get('title', '').strip().lower()), ''))
+    import slop_real as SR
+    lst = {}
+    for sec in h.get('sections') or []:
+        for l in sec.get('lines') or []:
+            lst.setdefault(SR._norm(l['text']), l.get('story', 0))
     rows = []
     for s in slots:
+        sn = sorted({lst.get(SR._norm(x), 0) for x in (s.get('text') or '').split(' / ') if x.strip()})
+        s['stories'] = sn
         what = {'hook': 'HOOK (instrumental intro before the first sung word): establish the lead and the main story',
                 'outro_tail': 'OUTRO TAIL (instrumental ending): the deadpan payoff, quiet'}.get(s['kind'])
         rows.append(f"{s['seg']} | {s['section']} | est {s['est']}s | shots {s['images']} | "
-                    + (what or f"\"{s['text']}\""))
-    tpl = open(os.path.join(HERE, 'prompts', 'claudia_book.txt')).read()
-    for k, v in {'TITLE': h.get('title', ''), 'STYLE': G.read(os.path.join(day, 'style.txt')).strip(), 'HEADLINE': hl,
+                    + (what or f"story {'/'.join(map(str, sn)) or 0} | \"{s['text']}\""))
+    tpl = open(_prompt_path('claudia_book.txt')).read()
+    for k, v in {'VOCAB': vocab_text(), 'TITLE': h.get('title', ''), 'STYLE': G.read(os.path.join(day, 'style.txt')).strip(), 'HEADLINE': hl,
                  'STORIES': st, 'LYRICS': G.read(os.path.join(day, 'lyrics.txt')).strip(), 'SEED_CAST': seed,
                  'SCENES': '\n'.join(rows)}.items():
         tpl = tpl.replace('{{' + k + '}}', str(v))
@@ -195,6 +325,92 @@ def lead_share(book):
     return sum(1 for x in sh if 'A' in x['cast']) / max(1, len(sh))
 
 
+STORY_TEXT = os.environ.get('GV_STORY_TEXT', '1') != '0'     # 19 Oct: factual story captions over the lyrics layer
+CAP_WORDS = 8
+VAGUE = re.compile(r'^\s*(-|none|n/?a|theme|mood|atmosphere|tech|technology|ai|work|office|vibe|general)\s*$', re.I)
+
+
+def story_grounding(book, slots, h):
+    """record + check which story each shot depicts (deterministic; Opus review did the rewriting)."""
+    want = [h.get('main_story')] + list(h.get('secondary') or [])
+    sl = {s['seg']: s for s in slots}
+    n, grounded, per, notes = 0, 0, {}, []
+    for sc in book.get('scenes') or []:
+        s = sl.get(sc['seg'], {})
+        for k, sh in enumerate(sc.get('shots') or []):
+            n += 1
+            try:
+                st = int(sh.get('story') or 0)
+            except (TypeError, ValueError):
+                st = 0
+            el = str(sh.get('story_element') or '').strip()
+            if st and st not in want:
+                notes.append(f"{sc['seg']}#{k}: story {st} not in today's song"); st = 0
+            if st and el and not VAGUE.match(el):
+                grounded += 1; per[st] = per.get(st, 0) + 1
+            elif s.get('kind') not in ('hook', 'outro_tail'):
+                notes.append(f"{sc['seg']}#{k}: not tied to a specific story element ({el or 'none'})")
+            sh['story'] = st
+            sec_want = [x for x in s.get('stories') or [] if x in (h.get('secondary') or [])]
+            if sec_want and st not in sec_want and k == 0:
+                notes.append(f"{sc['seg']}: sings story {sec_want} but its first shot depicts story {st}")
+    for x in h.get('secondary') or []:
+        if not per.get(x):
+            notes.append(f"secondary story {x} has no identifiable shot")
+    share = grounded / max(1, n)
+    return {'shots': n, 'grounded': grounded, 'share': round(share, 2), 'per_story': per, 'notes': notes[:20],
+            'summary': f"{grounded}/{n} shots ({share:.0%}) depict a specific story element; per story {per}"
+                       + (f"; {len(notes)} notes" if notes else '')}
+
+
+def _fact_ok(text, voc, stop):
+    ws = [x for w in re.findall(r"[A-Za-z0-9@%$~.'+\-\u2013;]+", text) for x in w.split(';') if x.strip(".,'")]
+    bad = [w for w in ws if w.lower().strip(".,'\";:!?") not in voc and w.lower().strip(".,;:!?") not in stop
+           and w.lower().strip(".,'\";:!?").replace(';', '') not in voc]
+    return not bad and 0 < len(text.split()) <= CAP_WORDS, bad
+
+
+def _short(t, n=CAP_WORDS):
+    t = re.sub(r'\s+', ' ', str(t or '').replace('"', '').strip())
+    w = t.split()
+    return ' '.join(w[:n]).rstrip(',;:') if len(w) > n else t
+
+
+def story_text(day, book, h):
+    """the factual layer: Opus's card / captions / hook fact, each verified word by word against stories.md (the same
+    rule as the ticker); anything unverifiable falls back to stories.md's own headings or is dropped. Never invents."""
+    import headline as H
+    st = {x['n']: x for x in H.stories(day)}
+    voc = set(H.vocab(day))
+    voc |= {re.sub(r"'s$", '', w) for w in voc} | {p for w in voc for p in re.split(r"[^a-z0-9%@]+", w) if p}
+    raw = book.get('story_text') or {}
+    notes = []
+    main = h.get('main_story')
+
+    def pick(cands, what):
+        for c in cands:
+            c = _short(c, 99) if c else ''
+            if not c:
+                continue
+            ok, bad = _fact_ok(c, voc, H.STOP)
+            if ok:
+                return c
+            notes.append(f"{what} '{c}' ({' '.join(bad) or 'too long'})")
+        return ''
+    title = lambda n: re.sub(r'\s*[:(].*$', '', st.get(n, {}).get('title', '')).strip()   # heading up to its colon
+    card = pick([raw.get('card'), h.get('headline_card'), title(main), st.get(main, {}).get('title')], 'card')
+    hs = st.get(main, {}).get('handles') or []
+    caps = []
+    for n in h.get('secondary') or []:
+        mine = [c.get('text') for c in raw.get('captions') or [] if int(c.get('story') or 0) == n]
+        t = pick(mine + [st.get(n, {}).get('title'), title(n)], f'caption {n}')
+        if t:
+            caps.append({'story': n, 'text': t, 'handle': '@' + (st.get(n, {}).get('handles') or [''])[0]
+                         if st.get(n, {}).get('handles') else ''})
+    fact = pick([raw.get('hook_fact')], 'hook fact')
+    return {'card': card, 'handle': '@' + hs[0] if hs else '', 'captions': caps, 'hook_fact': fact, 'notes': notes}
+
+
 def write_book_md(book, slots, path, review=None):
     L = book['lead']
     o = [f"# Prompt book ({VERSION})", '', "## Lead (cast A) reference sheet",
@@ -211,9 +427,18 @@ def write_book_md(book, slots, path, review=None):
         o += ['', f"### {sc['seg']} · {s.get('section', '')} · est {s.get('est', '?')}s · type: {sc['type_zone']}",
               f"*{s.get('text') or s.get('kind')}*", f"Location: {sc['location']}. Idea: {sc['idea']}"]
         for k, sh in enumerate(sc['shots']):
-            o += [f"{k + 1}. [{''.join(sh['cast']) or '-'}] {sh['duration']}s | {sh['camera']} | {sh['lens']} | {sh['light']}",
+            o += [f"{k + 1}. [{''.join(sh['cast']) or '-'}] story {sh.get('story', '?')}: {sh.get('story_element', '-')} | {sh['duration']}s | {sh.get('ref', '-')} | {sh.get('shot_type', '-')} | "
+                  f"move {sh.get('move', '-')}: {sh['camera']} | {sh['lens']} | {sh['light']}",
                   f"   first frame: {sh['image_prompt']}"] + [f"   - {m}" for m in sh['motion']]
     o += ['', f"**Cameo / sign-off:** {book.get('cameo', '')}"]
+    sg, stx = book.get('_story_grounding') or {}, book.get('_story_text') or {}
+    if sg:
+        o += ['', '## Story grounding', sg.get('summary', '')] + [f"- {x}" for x in sg.get('notes') or []]
+    if stx:
+        o += ['', f"## On-screen story text ({'ON' if STORY_TEXT else 'OFF'}; checked word by word against stories.md)",
+              f"- card: {stx.get('card')}  ·  via {stx.get('handle')}", f"- hook fact: {stx.get('hook_fact') or '-'}"]
+        o += [f"- story {c['story']} caption: {c['text']}" for c in stx.get('captions') or []]
+        o += [f"- dropped: {x}" for x in stx.get('notes') or []]
     if review:
         o += ['', '## Producer review (Opus)', f"Verdict: {review.get('verdict', '')}"] + [f"- {x}" for x in review.get('issues') or []]
         o.append(f"Fixes applied: {len(review.get('fixes') or [])}")
@@ -232,18 +457,20 @@ def plan(day, work, plines, dur, deadline=None, reuse=False):
     bp = os.path.join(work, 'prompt_book.json')
     key = [(s['seg'], s['images']) for s in slots]
     book = G.load_json(bp) if reuse and os.path.exists(bp) else None
-    if not book or book.get('_key') != key:
+    if not book or [list(x) for x in book.get('_key') or []] != [list(x) for x in key]:   # json lists vs tuples
         pf = os.path.join(od, 'book_prompt.txt'); open(pf, 'w').write(_book_prompt(day, slots, h))
         t0 = time.time()
         book, meta = SO.run_claude(pf, od, BOOK_SCHEMA, 900, tools='', effort='high')
         G.log(f"claudia: prompt book written by one Opus context in {meta['secs']}s (${meta.get('cost_usd')})")
         probs = _fit(book, slots)
+        probs += cine_lint(book)
         if probs:
             G.log(f"claudia: book fit notes {probs[:6]}")
         review = {}
         try:                                             # producer review before any spend
             rf = os.path.join(od, 'book_review.txt')
-            open(rf, 'w').write(open(os.path.join(HERE, 'prompts', 'claudia_review.txt')).read()
+            open(rf, 'w').write(open(_prompt_path('claudia_review.txt')).read()
+                                .replace('{{STORIES}}', G.read(os.path.join(day, 'stories.md')).strip()[:6000])
                                 .replace('{{BOOK}}', json.dumps(book, ensure_ascii=False)))
             review, rm = SO.run_claude(rf, od, REVIEW_SCHEMA, 420, tools='', effort='medium')
             by = {s['seg']: s for s in book['scenes']}
@@ -251,20 +478,29 @@ def plan(day, work, plines, dur, deadline=None, reuse=False):
             for f in review.get('fixes') or []:
                 sc = by.get(f.get('seg'))
                 if sc and 0 <= int(f.get('shot', -1)) < len(sc['shots']):
-                    sc['shots'][f['shot']].update({k: v for k, v in f.items() if k not in ('seg', 'shot') and v})
+                    sc['shots'][f['shot']].update({k: v for k, v in f.items() if k not in ('seg', 'shot') and v not in (None, '', [])})
                     n += 1
             _fit(book, slots)
+            cn = cine_lint(book)
+            book['_cine_lint'] = cn
+            if cn:
+                G.log(f"claudia: cine lint after review: {len(cn)} notes {cn[:5]}")
             G.log(f"claudia: Opus review {rm['secs']}s: {len(review.get('issues') or [])} issues, {n} fixes applied")
         except Exception as e:
             G.log(f"WARNING: claudia review skipped: {e!r}"[:300])
         book['_key'] = key
         book['_review'] = review
+        book['_story_grounding'] = story_grounding(book, slots, h)
+        G.log(f"claudia: story grounding {book['_story_grounding']['summary']}")
         G.save_json(book, bp)
+    book['_story_text'] = story_text(day, book, h)
+    G.log(f"claudia: story text layer {'ON' if STORY_TEXT else 'OFF'}: {book['_story_text'].get('notes') or 'all facts verified'}")
     write_book_md(book, slots, os.path.join(work, 'prompt_book.md'), book.get('_review'))
     sec_pal = {x['section'].lower(): x for x in book.get('sections') or []}
     cast = [{'id': 'A', 'role': f"lead: {book['lead']['name']}", 'description': book['lead']['description']}]
     cast += [c for c in (book.get('support') or [])[:2] if c['id'] in ('B', 'C')]
     segs = []
+    arch = archetypes()
     by = {s['seg']: s for s in book['scenes']}
     for sl in slots:
         sc = by[sl['seg']]
@@ -272,11 +508,17 @@ def plan(day, work, plines, dur, deadline=None, reuse=False):
         pal = sec_pal.get(sl['section'].lower()) or {}
         ims = []
         for k, sh in enumerate(sc['shots']):
-            body = (f"{sh['image_prompt']} Location: {sc['location']}. Light: {sh['light']}. Lens: {sh['lens']}. "
-                    + (f"Palette: {pal['palette']}. " if pal.get('palette') else ''))
-            mot = ' '.join(sh['motion'])
+            m_ = re.search(r'ARCH-[A-Z]+', str(sh.get('ref') or '').upper())
+            look = arch.get(m_.group(0), '').split(';')[0].strip(' .') if CINE and m_ else ''   # palette only
+            body = (f"{sh['image_prompt']} "
+                    + (f"Framing: {_plain(sh['shot_type']).rstrip('.')}. " if CINE and sh.get('shot_type') else '')
+                    + f"Location: {sc['location']}. Light: {_plain(sh['light'])}. Lens: {_plain(sh['lens'])}. "
+                    + (f"Palette: {_plain(pal['palette'])}. " if pal.get('palette') else (f"Colour: {look}. " if look else '')))
+            mot = ' '.join(_plain(m) for m in sh['motion'])
             ims.append({'prompt': body, 'image_prompt': body, 'cast': sh['cast'], '_clip': True, 'duration': sh['duration'],
-                        'motion': f"{mot} Camera: {sh['camera']}, {sh['lens']}. Light stays: {sh['light']}.", 'word': 0})
+                        'motion': (f"{mot} Camera: {_plain(sh['camera']).rstrip('.')}, {_plain(sh['lens'])}"
+                                   + (". One camera move only, no other camera motion" if CINE else '')
+                                   + f". Light stays: {_plain(sh['light'])}."), 'word': 0})
         segs.append({'seg': sl['seg'], 'images': ims})
     return slots, {'planner': VERSION, 'cast': cast, 'segments': segs, 'display': [], 'pip': [],
                    'cameo': book.get('cameo') or ''}, book
@@ -551,7 +793,7 @@ def _wrap(words, maxc):
     return lines
 
 
-def build_ass(path, L, pslots, hl, credits_ass, dur, cam0, accent_words=()):
+def build_ass(path, L, pslots, hl, credits_ass, dur, cam0, accent_words=(), story=None):
     """lyrics placed in each scene's type zone, word reveal on sung onsets; slim synced source tag; headline card;
     credits events copied from the existing end-card builder (credits_ass)."""
     head = f"""[Script Info]
@@ -569,6 +811,9 @@ Style: Acc,Instrument Serif,96,&H0078C4EC,&H00FFFFFF,&H00000000,&HA0000000,0,1,0
 Style: Src,Inter,38,&H00EDEDED,&H00FFFFFF,&H80000000,&H80000000,0,0,0,0,100,100,1,0,1,2,1,1,64,64,110,1
 Style: Head,Instrument Serif,124,&H00FFFFFF,&H00FFFFFF,&H70000000,&H90000000,0,0,0,0,100,100,0,0,1,3,2,5,80,80,80,1
 Style: HeadK,Inter,34,&H0078C4EC,&H00FFFFFF,&H00000000,&H90000000,1,0,0,0,100,100,6,0,1,0,2,5,80,80,80,1
+Style: HeadS,Inter,46,&H00F4F4F4,&H00FFFFFF,&H50000000,&H90000000,0,0,0,0,100,100,1,0,1,3,2,5,80,80,80,1
+Style: Cap,Inter Tight,50,&H00F4F4F4,&H00FFFFFF,&H48141414,&H00000000,1,0,0,0,100,100,0,0,3,16,0,5,90,90,80,1
+Style: CapK,Inter,28,&H0078C4EC,&H00FFFFFF,&H00000000,&H90000000,1,0,0,0,100,100,6,0,1,0,2,5,90,90,80,1
 """ + credits_ass['styles'] + """
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -627,17 +872,60 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 continue
             ev.append(f"Dialogue: 4,{_ts(a)},{_ts(b)},Src,,0,0,0,,{{\\fad(200,200)}}via  {{\\b1}}{_esc(hs[0])}"
                       + (f"{{\\b0\\alpha&H60&}}  ·  story {n}" if False else ''))
-        if hl.get('card') and sung:
-            c0 = max(0.4, sung[0]['words'][0][1] - 3.6)
+        stx = story if (STORY_TEXT and story) else None
+        card = (stx or {}).get('card') or hl.get('card')
+        card_shown = False
+        if card and sung:
+            c0 = max(0.4, sung[0]['words'][0][1] - (5.0 if stx else 3.6))
             c1 = sung[0]['words'][0][1] - 0.3
             if c1 - c0 > 1.0:
-                rows = _wrap(hl['card'].split(), 16)
+                card_shown = True
+                rows = _wrap(card.split(), 16)
                 ev.append(f"Dialogue: 6,{_ts(c0 - 0.2)},{_ts(c1)},HeadK,,0,0,0,,{{\\an5\\pos(540,700)\\fad(250,200)}}TODAY")
                 ev.append(f"Dialogue: 6,{_ts(c0)},{_ts(c1)},Head,,0,0,0,,{{\\an5\\pos(540,880)\\fad(350,200)}}"
                           + '\\N'.join(_esc(' '.join(r)) for r in rows))
+                if stx and stx.get('handle'):
+                    yh = 880 + 75 * len(rows) + 40
+                    ev.append(f"Dialogue: 6,{_ts(c0 + 0.3)},{_ts(c1)},HeadS,,0,0,0,,{{\\an5\\pos(540,{yh})\\fad(300,200)}}"
+                              f"via  {{\\b1}}{_esc(stx['handle'])}")
+        if stx:
+            ev += _story_events(stx, hl, sung, zone_of, cam0, card_shown, SR)
     ev += credits_ass['events']
     open(path, 'w').write(head + '\n'.join(ev) + '\n')
     return len(ev)
+
+
+def _story_events(stx, hl, sung, zone_of, cam0, card_shown, SR):
+    """factual captions (<= 8 words, verified against stories.md): one when each secondary story is first sung, the
+    hook fact at the first chorus, the card as a caption if the intro was too short for the headline card. Placed on
+    the opposite side of the frame from that scene's lyric zone so they never cover the sung words."""
+    out, used = [], []
+
+    def cap(t0, kicker, text, lid, hold=3.6):
+        z = zone_of.get(lid, ('lower',))[0]
+        y = 1560 if z in ('top', 'upper', 'left', 'right') else 250
+        t1 = min(t0 + hold, cam0 - 0.2)
+        if t1 - t0 < 1.0 or any(a < t1 and t0 < b for a, b in used):
+            return
+        used.append((t0, t1))
+        rows = _wrap(text.split(), 28)
+        out.append(f"Dialogue: 7,{_ts(t0)},{_ts(t1)},Cap,,0,0,0,,{{\\an5\\pos(540,{y})\\fad(220,250)}}"
+                   f"{{\\fnInter\\fs30\\fsp6\\c&H0078C4EC&}}{_esc(kicker)}{{\\fnInter Tight\\fs50\\fsp0\\c&H00F4F4F4&}}\\N"
+                   + '\\N'.join(_esc(' '.join(r)) for r in rows))
+    if not card_shown and stx.get('card') and sung:
+        cap(sung[0]['words'][0][1] - 0.2, 'TODAY · ' + (stx.get('handle') or ''), stx['card'], RP.line_id(sung[0]), 4.0)
+    seen = set()
+    for l in sung:
+        n = hl['line_story'].get(SR._norm(l['text']))
+        c = next((x for x in stx.get('captions') or [] if x['story'] == n), None)
+        if c and n not in seen:
+            seen.add(n)
+            cap(l['words'][0][1] - 0.2, 'ALSO TODAY', c['text'], RP.line_id(l))
+    if stx.get('hook_fact'):
+        ch = next((l for l in sung if l.get('kind') == 'chorus'), None)
+        if ch:
+            cap(ch['words'][0][1] - 0.1, 'THE STORY', stx['hook_fact'], RP.line_id(ch), 3.8)
+    return out
 
 
 def credits_from(ass_path, c0):
@@ -676,15 +964,28 @@ def write_lut(path, n=33):
     return path
 
 
+POLISH = os.environ.get('GV_POLISH', '0') != '0'     # 19 Oct: halation + fine grain on top of the LUT (opt-in)
+
+
+def polish_vf(lut):
+    """LUT -> subtle halation (highlights >~80% blurred, warmed, screened at 18%) -> fine temporal grain.
+    Deterministic, single ffmpeg pass. The typography is already burned in, so the glow is kept faint."""
+    return (f"lut3d={lut},split[a][b];"
+            "[b]curves=all='0/0 0.78/0 1/1',gblur=sigma=14,colorchannelmixer=rr=1:gg=0.55:bb=0.25[h];"
+            "[a][h]blend=all_mode=screen:all_opacity=0.18,"
+            "noise=c0s=5:c0f=t+u:c1s=2:c1f=t+u:c2s=2:c2f=t+u")
+
+
 def grade(video, work):
     lut = write_lut(os.path.join(work, 'claudia_soft_film.cube'))
     tmp = video[:-4] + '.grade.mp4'
-    r = subprocess.run(['ffmpeg', '-v', 'error', '-y', '-i', video, '-vf', f"lut3d={lut}", '-c:v', 'libx264', '-preset',
+    vf = polish_vf(lut) if POLISH else f"lut3d={lut}"
+    r = subprocess.run(['ffmpeg', '-v', 'error', '-y', '-i', video, '-vf', vf, '-c:v', 'libx264', '-preset',
                         'medium', '-crf', '18', '-maxrate', '12M', '-bufsize', '24M', '-pix_fmt', 'yuv420p', '-c:a', 'copy',
                         '-movflags', '+faststart', tmp], capture_output=True, text=True)
     if r.returncode == 0 and os.path.getsize(tmp) > 100000:
         os.replace(tmp, video)
-        G.log("claudia: LUT grade pass applied (soft film)")
+        G.log(f"claudia: LUT grade pass applied (soft film{' + halation/grain polish' if POLISH else ''})")
         return True
     G.log(f"WARNING: claudia grade pass failed: {r.stderr[-200:]}")
     return False
