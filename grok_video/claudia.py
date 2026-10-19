@@ -125,9 +125,8 @@ def scenes(plines, dur, timed=None):
 S, I = {"type": "string"}, {"type": "integer"}
 SHOT = {"type": "object", "properties": {
     "cast": {"type": "array", "items": S}, "image_prompt": S, "duration": I,
-    "motion": {"type": "array", "items": S}, "camera": S, "lens": S, "light": S,
-    "ref": S, "shot_type": S, "move": S},
-    "required": ["cast", "image_prompt", "duration", "motion", "camera", "lens", "light", "ref", "shot_type", "move"]}
+    "motion": {"type": "array", "items": S}, "camera": S, "lens": S, "light": S},
+    "required": ["cast", "image_prompt", "duration", "motion", "camera", "lens", "light"]}
 BOOK_SCHEMA = {"type": "object", "properties": {
     "lead": {"type": "object", "properties": {"name": S, "age": I, "face": S, "hair": S, "build": S, "wardrobe": S,
                                               "palette": S, "description": S},
@@ -142,128 +141,12 @@ BOOK_SCHEMA = {"type": "object", "properties": {
     "cameo": S},
     "required": ["lead", "support", "sections", "scenes", "cameo"]}
 FIX = {"type": "object", "properties": {"seg": S, "shot": I, "image_prompt": S, "duration": I,
-                                        "motion": {"type": "array", "items": S}, "camera": S, "lens": S, "light": S,
-                                        "ref": S, "shot_type": S, "move": S},
+                                        "motion": {"type": "array", "items": S}, "camera": S, "lens": S, "light": S},
        "required": ["seg", "shot"]}
 REVIEW_SCHEMA = {"type": "object", "properties": {"verdict": S, "issues": {"type": "array", "items": S},
                                                   "fixes": {"type": "array", "items": FIX}},
                  "required": ["verdict", "issues", "fixes"]}
 BOT = re.compile(r'\b(robot|robotic|android|cyborg|mascot|toy|pip|hologram)s?\b', re.I)
-
-# 19 Oct (the owner: "reference -> language -> prompt -> polish"): cine vocab grammar. GV_CINE=0 -> pre-vocab prompts.
-CINE = os.environ.get('GV_CINE', '1') != '0'
-VOCAB_PATH = os.path.join(HERE, 'prompts', 'cine_vocab.md')
-MOVES = ['STATIC', 'PUSH', 'PULL', 'TRUCKL', 'TRUCKR', 'SLIDER', 'PANL', 'PANR', 'TILTUP', 'TILTDN', 'ARC', 'ORBIT',
-         'TRACK', 'LEAD', 'FOLLOW', 'HANDHELD', 'CRANEUP', 'PUSHPAST', 'SZOOM', 'CRASH', 'WHIP', 'DOLLYZOOM', 'RACK']
-MOVE_CAP = {'CRASH': 2, 'WHIP': 2, 'DOLLYZOOM': 1}
-MOVE_WORDS = [('DOLLYZOOM', r'dolly[- ]?zoom|vertigo'), ('PUSHPAST', r'push(es|ing)? past'), ('CRASH', r'crash[- ]?zoom'),
-              ('WHIP', r'whip[- ]?pan'), ('SZOOM', r'slow zoom'), ('RACK', r'rack[- ]?focus|pull focus'),
-              ('ORBIT', r'orbit'), ('ARC', r'\barc'), ('CRANEUP', r'crane|jib'), ('LEAD', r'reverse track|backs away|walk-and-talk'),
-              ('FOLLOW', r'follow'), ('TRACK', r'track(ing)? (shot|alongside|beside)|side track'),
-              ('TRUCKL', r'truck(s|ing)? left'), ('TRUCKR', r'truck(s|ing)? right'), ('SLIDER', r'slider'),
-              ('PULL', r'dolly(ing)? (out|back)|pull(s|ing)? (out|back)'), ('PUSH', r'dolly(ing)? in|push(es|ing)? in|push-in'),
-              ('PANL', r'pan(s|ning)? left'), ('PANR', r'pan(s|ning)? right'), ('TILTUP', r'tilt(s|ing)? up'),
-              ('TILTDN', r'tilt(s|ing)? down'), ('HANDHELD', r'handheld'), ('STATIC', r'static|locked[- ]off|tripod, still')]
-GENERIC = re.compile(r',?\s*\b(cinematic|[48]k|ultra[- ]detailed|highly detailed|masterpiece|beautiful|stunning|epic|'
-                     r'hyper-?real(istic)?|award[- ]winning|breathtaking)\b', re.I)
-
-
-def vocab_text():
-    try:
-        return open(VOCAB_PATH).read().strip()
-    except OSError:
-        return ''
-
-
-def archetypes():
-    """ARCH-ID -> its palette/framing note from cine_vocab.md (film title dropped; only the look rides in prompts)."""
-    out, cur = {}, None
-    for line in vocab_text().splitlines():
-        m = re.match(r'- (ARCH-[A-Z]+)\s+(.*)', line)
-        if m:
-            cur = m.group(1); out[cur] = m.group(2).strip(); continue
-        if cur and line.startswith('  ') and line.strip():
-            out[cur] += ' ' + line.strip()
-        else:
-            cur = None
-    for k, v in out.items():
-        v = re.sub(r'^[^:]*\(\d{4}\):\s*', '', v)          # drop "Title (year):"
-        parts = v.rstrip('. ').rsplit('. ', 1)                 # drop the trailing genre hint
-        out[k] = (parts[0] if len(parts) > 1 else v.rstrip('. ')) + '.'
-    return out
-
-
-def move_id(sh):
-    m = re.sub(r'[^A-Z]', '', str(sh.get('move') or '').upper())
-    if m in MOVES:
-        return m
-    for k in MOVES:
-        if m.startswith(k):
-            return k
-    txt = f"{sh.get('move', '')} {sh.get('camera', '')}".lower()
-    for k, rx in MOVE_WORDS:
-        if re.search(rx, txt):
-            return k
-    return ''
-
-
-def _plain(t):
-    """drop vocab ids from text that goes to Grok ('PUSH - slow dolly in' -> 'slow dolly in'; '(ARCH-ENGLAND)' -> '')."""
-    t = str(t or '')
-    if not CINE:
-        return t
-    t = re.sub(r'\s*\(?\bARCH-[A-Z]+\b\)?:?', '', t)
-    t = re.sub(r'(^|[.;]\s+)(?:%s|[A-Z][A-Z0-9]{1,11})\s+[-\u2013\u2014:]\s+' % '|'.join(MOVES), r'\1', t)
-    return re.sub(r'\s{2,}', ' ', t).strip()
-
-
-def cine_lint(book):
-    """deterministic grammar pass after the book and after the review: strip filler words, normalise the move id,
-    cap the loud moves, flag shots with no ref/light/move. Returns notes (never raises)."""
-    notes, used = [], {}
-    if not CINE:
-        return notes
-    for sc in book.get('scenes') or []:
-        prev = None
-        for k, sh in enumerate(sc.get('shots') or []):
-            tag = f"{sc.get('seg')}#{k}"
-            for f in ('image_prompt', 'camera', 'light', 'lens', 'shot_type'):
-                if GENERIC.search(sh.get(f) or ''):
-                    sh[f] = re.sub(r'\s{2,}', ' ', GENERIC.sub('', sh[f])).strip(' ,'); notes.append(f"{tag}: filler words removed")
-            sh['motion'] = [re.sub(r'\s{2,}', ' ', GENERIC.sub('', m)).strip(' ,') for m in sh.get('motion') or []]
-            mv = move_id(sh)
-            if not mv:
-                mv = 'PUSH' if k == 0 else 'STATIC'; notes.append(f"{tag}: no named move -> {mv}")
-                sh['camera'] = (f"{'slow dolly in on a track, real parallax, no zoom' if mv == 'PUSH' else 'locked-off static camera'}"
-                                f"; {sh.get('camera', '')}").strip('; ')
-            if mv in MOVE_CAP:
-                used[mv] = used.get(mv, 0) + 1
-                if used[mv] > MOVE_CAP[mv]:
-                    notes.append(f"{tag}: {mv} over the film cap -> PUSH")
-                    for f in ('camera',):
-                        sh[f] = 'slow dolly in on a track toward the subject, real parallax, no zoom'
-                    sh['motion'] = [re.sub(r'(crash[- ]?zoom|whip[- ]?pan|dolly[- ]?zoom)', 'dolly in', m, flags=re.I)
-                                    for m in sh['motion']]
-                    mv = 'PUSH'
-            sh['move'] = mv
-            if prev and mv == prev and mv != 'STATIC':
-                notes.append(f"{tag}: repeats {mv} from the previous shot")
-            prev = mv
-            if not str(sh.get('ref') or '').strip():
-                notes.append(f"{tag}: no ref")
-            if not re.search(r'\b(window|sun|sky|lamp|practical|tungsten|sodium|fluorescent|overcast|rim|back|screen|stage|'
-                             r'daylight|dusk|dawn|candle|street|haze|golden|blue hour|silhouette|key|neon)\b',
-                             str(sh.get('light') or ''), re.I):
-                notes.append(f"{tag}: light names no source")
-            if not re.search(r'\d+\s?mm', str(sh.get('lens') or '')):
-                notes.append(f"{tag}: lens has no focal length")
-    return notes
-
-
-def _prompt_path(name):
-    p = os.path.join(HERE, 'prompts', name)
-    old = p + '.bak-20261019-cinevocab'
-    return old if not CINE and os.path.exists(old) else p
 
 
 def _book_prompt(day, slots, h):
@@ -278,8 +161,8 @@ def _book_prompt(day, slots, h):
                 'outro_tail': 'OUTRO TAIL (instrumental ending): the deadpan payoff, quiet'}.get(s['kind'])
         rows.append(f"{s['seg']} | {s['section']} | est {s['est']}s | shots {s['images']} | "
                     + (what or f"\"{s['text']}\""))
-    tpl = open(_prompt_path('claudia_book.txt')).read()
-    for k, v in {'VOCAB': vocab_text(), 'TITLE': h.get('title', ''), 'STYLE': G.read(os.path.join(day, 'style.txt')).strip(), 'HEADLINE': hl,
+    tpl = open(os.path.join(HERE, 'prompts', 'claudia_book.txt')).read()
+    for k, v in {'TITLE': h.get('title', ''), 'STYLE': G.read(os.path.join(day, 'style.txt')).strip(), 'HEADLINE': hl,
                  'STORIES': st, 'LYRICS': G.read(os.path.join(day, 'lyrics.txt')).strip(), 'SEED_CAST': seed,
                  'SCENES': '\n'.join(rows)}.items():
         tpl = tpl.replace('{{' + k + '}}', str(v))
@@ -328,8 +211,7 @@ def write_book_md(book, slots, path, review=None):
         o += ['', f"### {sc['seg']} · {s.get('section', '')} · est {s.get('est', '?')}s · type: {sc['type_zone']}",
               f"*{s.get('text') or s.get('kind')}*", f"Location: {sc['location']}. Idea: {sc['idea']}"]
         for k, sh in enumerate(sc['shots']):
-            o += [f"{k + 1}. [{''.join(sh['cast']) or '-'}] {sh['duration']}s | {sh.get('ref', '-')} | {sh.get('shot_type', '-')} | "
-                  f"move {sh.get('move', '-')}: {sh['camera']} | {sh['lens']} | {sh['light']}",
+            o += [f"{k + 1}. [{''.join(sh['cast']) or '-'}] {sh['duration']}s | {sh['camera']} | {sh['lens']} | {sh['light']}",
                   f"   first frame: {sh['image_prompt']}"] + [f"   - {m}" for m in sh['motion']]
     o += ['', f"**Cameo / sign-off:** {book.get('cameo', '')}"]
     if review:
@@ -350,19 +232,18 @@ def plan(day, work, plines, dur, deadline=None, reuse=False):
     bp = os.path.join(work, 'prompt_book.json')
     key = [(s['seg'], s['images']) for s in slots]
     book = G.load_json(bp) if reuse and os.path.exists(bp) else None
-    if not book or [list(x) for x in book.get('_key') or []] != [list(x) for x in key]:   # json lists vs tuples
+    if not book or book.get('_key') != key:
         pf = os.path.join(od, 'book_prompt.txt'); open(pf, 'w').write(_book_prompt(day, slots, h))
         t0 = time.time()
         book, meta = SO.run_claude(pf, od, BOOK_SCHEMA, 900, tools='', effort='high')
         G.log(f"claudia: prompt book written by one Opus context in {meta['secs']}s (${meta.get('cost_usd')})")
         probs = _fit(book, slots)
-        probs += cine_lint(book)
         if probs:
             G.log(f"claudia: book fit notes {probs[:6]}")
         review = {}
         try:                                             # producer review before any spend
             rf = os.path.join(od, 'book_review.txt')
-            open(rf, 'w').write(open(_prompt_path('claudia_review.txt')).read()
+            open(rf, 'w').write(open(os.path.join(HERE, 'prompts', 'claudia_review.txt')).read()
                                 .replace('{{BOOK}}', json.dumps(book, ensure_ascii=False)))
             review, rm = SO.run_claude(rf, od, REVIEW_SCHEMA, 420, tools='', effort='medium')
             by = {s['seg']: s for s in book['scenes']}
@@ -373,10 +254,6 @@ def plan(day, work, plines, dur, deadline=None, reuse=False):
                     sc['shots'][f['shot']].update({k: v for k, v in f.items() if k not in ('seg', 'shot') and v})
                     n += 1
             _fit(book, slots)
-            cn = cine_lint(book)
-            book['_cine_lint'] = cn
-            if cn:
-                G.log(f"claudia: cine lint after review: {len(cn)} notes {cn[:5]}")
             G.log(f"claudia: Opus review {rm['secs']}s: {len(review.get('issues') or [])} issues, {n} fixes applied")
         except Exception as e:
             G.log(f"WARNING: claudia review skipped: {e!r}"[:300])
@@ -388,7 +265,6 @@ def plan(day, work, plines, dur, deadline=None, reuse=False):
     cast = [{'id': 'A', 'role': f"lead: {book['lead']['name']}", 'description': book['lead']['description']}]
     cast += [c for c in (book.get('support') or [])[:2] if c['id'] in ('B', 'C')]
     segs = []
-    arch = archetypes()
     by = {s['seg']: s for s in book['scenes']}
     for sl in slots:
         sc = by[sl['seg']]
@@ -396,17 +272,11 @@ def plan(day, work, plines, dur, deadline=None, reuse=False):
         pal = sec_pal.get(sl['section'].lower()) or {}
         ims = []
         for k, sh in enumerate(sc['shots']):
-            m_ = re.search(r'ARCH-[A-Z]+', str(sh.get('ref') or '').upper())
-            look = arch.get(m_.group(0), '').split(';')[0].strip(' .') if CINE and m_ else ''   # palette only
-            body = (f"{sh['image_prompt']} "
-                    + (f"Framing: {_plain(sh['shot_type']).rstrip('.')}. " if CINE and sh.get('shot_type') else '')
-                    + f"Location: {sc['location']}. Light: {_plain(sh['light'])}. Lens: {_plain(sh['lens'])}. "
-                    + (f"Palette: {_plain(pal['palette'])}. " if pal.get('palette') else (f"Colour: {look}. " if look else '')))
-            mot = ' '.join(_plain(m) for m in sh['motion'])
+            body = (f"{sh['image_prompt']} Location: {sc['location']}. Light: {sh['light']}. Lens: {sh['lens']}. "
+                    + (f"Palette: {pal['palette']}. " if pal.get('palette') else ''))
+            mot = ' '.join(sh['motion'])
             ims.append({'prompt': body, 'image_prompt': body, 'cast': sh['cast'], '_clip': True, 'duration': sh['duration'],
-                        'motion': (f"{mot} Camera: {_plain(sh['camera']).rstrip('.')}, {_plain(sh['lens'])}"
-                                   + (". One camera move only, no other camera motion" if CINE else '')
-                                   + f". Light stays: {_plain(sh['light'])}."), 'word': 0})
+                        'motion': f"{mot} Camera: {sh['camera']}, {sh['lens']}. Light stays: {sh['light']}.", 'word': 0})
         segs.append({'seg': sl['seg'], 'images': ims})
     return slots, {'planner': VERSION, 'cast': cast, 'segments': segs, 'display': [], 'pip': [],
                    'cameo': book.get('cameo') or ''}, book
@@ -806,28 +676,15 @@ def write_lut(path, n=33):
     return path
 
 
-POLISH = os.environ.get('GV_POLISH', '0') != '0'     # 19 Oct: halation + fine grain on top of the LUT (opt-in)
-
-
-def polish_vf(lut):
-    """LUT -> subtle halation (highlights >~80% blurred, warmed, screened at 18%) -> fine temporal grain.
-    Deterministic, single ffmpeg pass. The typography is already burned in, so the glow is kept faint."""
-    return (f"lut3d={lut},split[a][b];"
-            "[b]curves=all='0/0 0.78/0 1/1',gblur=sigma=14,colorchannelmixer=rr=1:gg=0.55:bb=0.25[h];"
-            "[a][h]blend=all_mode=screen:all_opacity=0.18,"
-            "noise=c0s=5:c0f=t+u:c1s=2:c1f=t+u:c2s=2:c2f=t+u")
-
-
 def grade(video, work):
     lut = write_lut(os.path.join(work, 'claudia_soft_film.cube'))
     tmp = video[:-4] + '.grade.mp4'
-    vf = polish_vf(lut) if POLISH else f"lut3d={lut}"
-    r = subprocess.run(['ffmpeg', '-v', 'error', '-y', '-i', video, '-vf', vf, '-c:v', 'libx264', '-preset',
+    r = subprocess.run(['ffmpeg', '-v', 'error', '-y', '-i', video, '-vf', f"lut3d={lut}", '-c:v', 'libx264', '-preset',
                         'medium', '-crf', '18', '-maxrate', '12M', '-bufsize', '24M', '-pix_fmt', 'yuv420p', '-c:a', 'copy',
                         '-movflags', '+faststart', tmp], capture_output=True, text=True)
     if r.returncode == 0 and os.path.getsize(tmp) > 100000:
         os.replace(tmp, video)
-        G.log(f"claudia: LUT grade pass applied (soft film{' + halation/grain polish' if POLISH else ''})")
+        G.log("claudia: LUT grade pass applied (soft film)")
         return True
     G.log(f"WARNING: claudia grade pass failed: {r.stderr[-200:]}")
     return False

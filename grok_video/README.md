@@ -547,17 +547,3 @@ Off switch: `GV_CLAUDIA=0` (back to the 14-18 Oct headline pipeline). Rollback: 
    `claudia.grade()` applies a soft-film 3D LUT (`work/claudia_soft_film.cube`) in ffmpeg.
 Budget: unchanged 7.5 % cap (live meter); the estimate uses the mean planned clip length.
 Test without spending: `grok_video.sh <day> --style slopcore --plan-only --skip-gen --work <abs path>`.
-
-## Cine vocab (19 Oct 2026, from the owner's "reference -> language -> prompt -> polish" list)
-- `prompts/cine_vocab.md`: 60 named shot types / lenses / lights / camera moves with Grok-ready phrases, plus 17 film
-  reference archetypes (ARCH-*). Injected into `claudia_book.txt` via `{{VOCAB}}`.
-- Book schema adds per shot `ref` (ARCH id or real film frame), `shot_type`, `move` (exactly one vocab move id).
-  `claudia.cine_lint()` (deterministic, after the book and after the review) strips filler words ("cinematic, 4k,
-  beautiful..."), normalises/infers the move, caps CRASH/WHIP at 2 and DOLLYZOOM at 1, flags missing ref/light/lens.
-  `_plain()` drops vocab ids before text reaches Grok; the ARCH palette rides as "Colour:" only when a section has
-  no palette. The review prompt rejects generic shots and shots with no named move or light.
-- `GV_CINE=0` -> uses the `*.bak-20261019-cinevocab` book/review prompts and skips the lint (pre-vocab behaviour).
-- `GV_POLISH=1` (default OFF) -> grade adds faint halation (highlights blurred, warmed, screened 18%) + fine temporal
-  grain in the same ffmpeg pass as the LUT; ~+45 s on a 2:29 video. Off until judged on a real Claudia render.
-- Fixed: `plan(reuse=True)` never reused the book (json lists vs tuples in `_key`); now compares as lists.
-- Full rollback: `cd tools/grok_video && for f in claudia.py README.md prompts/claudia_book.txt prompts/claudia_review.txt; do cp -p $f.bak-20261019-cinevocab $f; done`

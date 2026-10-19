@@ -11,16 +11,8 @@ CHECK EVERY SHOT FOR:
 - an uncluttered composed frame with a clean type_zone; one subject; not a busy stock photo.
 - shots within a scene are the SAME place and continuous action (coherent scene), and the scene acts out its lyric.
 - chorus/bridge scenes may be quick; verses linger.
-- CINE GRAMMAR (reject and fix): every shot names a 'ref' archetype or real film frame, a 'shot_type', a lens with
-  focal length, a named lighting setup with its source, and exactly ONE 'move' from the vocab ids (STATIC, PUSH,
-  PULL, TRUCKL, TRUCKR, SLIDER, PANL, PANR, TILTUP, TILTDN, ARC, ORBIT, TRACK, LEAD, FOLLOW, HANDHELD, CRANEUP,
-  PUSHPAST, SZOOM, CRASH, WHIP, DOLLYZOOM, RACK) whose phrase in 'camera' and 'motion' is the same single move.
-  Reject GENERIC shots: any shot that relies on "cinematic", "4k/8k", "beautiful", "stunning", "epic",
-  "masterpiece", "ultra-detailed", "hyperreal" instead of a concrete lens + light + move, any shot with no named
-  move or no named light, and any shot that stacks two moves ("pan and tilt", "orbit while zooming"). Max 2 CRASH,
-  2 WHIP, 1 DOLLYZOOM per film; consecutive shots in a scene should not repeat the same move.
 
-Return {"verdict": "...", "issues": [...short strings...], "fixes": [{"seg": ..., "shot": <0-based index>, "image_prompt": ..., "motion": [...], "duration": n, "camera": ..., "lens": ..., "light": ..., "ref": ..., "shot_type": ..., "move": ...}]}
+Return {"verdict": "...", "issues": [...short strings...], "fixes": [{"seg": ..., "shot": <0-based index>, "image_prompt": ..., "motion": [...], "duration": n, "camera": ..., "lens": ..., "light": ...}]}
 Only include fields that change in a fix (seg and shot always). Keep fixes to what matters; an empty list is fine if the
 book is ready.
 

@@ -905,7 +905,8 @@ def edit_and_render_claudia(P, L, out, args, status, segs, cuts, ok, ex):
     ass = os.path.join(work, 'type.ass')
     hl = LK.get('headline')
     accw = (hl or {}).get('hook_words', '').split()
-    C.build_ass(ass, L, P['pslots'], hl, C.credits_from(base, credits['t0']), dur, cam0, accw)
+    C.build_ass(ass, L, P['pslots'], hl, C.credits_from(base, credits['t0']), dur, cam0, accw,
+                story=(P.get('book') or {}).get('_story_text'))
     G.save_json(edit, os.path.join(work, 'edit.json'))
     body = [e for e in edit if e['seg_kind'] not in ('credits', 'cameo')]
     lens = [e['t1'] - e['t0'] for e in body]
