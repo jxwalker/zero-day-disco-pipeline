@@ -523,3 +523,41 @@ one headline card on the main story's first line, chorus hook line as sung, bott
 on the line where the story changes). `HEADLINE_OFF=1` ignores it. Also 13 Oct: cast lists pruned to letters named in
 the prompt (slop_opus.fix_cast); hold-cap splits borrow neighbouring lines' shots; judge prompt is mode-aware and adds
 a sound-off test in headline mode. Dry run: 2026-10-13-headline/dryrun/.
+
+## Claudia mode (19 Oct 2026, the owner-approved; default in headline mode)
+Modelled on @anabology's Claudia pipeline (claudia.gallery/wiki/pipeline). Code: `claudia.py`, wired in
+`slop_real.prepare_claudia` / `generate_media` / `edit_and_render_claudia`, plus a likeness line in `judge.realism_gate`.
+Off switch: `GV_CLAUDIA=0` (back to the 14-18 Oct headline pipeline). Rollback: every touched file has a
+`.bak-20261019-claudia` copy.
+1. **Pacing:** `claudia.scenes()` = one scene per verse couplet (4-8 s), one per chorus/bridge line (1-2 quick shots),
+   hook 1-2, outro tail 1; 25-40 shots total; every shot is a moving clip (3-6 s, set per shot).
+2. **One lead:** the prompt book fixes cast A's reference sheet (name, age, face, hair, build, wardrobe, palette) + at
+   most B, C. `castA` is rendered as a plain reference-sheet portrait, Opus approves it (`lead_approval.json`, one
+   reroll) before any batch; stills are image_edit from it and every clip with A passes it as a reference image
+   (reference-to-video). The realism gate rejects off-model lead stills.
+3. **Prompt book:** ONE Opus call writes every paid prompt (`prompts/claudia_book.txt`): first-frame prompt, timestamped
+   motion/blocking, camera, lens, light, type zone per scene; an Opus producer review (`prompts/claudia_review.txt`)
+   applies fixes before any spend. Output: `work/prompt_book.md` + `.json`. After the clips, Opus picks each clip's
+   usable in/out window from 0.5 s frame strips (`work/windows.json`); the edit plays only that window, at 1x.
+4. **Typography:** `claudia.build_ass` (libass, code, free): lyric lines in the scene's negative-space zone, Inter Tight
+   with Instrument Serif italic accents (hook words, numbers), each word revealed on its sung onset; a slim synced
+   "via @handle" tag bottom-left replaces the scrolling ticker; a serif headline card before the first sung line; the
+   existing end card (MADE WITH SUNO + handles) is copied unchanged.
+5. **Look:** `clean-film` (soft motivated light, no flash, no VHS/datestamp, no handheld shake on stills), then
+   `claudia.grade()` applies a soft-film 3D LUT (`work/claudia_soft_film.cube`) in ffmpeg.
+Budget: unchanged 7.5 % cap (live meter); the estimate uses the mean planned clip length.
+Test without spending: `grok_video.sh <day> --style slopcore --plan-only --skip-gen --work <abs path>`.
+
+## Cine vocab (19 Oct 2026, from the owner's "reference -> language -> prompt -> polish" list)
+- `prompts/cine_vocab.md`: 60 named shot types / lenses / lights / camera moves with Grok-ready phrases, plus 17 film
+  reference archetypes (ARCH-*). Injected into `claudia_book.txt` via `{{VOCAB}}`.
+- Book schema adds per shot `ref` (ARCH id or real film frame), `shot_type`, `move` (exactly one vocab move id).
+  `claudia.cine_lint()` (deterministic, after the book and after the review) strips filler words ("cinematic, 4k,
+  beautiful..."), normalises/infers the move, caps CRASH/WHIP at 2 and DOLLYZOOM at 1, flags missing ref/light/lens.
+  `_plain()` drops vocab ids before text reaches Grok; the ARCH palette rides as "Colour:" only when a section has
+  no palette. The review prompt rejects generic shots and shots with no named move or light.
+- `GV_CINE=0` -> uses the `*.bak-20261019-cinevocab` book/review prompts and skips the lint (pre-vocab behaviour).
+- `GV_POLISH=1` (default OFF) -> grade adds faint halation (highlights blurred, warmed, screened 18%) + fine temporal
+  grain in the same ffmpeg pass as the LUT; ~+45 s on a 2:29 video. Off until judged on a real Claudia render.
+- Fixed: `plan(reuse=True)` never reused the book (json lists vs tuples in `_key`); now compares as lists.
+- Full rollback: `cd tools/grok_video && for f in claudia.py README.md prompts/claudia_book.txt prompts/claudia_review.txt; do cp -p $f.bak-20261019-cinevocab $f; done`

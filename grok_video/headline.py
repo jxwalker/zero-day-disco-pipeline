@@ -196,6 +196,7 @@ def write(src, out):
             print(f"rewrite failed: {e!r}"[:300]); break
     res['style'] = SL.fix(res['style'])  # 16 Oct: no autotune/vocoder, no jingles
     open(os.path.join(out, 'style.txt'), 'w').write(res['style'].strip() + '\n')
+    res['cast'] = (res.get('cast') or [])[:3]      # 19 Oct (Claudia mode): one lead A + at most 2 supporting
     open(os.path.join(out, 'title.txt'), 'w').write(res['title'].strip() + '\n')
     json.dump(res, open(os.path.join(out, 'headline.json'), 'w'), indent=1, ensure_ascii=False)
     open(os.path.join(out, 'headline.md'), 'w').write(md(res, out))

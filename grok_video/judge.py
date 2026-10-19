@@ -135,6 +135,10 @@ GSCHEMA = {"type": "object", "properties": {"fails": {"type": "array", "items": 
     "id": {"type": "string"}, "reason": {"type": "string"}, "prompt": {"type": "string"}},
     "required": ["id", "reason", "prompt"]}}}, "required": ["fails"]}
 MAX_GATE_REROLLS = 30
+LIKENESS = ("LIKENESS (19 Oct, one-lead films): CAST A is the film's lead reference sheet. Every still labelled with A must "
+            "show the SAME person as CAST A: same face shape, age, skin, hair colour/length and the same wardrobe. Reject "
+            "any A still that drifts (different face, older/younger, other hair or clothes) with reason 'off-model lead'. "
+            "Also reject harsh on-camera flash, cluttered busy frames with no clear subject, and neon-soup lighting.\n")
 
 
 def realism_gate(P, args, status, gen_spent):
@@ -162,6 +166,7 @@ def realism_gate(P, args, status, gen_spent):
         prompt = (f"You are a feature-film cinematographer and VFX supervisor doing a REALISM GATE on the stills of a photoreal "
                   f"music video before they are animated. Use the Read tool on every image: {', '.join(names)}. Each sheet "
                   "starts with the CAST portraits, then stills labelled '<id> <cast letters>'.\n"
+                  + (LIKENESS if P.get('claudia') else '') +
                   f"Reject a still if it shows {REALISM}; or the usual QA fails: {FAILS}. A still that would pass as a frame "
                   "from a real film or real camcorder tape PASSES even if gritty, grainy or absurd. Expect 15-40% rejects "
                   "on a first pass; be honest, not lenient.\nFor every reject give 'reason' (under 14 words) and a REWRITTEN "

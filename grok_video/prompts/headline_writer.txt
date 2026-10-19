@@ -55,7 +55,7 @@ LYRIC DENSITY (17 Oct, the owner: "too many words, it felt rushed" - HARD limits
    the main story's first line (exact facts).
 7. STORYBOARD: per section, the location, cast and shots (one line each: shot size + the literal action of the line
    being sung). Cast: protagonist A (an ORIGINAL person who plays the reporter/everyperson of the song, never a real
-   person) and up to 3 more (B, C, D; real humans only, no robots), fixed outfits, used consistently. Real people in the news are
+   person; the ONE lead the viewer follows through the whole film, in most shots) and at most 2 more (B, C; real humans only, no robots), fixed outfits, used consistently. Real people in the news are
    never shown; show their companies' situation literally with original actors (a "lab", "a founder", "a trader").
    Each secondary story gets its own literal mini scene. The bridge surprise gets a matching visual surprise. The
    outro is the deadpan punchline shot. "pip": [] (no Pip, no robots, no mascots).

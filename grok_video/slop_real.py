@@ -268,7 +268,11 @@ def prepare(day, work, look_genre, args, status):
     look, why = SP.pick_look(look_genre, getattr(args, 'real_look', 'auto'))
     if T.LOOK.get(tn['tone']) and getattr(args, 'real_look', 'auto') in (None, 'auto'):
         look, why = T.LOOK[tn['tone']], f"tone {tn['tone']} -> {T.LOOK[tn['tone']]}"
-    LK = dict(SP.SLOP_LOOKS[look], type='sparse', handheld=True)
+    import claudia as C
+    claud = C.enabled(day) and getattr(args, 'real_planner', 'opus') == 'opus'
+    if claud and getattr(args, 'real_look', 'auto') in (None, 'auto'):   # 19 Oct: clean film grade, no VHS/flash default
+        look, why = 'clean-film', 'claudia mode (headline): clean cinematic film look'
+    LK = dict(SP.SLOP_LOOKS[look], type='sparse', handheld=not claud)
     try:
         import datetime
         d = datetime.date.fromisoformat(os.path.basename(os.path.normpath(day))[:10])
@@ -287,6 +291,8 @@ def prepare(day, work, look_genre, args, status):
     sec = args.real_clip_sec or 3
     planner = getattr(args, 'real_planner', 'opus')
     script = planner in ('script', 'opus')
+    if claud:                                          # 19 Oct Claudia mode: scenes + prompt book + one lead
+        return prepare_claudia(day, work, look, LK, args, status, audio, dur, beats, seed, plines)
     if script:
         import slop_script as SS
         mx = args.real_images
@@ -369,6 +375,36 @@ def prepare(day, work, look_genre, args, status):
             'cameo': cameo, 'sec': sec, 'script': script}
 
 
+def prepare_claudia(day, work, look, LK, args, status, audio, dur, beats, seed, plines):
+    import claudia as C
+    import slop_opus as SO
+    t0 = time.time()
+    SO.HEADLINE.clear(); SO.NARRATIVE.clear()
+    SO.HEADLINE.update(SO.headline(day) or {})
+    status['headline'] = SO.HEADLINE.get('title')
+    pslots, plan, book = C.plan(day, work, plines, dur, deadline=getattr(args, 'deadline', None),
+                                reuse=getattr(args, 'real_reuse_plan', False))
+    G.save_json(pslots, os.path.join(work, 'slots.json'))
+    LK['story_cards'] = {}
+    LK['headline'] = headline_overlay(day, SO.HEADLINE)
+    cast_jobs, stills, heroes, cameo = build_jobs(plan, pslots, work, LK, 5)
+    ds = [im.get('duration') or 5 for sg in plan['segments'] for im in sg['images']]
+    args.real_clip_sec = max(2, min(5, math.ceil(sum(ds) / max(1, len(ds)))))   # budget estimate: the mean clip length
+    heroes = C.patch_jobs(cast_jobs, stills, heroes, pslots, plan, work, LK, book['lead'])
+    n_sh = sum(s['images'] for s in pslots)
+    status['plan'] = {'secs': round(time.time() - t0), 'segments': len(pslots), 'planner': C.VERSION, 'shots': n_sh,
+                      'clips': len(heroes) - 1, 'lead': book['lead'].get('name'), 'lead_share': round(C.lead_share(book), 2),
+                      'cast': [c.get('role') for c in plan['cast']], 'review_issues': len((book.get('_review') or {}).get('issues') or [])}
+    status['claudia'] = True
+    G.log(f"claudia: {n_sh} shots in {len(pslots)} scenes, {len(heroes) - 1} clips (+ sign-off), lead "
+          f"{book['lead'].get('name')} in {C.lead_share(book):.0%}; prompt_book.md written")
+    G.log(f"jobs: {len(cast_jobs)} cast portraits, {len(stills)} stills ({sum(1 for j in stills if j['kind']=='edit')} "
+          f"from cast references), {len(heroes)} clips")
+    return {'v2': True, 'day': day, 'work': work, 'look': look, 'LK': LK, 'audio': audio, 'dur': dur, 'beats': beats,
+            'seed': seed, 'pslots': pslots, 'plan': plan, 'cast_jobs': cast_jobs, 'stills': stills, 'heroes': heroes,
+            'cameo': cameo, 'sec': 5, 'script': True, 'claudia': True, 'book': book}
+
+
 def generate_media(P, args, status):
     gen = {'skipped': bool(args.skip_gen)}
     if os.environ.get('CINE_REAL_FAIL') == 'gen':
@@ -382,6 +418,9 @@ def generate_media(P, args, status):
                                  start_gap=4.0, tag='cast', timeout=300, deadline=(dl - CR.RENDER_RESERVE_S) if dl else None)
             r = B.run(cj)
             G.log(f"cast portraits: {sum(1 for j in P['cast_jobs'] if os.path.exists(j['out']))}/{len(P['cast_jobs'])}")
+        if P.get('claudia'):                           # 19 Oct: the lead's sheet is Opus-approved before any batch
+            import claudia as C
+            status['lead_approval'] = C.approve_lead(P, args)
         for j in P['stills']:                         # a cast portrait failed: describe the person in words instead
             if j['kind'] == 'edit' and j.get('cast') and not all(os.path.exists(x) for x in j['images']):
                 j.update(kind='gen', prompt=j['gen_prompt']); j.pop('images', None)
@@ -408,6 +447,15 @@ def generate_media(P, args, status):
             gen['judge'] = J.loop(P, args, status, gen, stills_done=gated)
         except Exception as e:
             G.log(f"WARNING: judge loop not run: {e!r}"[:300])
+        if P.get('claudia'):                           # 19 Oct: Opus picks each clip's usable in/out window
+            try:
+                import claudia as C
+                ex = qa_exclude(work)
+                cl = [h['out'] for h in P['heroes'] if os.path.exists(h['out']) and CR.valid_video(h['out'], 12)
+                      and os.path.basename(h['out']) not in ex]
+                C.pick_windows(P, cl)
+            except Exception as e:
+                G.log(f"WARNING: window pick not run: {e!r}"[:300])
     status['generation'] = gen
     return gen
 
@@ -743,6 +791,8 @@ def edit_and_render(P, L, out, args, status):
         G.log(f"QA exclude: {sorted(ex)}")
         status['qa_exclude'] = sorted(ex)
     ok = {c for c in clips_ok if os.path.basename(c) not in ex}
+    if P.get('claudia'):
+        return edit_and_render_claudia(P, L, out, args, status, segs, cuts, ok, ex)
     if P.get('script'):
         edit, uses, sm = make_edit_script(segs, cuts, pslots, mapping, ok, ex, work, seed)
         status['script_edit'] = sm
@@ -826,6 +876,50 @@ def edit_and_render(P, L, out, args, status):
     t0 = time.time()
     RR.render(edit, LK, audio, ass, out, dur, seed=seed, hard_deadline=getattr(args, 'deadline', None))
     G.log(f"render: {time.time()-t0:.0f}s")
+    return True, {'metrics': metrics, 'look': P['look']}
+
+
+def edit_and_render_claudia(P, L, out, args, status, segs, cuts, ok, ex):
+    import claudia as C
+    day, work, LK, audio, dur, seed, cameo = P['day'], P['work'], P['LK'], P['audio'], P['dur'], P['seed'], P['cameo']
+    edit = C.make_edit(L, P['pslots'], work, ok, ex, segs, dur)
+    cam_clip = os.path.join(work, 'heroes', 'cameo.mp4')
+    cam_clip = cam_clip if cam_clip in ok else None
+    cam = cameo['out'] if os.path.exists(cameo['out']) and CR.valid_image(cameo['out']) else None
+    last = next((e['src'] for e in reversed(edit) if e['kind'] == 'still'), edit[0]['src'] if edit else None)
+    cam0 = min(s['t0'] for s in segs if s['kind'] in ('cameo', 'credits'))
+    if edit:
+        edit[-1]['t1'] = max(edit[-1]['t1'], cam0) if cam0 - edit[-1]['t1'] < 3 else edit[-1]['t1']
+    for s in segs:                                     # sign-off + credits: one shot each, no beat cuts
+        if s['kind'] in ('cameo', 'credits'):
+            src, kind = (cam_clip, 'video') if cam_clip else (cam or last, 'still')
+            edit.append({'t0': s['t0'], 't1': s['t1'], 'src': src, 'kind': kind, 'win0': 0.1, 'move': 'push_in',
+                         'cut_in': False, 'seg': s['kind'], 'seg_kind': s['kind'], 'on_beat': True, 'flash': False,
+                         'whip': False, 'leak': False, 'anchor': (0.5, 0.5)})
+    edit.sort(key=lambda e: e['t0'])
+    rows, footer = G.credit_card(day)
+    credits = {'t0': [s for s in segs if s['kind'] == 'credits'][0]['t0'], 'rows': rows[:6], 'footer': footer}
+    base = os.path.join(work, 'type_base.ass')
+    first = [ln for ln in L if ln.get('words')][0]
+    RR.build_ass(base, L, {}, {}, None, dict(LK, vhs=False), credits, dur, [first['words'][0][0]])
+    ass = os.path.join(work, 'type.ass')
+    hl = LK.get('headline')
+    accw = (hl or {}).get('hook_words', '').split()
+    C.build_ass(ass, L, P['pslots'], hl, C.credits_from(base, credits['t0']), dur, cam0, accw)
+    G.save_json(edit, os.path.join(work, 'edit.json'))
+    body = [e for e in edit if e['seg_kind'] not in ('credits', 'cameo')]
+    lens = [e['t1'] - e['t0'] for e in body]
+    metrics = {'shots': len(body), 'avg_shot_s': round(sum(lens) / max(1, len(lens)), 2),
+               'motion_share': round(sum(l for e, l in zip(body, lens) if e['kind'] == 'video') / max(0.1, sum(lens)), 2),
+               'clips_used': len({e['src'] for e in body if e['kind'] == 'video'}),
+               'distinct_stills': len({e['src'] for e in body if e['kind'] == 'still'}),
+               'longest_s': round(max(lens or [0]), 2), 'shorter_than_1_5s': sum(1 for l in lens if l < 1.5)}
+    status['real_metrics'] = metrics
+    G.log(f"edit (claudia): {metrics}")
+    t0 = time.time()
+    RR.render(edit, LK, audio, ass, out, dur, seed=seed, hard_deadline=getattr(args, 'deadline', None))
+    G.log(f"render: {time.time()-t0:.0f}s")
+    C.grade(out, work)
     return True, {'metrics': metrics, 'look': P['look']}
 
 

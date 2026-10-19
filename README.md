@@ -157,3 +157,8 @@ python3 /home/box/suno-daily/tools/x_source_reply.py /home/box/suno-daily/<day>
   (mode `quote_link`).
 - Video uploaded once (media_id cached in `post/source_media.json`). It won't run if `post/source_reply_result.json`
   exists; it writes {mode, url, ...} there and adds a `- source <mode>:` line to log.md.
+
+## Song takes (19 Oct 2026)
+Every Suno Create makes TWO takes for the same credits (no extra spend), so the routine should listen to / compare
+both and keep the take with the more natural, un-autotuned lead vocal (clearer words, less pitch-snapped, no vocoder
+sheen), not just the first one. Note the choice and why in log.md. Docs only: no tool does this automatically yet.
