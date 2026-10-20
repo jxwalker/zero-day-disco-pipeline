@@ -40,6 +40,28 @@ Options: `--stills N` `--clips N` (or GV_KARAOKE_STILLS/CLIPS), `--time-limit MI
 `grok_video.sh <day> --skip-gen --no-fallback`.
 Grok usage: about 14 stills + 8 clips per day (measured on the 20 Oct test, see below). Runtime: see below.
 
+
+### karaoke v2 (20 Oct 2026 afternoon): per-video design, screen check
+the owner: "similar style but it can't look copied" and "the screens are on the back of the laptops".
+- **Art direction per video** (`design.py`): Opus picks palette (9), type family (8), lyric_style (pop, block,
+  underline, bounce, reveal, neon, marker, wipe), lyric position (lower-center, lower-left, bottom-band), transition
+  (cut, flash, dip, punch, slide, glitch), grade (6) and texture from the song's genre/mood and the stories.
+  `design.resolve()` forces a different palette/type/lyric_style from the last 3 days and transition from yesterday,
+  and never the exact No Window lyric look. Each day's choice + template counts go to
+  `/home/box/suno-daily/karaoke_design_history.json` (fed back into the next plan).
+- **Graphics** (`kgfx2.py`, themed by the design): story-domain templates headline, bignum, bars, post, feed, inbox,
+  chat, code, terminal, rows, stamp, quote, browser, gauge, compare, countdown, screen. The ONUG ones (NOC dashboard,
+  blue/green switch, pipeline, CAB calendar, change ticket, DNS) are gone (unknown types become headlines). No template
+  more than twice per video (`MAX_PER_TEMPLATE`); extras become the least-used live-action scene.
+- **Lyrics** (`klyrics.py`): per-word ASS events laid out with PIL metrics; `design.ASS_SCALE` holds the measured
+  libass/PIL size ratio per font (re-measure if fonts are added).
+- **Screens**: the Grok prompts carry a screen rule (screen faces camera, over-the-shoulder or straight-on, never a lid
+  back). After the stills, Claude (headless, Read tool) checks every still (`screen_check()`: reversed/away screens,
+  content on a lid, stacked duplicates, robots, garbled text, bad hands); rejects are rerolled once with an
+  over-the-shoulder framing, re-checked, and still-bad ones are dropped (their uses become a code-rendered `screen`
+  insert, at most 2, or another scene). Only checked stills are animated. Results: `work_*/grok/screen_check_*.json`.
+- v1 files (`kgfx.py`, `kgfx_base.py`) are kept but no longer used. Backups: `*.bak-20261020-karaoke2`.
+
 ---
 
 

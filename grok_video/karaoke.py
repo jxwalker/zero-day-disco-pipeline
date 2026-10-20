@@ -10,9 +10,11 @@ HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 import common_gv as G
 
 FPS = 30
+TEMPLATES = ['headline', 'bignum', 'bars', 'post', 'feed', 'inbox', 'chat', 'code', 'terminal', 'rows', 'stamp', 'quote', 'browser', 'gauge', 'compare', 'countdown', 'screen']
+MAX_PER_TEMPLATE = 2
 MAX_SHOT = float(os.environ.get('GV_KARAOKE_MAX_SHOT', 3.6))
-PLAN_VER = 'karaoke-1'
-SCHEMA = {"type": "object", "required": ["scenes", "lines", "intro", "breaks", "outro", "story_text", "credit"],
+PLAN_VER = 'karaoke-2'
+SCHEMA = {"type": "object", "required": ["scenes", "lines", "intro", "breaks", "outro", "story_text", "credit", "design"],
           "properties": {
               "scenes": {"type": "array", "items": {"type": "object", "required": ["id", "prompt", "motion"],
                          "properties": {"id": {"type": "string"}, "prompt": {"type": "string"}, "motion": {"type": "string"}}}},
@@ -24,10 +26,15 @@ SCHEMA = {"type": "object", "required": ["scenes", "lines", "intro", "breaks", "
               "story_text": {"type": "array", "items": {"type": "object", "required": ["from_line", "to_line", "kicker", "text"],
                              "properties": {"from_line": {"type": "integer"}, "to_line": {"type": "integer"},
                                             "kicker": {"type": "string"}, "text": {"type": "string"}}}},
-              "credit": {"type": "string"}}}
-LOOK = (" Photorealistic cinematic film still, shot on ARRI Alexa, 35mm lens, shallow depth of field, natural skin texture, "
-        "motivated practical lighting, subtle film grain, vertical 9:16 composition. Cast are young adults aged 21-28, "
-        "attractive, natural balanced expressions. No robots, no text, no logos, no readable writing, no famous people.")
+              "credit": {"type": "string"},
+              "design": {"type": "object", "required": ["palette", "type", "lyric_style", "lyric_pos", "transition", "grade", "texture", "why"],
+                         "properties": {k: {"type": "string"} for k in ("palette", "type", "lyric_style", "lyric_pos", "transition", "grade", "texture", "why")}}}}
+SCREEN_RULE = (" Any laptop, monitor or phone: its SCREEN faces the camera (we see the display, shot over the user's shoulder "
+               "from behind them, or a straight-on screen view); never show the back of a laptop lid, never put an image or "
+               "glow on the back of a lid, no screens facing away from camera.")
+LOOK = (" Photorealistic cinematic film still, natural skin texture, motivated practical lighting, vertical 9:16 composition. "
+        "Cast are young adults aged 21-28, attractive, natural balanced expressions. No robots, no text, no logos, no "
+        "readable writing, no famous people." + SCREEN_RULE)
 
 
 def norm(s): return re.sub(r'[^a-z0-9]+', ' ', s.lower()).strip()
@@ -138,7 +145,9 @@ def plan_opus(day, work, nscenes, nclips):
     lines = lyric_lines(day)
     st = G.read(os.path.join(day, 'stories.md'))
     txt = open(os.path.join(HERE, 'prompts', 'karaoke_plan.txt')).read()
-    for k, v in dict(SCENES_MAX=nscenes, CLIPS_MAX=nclips, INTRO_S='8-15', TITLE=G.read(os.path.join(day, 'title.txt')).strip(),
+    import design as DZ
+    hist = '\n'.join(json.dumps({k: h.get(k) for k in ('day', 'palette', 'type', 'lyric_style', 'lyric_pos', 'transition', 'grade', 'texture')}) for h in DZ.history()) or '(none yet)'
+    for k, v in dict(DESIGN_MENU=DZ.menu_text(), DESIGN_HISTORY=hist, TEMPLATES=', '.join(TEMPLATES), SCENES_MAX=nscenes, CLIPS_MAX=nclips, INTRO_S='8-15', TITLE=G.read(os.path.join(day, 'title.txt')).strip(), GENRE=G.genre_of(day)[0] or 'pop',
                      STYLE=G.read(os.path.join(day, 'style.txt')).strip()[:300], STORIES=st[:9000],
                      LINES='\n'.join(f"{i}: {l}" for i, l in enumerate(lines))).items():
         txt = txt.replace('{' + k + '}', str(v))
@@ -219,7 +228,7 @@ def fact_lint(P, day):
         ln['v'] = [fix(v, f"line {ln['i']}") for v in ln.get('v', [])][:2]
     for k in ('intro', 'breaks', 'outro'):
         P[k] = [fix(v, k) for v in P.get(k, [])]
-    import kgfx
+    import kgfx2 as kgfx
     for v in [v for ln in P['lines'] for v in ln['v']] + P['intro'] + P['breaks'] + P['outro']:
         if v.get('kind') == 'gfx' and v.get('g') not in kgfx.R:
             warns.append(f"unknown gfx {v.get('g')!r} -> headline"); v['g'] = 'headline'; v['p'] = {'text': str(v.get('p', {}).get('text') or G.read(os.path.join(day, 'title.txt')))}
@@ -238,6 +247,57 @@ def dup_halves(png):
         return False
 
 
+SCREEN_SCHEMA = {"type": "object", "required": ["results"], "properties": {"results": {"type": "array", "items": {
+    "type": "object", "required": ["id", "device_present", "user_faces_camera_behind_device", "display_visible_to_camera",
+                                   "other_problem", "issue"],
+    "properties": {"id": {"type": "string"}, "device_present": {"type": "boolean"},
+                   "user_faces_camera_behind_device": {"type": "boolean"}, "display_visible_to_camera": {"type": "boolean"},
+                   "other_problem": {"type": "boolean"}, "issue": {"type": "string"}}}}}}
+DEVICE_RE = re.compile(r'laptop|phone|screen|monitor|tablet|computer|keyboard|display|terminal|inbox|email', re.I)
+DEVICE_PREFIX = ("CAMERA POSITION: behind the person, over their shoulder, so we see the back of their head and the FRONT "
+                 "of the device's screen (screen content faces the camera, the person faces away from camera). ")
+
+
+def screen_check(gdir, jobs, status, tag):
+    """Claude looks at every still: reject reversed/impossible screens (content on a laptop lid, screen facing away
+    while we are meant to see it, glowing backs), robots, readable gibberish text, duplicated/stacked frames, bad hands
+    or faces. Returns the set of rejected ids. Fails open (logs) if the checker is unavailable."""
+    if not jobs: return set()
+    import slop_opus as SO
+    names = [os.path.basename(j['out']) for j in jobs]
+    pf = os.path.join(gdir, f'screen_check_{tag}.txt')
+    open(pf, 'w').write(
+        "You are a strict continuity checker for photoreal stills in a music video. Read each image file listed below "
+        "(use the Read tool on each, in this directory) and answer the fields for each image literally:\n"
+        "- device_present: any laptop/phone/monitor/tablet that someone is using.\n"
+        "- user_faces_camera_behind_device: the person using that device faces the camera with the device between them "
+        "and the camera (we see their face over/behind the device).\n"
+        "- display_visible_to_camera: we can see that device's lit screen content (UI, code, image).\n"
+        "  If BOTH of the last two are true the screen is physically on the wrong side: that is the main failure.\n"
+        "- other_problem: anything in the list below.\n"
+        "Reject (ok=false) if ANY of these: a laptop shows an image/screen content on the BACK of its lid; a laptop/monitor/"
+        "phone that the person is using has its screen facing away from the camera while the shot is about what is on it "
+        "(we only see the back of the lid/monitor, which looks like a screen); a screen glows on the wrong side; a device "
+        "is physically impossible; the frame is two stacked copies of the same picture; a robot or android; garbled "
+        "readable text that is prominent; badly malformed hands or faces. A laptop seen from behind is ONLY acceptable if "
+        "its lid back is plain (no picture) and we are clearly looking at the person's face, not the screen; when unsure, "
+        "reject.\nGive a short issue for each problem image, '' otherwise. id = the file name without .png.\n\nFILES:\n"
+        + '\n'.join(names))
+    try:
+        res, meta = SO.run_claude(pf, gdir, SCREEN_SCHEMA, 420, tools='Read', effort='medium')
+    except Exception as e:
+        G.log(f"karaoke: screen check unavailable ({str(e)[:150]}); continuing without it")
+        status.setdefault('warnings', []).append('screen check unavailable'); return set()
+    rs = {r['id'].replace('.png', ''): r for r in (res or {}).get('results', [])}
+    G.save_json(rs, os.path.join(gdir, f'screen_check_{tag}.json'))
+    for r in rs.values():
+        r['ok'] = not ((r.get('user_faces_camera_behind_device') and r.get('display_visible_to_camera')) or r.get('other_problem'))
+    bad = {k for k, r in rs.items() if not r.get('ok')}
+    G.log(f"karaoke: screen check {tag}: {len(rs)} checked, rejected {sorted(bad)}")
+    status.setdefault('screen_checks', {})[tag] = {k: r.get('issue') for k, r in rs.items() if not r.get('ok')}
+    return bad
+
+
 def generate(P, work, a, deadline, status):
     import real_gen as R
     gdir = os.path.join(work, 'grok'); os.makedirs(gdir, exist_ok=True)
@@ -247,7 +307,7 @@ def generate(P, work, a, deadline, status):
     used = {}
     for v in [v for ln in P['lines'] for v in ln['v']] + P['intro'] + P['breaks'] + P['outro']:
         if v.get('kind') == 'scene': used[v.get('id')] = used.get(v.get('id'), 0) + 1
-    jobs = [{'id': s['id'], 'kind': 'gen', 'prompt': s['prompt'].strip() + LOOK, 'aspect': '9:16', 'out': f"{gdir}/{s['id']}.png"}
+    jobs = [{'id': s['id'], 'kind': 'gen', 'prompt': (DEVICE_PREFIX if DEVICE_RE.search(s['prompt']) else '') + s['prompt'].strip() + LOOK, 'aspect': '9:16', 'out': f"{gdir}/{s['id']}.png"}
             for s in scenes]
     b = R.Batcher(gdir, {'gen': len(jobs) + 3}, batch_size=5, max_parallel=3, deadline=deadline - 9 * 60, tag='stills')
     b.run(jobs)
@@ -257,6 +317,28 @@ def generate(P, work, a, deadline, status):
         for j in dups: os.replace(j['out'], j['out'] + '.dup.png')
         b3 = R.Batcher(gdir, {'gen': len(dups)}, batch_size=5, max_parallel=2, deadline=deadline - 9 * 60, tag='reroll')
         b3.no_salvage = True; b3.run(dups)
+    bad = screen_check(gdir, [j for j in jobs if os.path.exists(j['out'])], status, 'stills')
+    if bad and time.time() < deadline - 9 * 60:
+        G.log(f"karaoke: rerolling {len(bad)} stills with screen problems: {sorted(bad)}")
+        rj = []
+        for j in jobs:
+            if j['id'] in bad:
+                os.replace(j['out'], j['out'] + '.screen.png')
+                mp = os.path.splitext(j['out'])[0] + '.mp4'
+                if os.path.exists(mp): os.replace(mp, mp + '.screen.mp4')   # clip made from the rejected still
+                rj.append(dict(j, prompt=("Framing: over-the-shoulder from BEHIND the person: we see the back of their head and the "
+                                          "front of their screen; the person does NOT face the camera. " + j['prompt'].replace(DEVICE_PREFIX, ''))))
+        b4 = R.Batcher(gdir, {'gen': len(rj)}, batch_size=5, max_parallel=3, deadline=deadline - 8 * 60, tag='screenfix')
+        b4.no_salvage = True; b4.run(rj)
+        bad2 = screen_check(gdir, [j for j in rj if os.path.exists(j['out'])], status, 'reroll')
+        for j in rj:
+            if j['id'] in bad2 or not os.path.exists(j['out']):
+                if os.path.exists(j['out']): os.replace(j['out'], j['out'] + '.screen2.png')
+                status.setdefault('screen_rejected', []).append(j['id'])
+    elif bad:
+        for j in jobs:
+            if j['id'] in bad and os.path.exists(j['out']):
+                os.replace(j['out'], j['out'] + '.screen.png'); status.setdefault('screen_rejected', []).append(j['id'])
     status['stills_made'] = sum(1 for j in jobs if os.path.exists(j['out']))
     mv = sorted([s for s in scenes if s.get('motion') and os.path.exists(f"{gdir}/{s['id']}.png") and not dup_halves(f"{gdir}/{s['id']}.png")],
                 key=lambda s: -used.get(s['id'], 0))[:a.clips]
@@ -330,6 +412,30 @@ def timeline(P, L, dur, day, gdir):
                 shots.append({'t0': s['t0'] + q * step, 't1': s['t0'] + (q + 1) * step, 'v': s['v'] if q == 0 else take('fill')})
         else:
             shots.append(s)
+    # template cap: no graphic template more than MAX_PER_TEMPLATE times; extra uses become live-action scenes
+    have = [x['id'] for x in P.get('scenes', []) if os.path.exists(f"{gdir}/{x['id']}.png")]
+    used_t, k_ = {}, 0
+    for s_ in shots:
+        v = s_['v']
+        if v.get('kind') == 'gfx':
+            g = 'terminal' if v.get('g') == 'term' else v.get('g')
+            used_t[g] = used_t.get(g, 0) + 1
+            if used_t[g] > MAX_PER_TEMPLATE and have:
+                cnt = {h: 0 for h in have}
+                for x in shots:
+                    if x['v'].get('kind') == 'scene' and x['v'].get('id') in cnt: cnt[x['v']['id']] += 1
+                prev = shots[shots.index(s_) - 1]['v'].get('id') if shots.index(s_) else None
+                s_['v'] = {'kind': 'scene', 'id': min((h for h in have if h != prev), key=lambda h: (cnt[h], h), default=have[0])}
+    # scene overuse: no scene more than 3 times; later uses go to the least-used other scene
+    cnt = {h: 0 for h in have}
+    for i_, s_ in enumerate(shots):
+        sid = s_['v'].get('id') if s_['v'].get('kind') == 'scene' else None
+        if sid in cnt:
+            if cnt[sid] >= 3:
+                nb = {shots[i_ - 1]['v'].get('id') if i_ else None, shots[i_ + 1]['v'].get('id') if i_ + 1 < len(shots) else None}
+                alt = min((h for h in have if h not in nb), key=lambda h: (cnt[h], h), default=sid)
+                s_['v'] = {'kind': 'scene', 'id': alt}; sid = alt
+            cnt[sid] += 1
     shots.append({'t0': end_t, 't1': dur, 'v': {'kind': 'gfx', 'g': 'endcard', 'p': {}}})
     # resolve scenes: clip > still > gfx headline; vary clip offsets on reuse
     seen = {}
@@ -343,8 +449,14 @@ def timeline(P, L, dur, day, gdir):
             elif os.path.exists(png) and not dup_halves(png):
                 s['src'] = ('still', png, k)
             else:                                  # missing/bad picture: another scene that exists, else a headline card
-                alt = [f for f in sorted(os.listdir(gdir)) if f.endswith('.png') and not dup_halves(os.path.join(gdir, f))] if os.path.isdir(gdir) else []
-                if alt:
+                alt = [f for f in sorted(os.listdir(gdir)) if f.endswith('.png') and not f.endswith(('.dup.png', '.screen.png', '.screen2.png')) and not dup_halves(os.path.join(gdir, f))] if os.path.isdir(gdir) else []
+                sc = next((x for x in P.get('scenes', []) if x['id'] == sid), {})
+                if seen.get('_screen', 0) < 2 and re.search(r'laptop|screen|monitor|phone|inbox|email', sc.get('prompt', ''), re.I):
+                    seen['_screen'] = seen.get('_screen', 0) + 1     # rejected device shot -> code-rendered screen insert
+                    st_ = (G.story_list(day) or [{'text': G.read(os.path.join(day, 'title.txt'))}])[0]
+                    s['src'] = ('gfx', 'screen', {'device': 'phone' if 'phone' in sc.get('prompt', '').lower() else 'laptop',
+                                                  'app': 'news', 'text': st_['text']})
+                elif alt:
                     s['src'] = ('still', os.path.join(gdir, alt[(len(seen) * 5 + k) % len(alt)]), k + 1)
                 else:
                     s['src'] = ('gfx', 'headline', {'kicker': 'TODAY', 'text': G.read(os.path.join(day, 'title.txt')).strip()})
@@ -366,26 +478,39 @@ def _vf_fill(W, H):
             f"[b]scale=-2:{H}[fg];[bg][fg]overlay=(W-w)/2:0")
 
 
-ENC = ['-c:v', 'libx264', '-preset', 'veryfast', '-crf', '18', '-pix_fmt', 'yuv420p', '-r', str(FPS)]
+ENC0 = ['-c:v', 'libx264', '-preset', 'veryfast', '-crf', '18', '-pix_fmt', 'yuv420p', '-r', str(FPS)]
+
+
+def trans_vf(design, i, nfr):
+    t = design.get('transition', 'cut')
+    if i == 0 or t == 'cut': return ''
+    return {'flash': 'fade=in:st=0:d=0.1:color=white', 'dip': 'fade=in:st=0:d=0.12:color=black',
+            'punch': "scale=iw*1.08:ih*1.08,crop=iw/1.08:ih/1.08" if False else "zoompan=z='if(lt(on,5),1.10-0.02*on,1)':d=1:s=WxH:fps=30",
+            'slide': "fade=in:st=0:d=0.08",
+            'glitch': "rgbashift=rh=-8:bh=8:enable='lt(t,0.12)'"}.get(t, '')
 
 
 def render_seg(job):
-    s, W, H, out, endp = job
-    import kgfx
+    s, W, H, out, endp, design, i = job
+    import kgfx2 as kgfx, design as DZ
     from PIL import Image
+    kgfx.set_theme(DZ.theme(design))
+    tv = trans_vf(design, i, 0).replace('s=WxH', f's={W}x{H}')
+    grade = DZ.GRADE.get(design.get('grade'), '')
+    ENC = ENC0
     nfr = max(1, round(s['t1'] * FPS) - round(s['t0'] * FPS)); dur = nfr / FPS
     kind, src, x = s['src']
     if kind == 'clip':
         spd = min(1.0, max(0.4, (6.0 - x) / dur))
         subprocess.run(['ffmpeg', '-v', 'error', '-y', '-ss', str(x), '-i', src, '-filter_complex',
-                        f"setpts=PTS/{spd},{_vf_fill(W, H)},eq=contrast=1.05:saturation=1.05,fps={FPS}", '-frames:v', str(nfr), '-an'] + ENC + [out], check=True)
+                        f"setpts=PTS/{spd},{_vf_fill(W, H)},fps={FPS}" + (',' + grade if grade else '') + (',' + tv if tv else ''), '-frames:v', str(nfr), '-an'] + ENC + [out], check=True)
         return out
     if kind == 'still':
         zin = x % 2 == 0
         z = (f"zoompan=z='{'1+0.0016*on' if zin else '1.12-0.0016*on'}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d={nfr}:s={W}x{H}:fps={FPS}")
         pre = (f"scale={W * 2}:{H * 2}:force_original_aspect_ratio=increase,crop={W * 2}:{H * 2}," if H > W else
                f"split[a][b];[a]scale={W*2}:{H*2}:force_original_aspect_ratio=increase,crop={W*2}:{H*2},boxblur=40:3,eq=brightness=-0.15[bg];[b]scale=-2:{H*2}[fg];[bg][fg]overlay=(W-w)/2:0,")
-        subprocess.run(['ffmpeg', '-v', 'error', '-y', '-loop', '1', '-i', src, '-filter_complex', pre + z, '-frames:v', str(nfr)] + ENC + [out], check=True)
+        subprocess.run(['ffmpeg', '-v', 'error', '-y', '-loop', '1', '-i', src, '-filter_complex', pre + z + (',' + grade if grade else '') + (',' + tv if tv else ''), '-frames:v', str(nfr)] + ENC + [out], check=True)
         return out
     p = dict(x)
     if src == 'endcard':
@@ -393,7 +518,7 @@ def render_seg(job):
         if p.get('bg'): p['bg'] = _fill(Image.open(p['bg']).convert('RGB'), W, H)
     f = kgfx.R.get(src, kgfx.R['headline'])
     pr = subprocess.Popen(['ffmpeg', '-v', 'error', '-y', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-s', f'{W}x{H}', '-r', str(FPS),
-                           '-i', '-'] + ENC + [out], stdin=subprocess.PIPE)
+                           '-i', '-'] + (['-vf', tv] if tv else []) + ENC + [out], stdin=subprocess.PIPE)
     for k in range(nfr):
         try:
             im = f(W, H, k / FPS, dur, p)
@@ -406,13 +531,18 @@ def render_seg(job):
     return out
 
 
-def band_png(W, H, path):
+def band_png(W, H, path, design=None):
     from PIL import Image
+    import design as DZ
+    th = DZ.theme(design) if design else {'bg': (0, 0, 0), 'light': False}
+    bc = th['bg'] if not th['light'] else th['panel']
     im = Image.new('RGBA', (W, H), (0, 0, 0, 0)); px = im.load()
+    if design and design.get('lyric_pos') == 'bottom-band':
+        im.save(path); return
     y0 = int(H * (0.60 if H > W else 0.62))
     for y in range(y0, H):
         a = int(min(1, (y - y0) / (H * 0.10)) * 175)
-        for xx in range(W): px[xx, y] = (0, 0, 0, a)
+        for xx in range(W): px[xx, y] = bc + (a,)
     im.save(path)
 
 
@@ -565,7 +695,7 @@ def main():
     t_start = time.time(); day = os.path.abspath(a.day)
     out = os.path.abspath(a.out or os.path.join(day, 'video_karaoke.mp4'))
     base_ = os.path.splitext(out)[0]; chat, wide = base_ + '_chat.mp4', base_ + '_16x9.mp4'
-    work = os.path.abspath(a.work or os.path.join(day, 'work_karaoke')); os.makedirs(work, exist_ok=True)
+    work = os.path.abspath(a.work or os.path.join(day, 'work_' + os.path.splitext(os.path.basename(out))[0].replace('video_', ''))); os.makedirs(work, exist_ok=True)
     gdir = os.path.join(work, 'grok'); os.makedirs(gdir, exist_ok=True)
     deadline = t_start + a.time_limit * 60
     status = {'style': 'karaoke', 'day': day, 'out': out, 'started': time.strftime('%Y-%m-%d %H:%M:%S %Z'), 'warnings': []}
@@ -625,6 +755,9 @@ def main():
             G.save_json(P, os.path.join(work, 'plan_raw.json'))
             status['warnings'] += fact_lint(P, day)
             G.save_json(P, pp)
+        import design as DZ
+        DES = DZ.resolve(day, P.get('design')); status['design'] = DES
+        G.log(f"karaoke: design {DES}")
         G.log(f"karaoke: plan ready ({P.get('planner')}, {len(P.get('scenes', []))} scenes) at {time.time() - t_start:.0f}s")
         gt = time.time(); generate(P, work, a, t_start + 26 * 60, status); status['gen_s'] = round(time.time() - gt)
         G.log(f"karaoke: media done at {time.time() - t_start:.0f}s")
@@ -655,7 +788,7 @@ def main():
         jobs = []
         for W, H in sizes:
             sd = os.path.join(work, f'seg_{W}x{H}'); os.makedirs(sd, exist_ok=True)
-            jobs += [(s, W, H, os.path.join(sd, f'{i:03d}.mp4'), endp) for i, s in enumerate(shots)]
+            jobs += [(s, W, H, os.path.join(sd, f'{i:03d}.mp4'), endp, DES, i) for i, s in enumerate(shots)]
         rt = time.time()
         with Pool(min(8, os.cpu_count() or 4)) as pool:
             segs = pool.map(render_seg, jobs, chunksize=1)
@@ -668,12 +801,13 @@ def main():
             bg = os.path.join(work, f'bg_{tag}.mp4')
             subprocess.run(['ffmpeg', '-v', 'error', '-y', '-f', 'concat', '-safe', '0', '-i', lst, '-c', 'copy', bg], check=True)
             assf = os.path.join(work, f'lyrics_{tag}.ass'); bandf = os.path.join(work, f'band_{tag}.png')
-            ll = build_ass(assf, L, W, H, dur, story, sync_ok); band_png(W, H, bandf)
+            import klyrics
+            ll = klyrics.build(assf, L, W, H, dur, story, sync_ok, DES, DZ.theme(DES), line_ok); band_png(W, H, bandf, DES)
             status['line_level_lines'] = ll
             dst = out if H > W else wide
             tmp = dst + '.part.mp4'
             subprocess.run(['ffmpeg', '-v', 'error', '-y', '-i', bg, '-i', bandf, '-i', audio, '-filter_complex',
-                            f"[0:v][1:v]overlay=0:0,ass='{assf}':fontsdir=/usr/share/fonts/truetype/sand-box/google[v]",
+                            f"[0:v][1:v]overlay=0:0,ass='{assf}'[v]",
                             '-map', '[v]', '-map', '2:a', '-c:v', 'libx264', '-preset', 'medium', '-crf', '20', '-pix_fmt', 'yuv420p',
                             '-profile:v', 'high', '-r', str(FPS), '-c:a', 'aac', '-b:a', '192k', '-t', f'{dur:.3f}', '-movflags', '+faststart', tmp], check=True)
             os.replace(tmp, dst); results[tag] = dst
@@ -699,6 +833,12 @@ def main():
         except Exception:
             pass
         if bad: status['warnings'].append(f"spelling check: unknown words {bad}")
+        tl = {}
+        for s_ in shots:
+            if s_['src'][0] == 'gfx': tl[s_['src'][1]] = tl.get(s_['src'][1], 0) + 1
+        status['templates'] = tl
+        try: DZ.record(day, DES, tl)
+        except Exception as e: status['warnings'].append(f'design history not saved: {e!r}')
         G.save_json(status, sp)
         if not vr['ok']: raise RuntimeError(f"verification failed {vr['checks']}")
         print(f"GROK_VIDEO_STATUS=ok code=0 style=karaoke planner={P.get('planner')} out={out} chat={chat} wide={status['wide']} "

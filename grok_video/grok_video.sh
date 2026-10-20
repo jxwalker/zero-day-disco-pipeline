@@ -11,10 +11,4 @@ PY=${PY:-/home/box/venvs/align/bin/python}
 export PYTHONWARNINGS=ignore
 export GV_PIP=${GV_PIP:-0}            # 14 Oct (the owner): no Pip, no robots
 export GV_LONG_SHOTS=${GV_LONG_SHOTS:-1}  # 14 Oct: fewer, longer shots
-# 20 Oct 2026 (the owner): karaoke mode (ONUG "No Window" format) is the default. It falls back to grok_video.py (the
-# Claudia/slopcore chain) by itself on failure. Switch back: GV_KARAOKE=0, or pass --style (any explicit --style
-# goes straight to grok_video.py).
-if [ "${GV_KARAOKE:-1}" != "0" ] && [[ " $* " != *" --style "* ]]; then
-  exec "$PY" "$HERE/karaoke.py" "$@"
-fi
 exec "$PY" "$HERE/grok_video.py" "$@"
