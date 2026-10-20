@@ -14,7 +14,7 @@ STORIES (the facts behind the lyrics):
 LYRICS:
 {{LYRICS}}
 
-SEED CAST from the song writer (adapt it; the lead MUST be one ordinary original person):
+SEED CAST from the song writer (adapt it; the lead MUST be an original person who is a PARTICIPANT in the main story):
 {{SEED_CAST}}
 
 SCENES TO FILL (song order; "story N" = the story that scene's lyric sings, 0 = chorus/theme of the MAIN story; one coherent scene each = one place, one continuous action; its shots are camera angles /
@@ -22,10 +22,16 @@ moments of that SAME scene; est = estimated seconds on screen):
 {{SCENES}}
 
 RULES
-1. LEAD (cast id "A"): one original, ordinary, believable person (never a real or famous person, never a lookalike).
+1. LEAD (cast id "A"): one original, believable person (never a real or famous person, never a lookalike) who IS a
+   participant in the main story: the engineer/researcher/maintainer/official who actually does or receives the thing
+   in STORIES (e.g. the security researcher running the scan, the curl maintainer shipping the patch). NEVER invent a
+   bystander with a private day-in-the-life (a kitchen, a home, a mug, hobbies) that the news does not contain. Every
+   location must be a place where the story actually happens (lab, ops room, maintainer's desk, mailroom, bank
+   data centre, agency office), not the lead's home.
    Fix the reference sheet: name, age, face (bone structure, skin, eyes, distinguishing marks), hair, build, ONE wardrobe
    worn the whole film (exact garments, colours, materials), personal palette. 'description' is one dense 45-70 word
-   paragraph that is pasted verbatim into every prompt. The lead is in at least 70% of the shots.
+   paragraph that is pasted verbatim into every prompt. The lead is in at least 50% of the shots (story actors B/C may carry
+   their own story's scenes).
 2. SUPPORTING CAST: at most 2 (ids "B", "C"), only if a story truly needs them, each with a fixed 30-50 word description.
    CASTING (the owner, 2026-10-20, overrides the seed cast): EVERY person on screen, lead and supporting, is a young
    adult aged 21-28, attractive, fresh-faced, warm and HAPPY: bright genuine smiles, laughing, playful energy,
@@ -33,9 +39,12 @@ RULES
    stern-faced. Original people only (never a real person or lookalike).
    No crowds of named people; extras are anonymous, soft and in the background.
 3. ABSOLUTELY NO robots, androids, humanoid machines, mascots, toys, holograms or "AI characters". AI is shown through
-   real people, real screens seen from behind or out of focus, real offices, real objects. No readable text, logos,
-   screens with legible words, signs or documents with writing (the only exception: big hand-painted numerals named in
-   the prompt, max 2 digits groups).
+   real people, real screens seen from behind or out of focus, real offices, real objects. No logos, brand marks or company
+   names in the picture. STORY TEXT IN THE PICTURE IS ALLOWED AND WANTED (the owner, 20 Oct): screens and printouts may show
+   SHORT, large, legible story facts copied exactly from STORIES - numbers ("77 critical", "803 high", "114 projects"),
+   tool/project and language names ("curl", "COBOL", "FORTRAN"), a CVE id, a status word ("PATCHED", "QUARANTINED",
+   "MALWARE DETECTED") - max 4 words per screen, quoted exactly in image_prompt. Code on screens may be real-looking
+   COBOL/Fortran/C lines. Never invent other words.
 4. ART DIRECTION: give each section a palette (2-3 colours + one accent) and a light plan. Soft motivated light from a
    named source (window, overcast sky, practical lamp, sodium street light, low sun). NEVER on-camera flash, never harsh
    frontal flash, no neon soup, no HDR, no bloom. Composed frames: one subject, clean background, deliberate negative
@@ -53,7 +62,10 @@ RULES
    size, angle), composition with the negative space side, palette, light source. Do not repeat the lens/stock (they go
    in 'camera', 'lens', 'light').
 8. Each scene acts out its lyric literally enough that a viewer connects picture and line; the story facts come through
-   the action and props, never through readable text in the picture. Keep the satire playful (performances bright and happy, never dour): absurd situations played
+   the action, the props and short legible on-screen facts (rule 3). LITERAL, NOT METAPHOR: show the actual thing
+   (a vulnerability scan report, a patch diff, a mail filter quarantining a report, a terminal running curl, COBOL on a
+   mainframe console), never a stand-in symbol (tally marks, blinking toy LEDs, stopwatches, fridges, mugs, gloves,
+   cardigans, flung-open windows, spinning with joy). Keep the satire playful (performances bright and happy, never dour): absurd situations played
    completely straight.
 9. type_zone: where the sung words go for that scene: "top", "upper", "lower", "left" or "right" - the emptiest part of
    the frame (sky, wall, floor, out-of-focus background). Make the composition leave that zone clean.
@@ -92,7 +104,15 @@ RULES
    - BANNED: generic shots that could fit any story (someone staring at a laptop, walking down a corridor, typing,
      coffee, city skyline, "thinking" close-ups) unless the shot's prop/action is the story's actual element.
    - Real names, brands and logos never appear; depict roles ("a games-studio founder", "a startup research lab").
-   - Numbers from the story may appear only as big hand-painted numerals per rule 3, never as screens or documents.
+   - Numbers from the story SHOULD appear on screens or printouts per rule 3 (e.g. a scan dashboard reading
+     "77 critical  803 high").
+   - SEQUENCE: the film tells the main story in its real order (e.g. launch -> scan finds bugs -> reports sent ->
+     bounced as malware -> someone finds them -> patch shipped), each beat its own scene, before/alongside the
+     secondary stories in the verse lines that sing them. Every scene's 'idea' must name the concrete event it shows.
+   - Each 'story_element' must name a WHO + DID WHAT + the actual object from STORIES (e.g. "security researcher
+     watches the scan dashboard count 77 critical, 803 high"); emotional beats of an invented character are not story
+     elements.
+   - Wardrobe/props are never the story: no signature mug, cardigan, gloves or other personal props as recurring motifs.
 13. STORY TEXT (on-screen, typeset later by code, NOT in the picture). Fill 'story_text' using ONLY words and facts that
    appear in STORIES (they are checked word by word against it; anything else is dropped):
    - 'card': the main story as one plain-English headline a stranger understands, max 8 words, no slang without

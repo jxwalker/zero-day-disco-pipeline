@@ -52,6 +52,13 @@ def no_text(body):
     """NO_TEXT, except the key numbers a shot shows as big physical painted figures (13 Oct: 41 vs 61 never appeared)."""
     nums = re.findall(r'painted (?:wooden |metal |tin )?(?:numerals?|figures?|numbers?)\s+"?(\d{1,3}%?)"?(?:\s+(?:and|vs\.?)\s+"?(\d{1,3}%?)"?)?', body, re.I)
     keep = [n for t in nums for n in t if n][:2]
+    # 20 Oct (the owner: video "bears no relation to the story"): claudia books may put SHORT exact story facts on
+    # screens/printouts, quoted in the prompt ("77 critical", "curl", "COBOL"). GV_SCREEN_TEXT=0 restores no-text.
+    quoted = [q.strip() for q in re.findall(r'"([^"]{1,40})"', body) if 1 <= len(q.split()) <= 4][:4]
+    if quoted and os.environ.get('GV_SCREEN_TEXT', '1') != '0':
+        return ("The ONLY readable text allowed is exactly: " + '; '.join(f'"{q}"' for q in quoted) + " - crisp, large, "
+                "correctly spelled, on the screen or printout named; no other words, letters, logos or brand marks. "
+                + NO_TEXT.split('. ', 1)[1])
     if not keep:
         return NO_TEXT
     return (f"The ONLY marks allowed are the big hand-painted figures {' and '.join(keep)} exactly as written, crisp and "

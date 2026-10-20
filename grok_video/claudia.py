@@ -21,7 +21,7 @@ import slop_plan as SP
 HERE = os.path.dirname(os.path.abspath(__file__))
 VERSION = 'claudia-2-story'   # 19 Oct evening: story grounding + story text layer (GV_STORY_TEXT=0 off)
 MIN_SHOTS, MAX_SHOTS = 25, 40
-LEAD_MIN_SHARE = 0.7
+LEAD_MIN_SHARE = 0.5   # 20 Oct storyfix: story actors carry their own scenes
 
 CLEAN_FILM = {
     'label': 'clean cinematic 35mm film, soft motivated light',
@@ -330,6 +330,9 @@ CAP_WORDS = 8
 VAGUE = re.compile(r'^\s*(-|none|n/?a|theme|mood|atmosphere|tech|technology|ai|work|office|vibe|general)\s*$', re.I)
 
 
+METAPHOR = re.compile(r'\b(kitchen|fridge|mug|cardigan|tally marks?|stopwatch|yellow gloves?|windowsill)\b', re.I)
+
+
 def story_grounding(book, slots, h):
     """record + check which story each shot depicts (deterministic; Opus review did the rewriting)."""
     want = [h.get('main_story')] + list(h.get('secondary') or [])
@@ -346,6 +349,10 @@ def story_grounding(book, slots, h):
             el = str(sh.get('story_element') or '').strip()
             if st and st not in want:
                 notes.append(f"{sc['seg']}#{k}: story {st} not in today's song"); st = 0
+            txt = f"{sh.get('image_prompt', '')} {el}"
+            if METAPHOR.search(txt):                      # 20 Oct storyfix: symbols/home life are not story facts
+                notes.append(f"{sc['seg']}#{k}: metaphor/home prop instead of the story event ({METAPHOR.search(txt).group(0)})")
+                el = ''
             if st and el and not VAGUE.match(el):
                 grounded += 1; per[st] = per.get(st, 0) + 1
             elif s.get('kind') not in ('hook', 'outro_tail'):

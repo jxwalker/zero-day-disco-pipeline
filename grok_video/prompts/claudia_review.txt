@@ -5,9 +5,11 @@ the director's ideas.
 CHECK EVERY SHOT FOR:
 - motion: timestamped steps that start at 0s and reach the shot's duration exactly, one clear plausible action, no
   morphing, no sudden objects, no cuts.
-- the lead (A) is described consistently (wardrobe, hair) and appears in at least 70% of shots; supporting cast max 2.
+- the lead (A) is described consistently (wardrobe, hair) and appears in at least 50% of shots and is a PARTICIPANT in the main story (its engineer/researcher/
+  maintainer), not an invented bystander; reject any book whose lead has a private home/day-in-the-life storyline; supporting cast max 2.
 - CASTING: every person is a young adult (21-28), attractive, smiling and happy. Rewrite any shot or cast sheet with a middle-aged/older person or a dour, glum, stern or tired expression.
-- NO robots/androids/mascots/toys/holograms; no readable text, logos, legible screens or documents with writing.
+- NO robots/androids/mascots/toys/holograms; no logos/brand marks. Short legible story facts on screens/printouts are
+  WANTED (exact numbers, "curl", "COBOL", CVE id, max 4 words, copied from STORIES); reject invented words.
 - soft motivated light with a named source; no on-camera flash, no neon soup, no HDR/bloom; a real lens + stock.
 - an uncluttered composed frame with a clean type_zone; one subject; not a busy stock photo.
 - shots within a scene are the SAME place and continuous action (coherent scene), and the scene acts out its lyric.
@@ -20,13 +22,19 @@ CHECK EVERY SHOT FOR:
   "masterpiece", "ultra-detailed", "hyperreal" instead of a concrete lens + light + move, any shot with no named
   move or no named light, and any shot that stacks two moves ("pan and tilt", "orbit while zooming"). Max 2 CRASH,
   2 WHIP, 1 DOLLYZOOM per film; consecutive shots in a scene should not repeat the same move.
+- LITERAL STORY (reject and rewrite, highest priority): for each shot ask "which sentence of STORIES does this
+  act out?" If the answer is a metaphor or symbol (tally marks, LED turning green, stopwatch, mug, fridge, window,
+  dancing, spinning) or an invented character's feelings/home, REWRITE it to show the actual event: the real object
+  (scan report "77 critical 803 high", mail filter flagging the PoC as malware, curl patch shipped, COBOL/Fortran
+  code on a mainframe console, agency order to remove DeepSeek, X timeline ranking time spent), the real actor and
+  the real place. Scenes must follow the story's real order. If more than 3 shots fail, rewrite the whole scene.
 - STORY GROUNDING (reject and rewrite): every shot must depict a SPECIFIC element of the story its lyric sings (the
   actual object, place, action, number or stakes from STORIES), recorded in 'story' (number) and 'story_element'.
   Rewrite (image_prompt + motion + story_element) any shot that is a generic office/mood shot that could fit any story
   (laptop staring, corridor walking, typing, coffee, skyline, pensive close-up) or whose story_element is vague
   ("tech", "AI anxiety", "work"). Each secondary story must have at least one shot clearly identifiable as THAT story
   during the verse lines that sing it. Allowed story-0 shots: hook establisher, outro tail, max 2 reactions. Keep the
-  standing rules while rewriting (human cast only, one lead, one move, named light, no logos/likeness/legible text).
+  standing rules while rewriting (human cast only, one lead, one move, named light, no logos/likeness; legible text only as exact story facts).
 
 STORIES (the facts):
 {{STORIES}}
