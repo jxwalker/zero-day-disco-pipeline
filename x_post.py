@@ -9,6 +9,8 @@ Usage:
       reply under it. Prints JSON: {"url": ..., "id": ..., "reply_url": ...}.
       Runs post_lint.py first (Grok Bot / @grok / #slopcore above the fold, length, sources
       links) and refuses to post if it fails; --skip-lint only for non-daily posts the owner OKs.
+      --bot suno (default) | interesting-x picks the check profile; interesting-x gets
+      generic checks only. --lint-only runs the checks and exits without posting.
   x_post.py --delete ID [ID ...]
       Deletes the given posts on the signed-in account (only with the owner's OK).
 
@@ -154,8 +156,19 @@ def main():
     ap.add_argument("--reply-file")
     ap.add_argument("--in-reply-to", metavar="TWEET_ID", help="post the main post as a reply to this post id")
     ap.add_argument("--skip-lint", action="store_true", help="skip post_lint.py (non-daily posts only)")
+    ap.add_argument("--bot", choices=["suno", "interesting-x"], default="suno",
+                    help="post-check profile (20 Oct 2026): suno = Grok Bot/@grok/#slopcore rules (default); interesting-x = generic checks")
+    ap.add_argument("--lint-only", action="store_true", help="run the post checks and exit; posts nothing, needs no credentials")
     ap.add_argument("--delete", nargs="+", metavar="TWEET_ID", help="delete these post ids (own account only)")
     a = ap.parse_args()
+    if a.lint_only:
+        if not a.text_file: ap.error("--text-file required")
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import post_lint as PL
+        probs = PL.check_post(open(a.text_file).read().strip(), a.bot)[1]
+        if a.reply_file: probs += PL.check_sources(open(a.reply_file).read().strip(), a.bot)[1]
+        print(json.dumps({"bot": a.bot, "lint": "clean" if not probs else "failed", "problems": probs}))
+        sys.exit(3 if probs else 0)
     c = load_creds()
     if a.verify:
         return verify(c)
@@ -171,11 +184,11 @@ def main():
     if not a.skip_lint:   # 18 Oct 2026: daily post must credit Grok Bot, tag @grok, carry #slopcore, fit the limit
         sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
         import post_lint as PL
-        _, probs = PL.check_post(text)
+        _, probs = PL.check_post(text, a.bot)
         if a.reply_file:
-            probs += PL.check_sources(open(a.reply_file).read().strip())[1]
+            probs += PL.check_sources(open(a.reply_file).read().strip(), a.bot)[1]
         if probs:
-            print(json.dumps({"error": "post_lint failed, nothing posted", "problems": probs}))
+            print(json.dumps({"error": "post_lint failed, nothing posted", "bot": a.bot, "problems": probs}))
             sys.exit(3)
     mid = upload_video(c, a.video) if a.video else None
     tid = post(c, text, media_id=mid, reply_to=a.in_reply_to)

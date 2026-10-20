@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Daily X post lint (18 Oct 2026, the owner: credit Grok Bot, tag @grok so Grok replies, #slopcore; wants Elon's attention).
-usage: post_lint.py <post.txt> [sources.txt]   -> "post lint: clean" (exit 0) or the problems (exit 1).
+usage: post_lint.py [--bot suno|interesting-x] <post.txt> [sources.txt]   (default --bot suno)
+--bot interesting-x: generic checks only (non-empty, no secrets, valid links, length).
+Suno profile (default):   -> "post lint: clean" (exit 0) or the problems (exit 1).
 post.txt must contain 'Grok Bot', an '@grok' mention and '#slopcore',
 all inside the first 280 weighted characters (above X's "Show more" fold), and the whole post must fit X's limit
 (@jxwalker has Premium+: 25,000 weighted chars; override with X_POST_LIMIT). sources.txt must keep the story links
@@ -36,7 +38,25 @@ def head(text, k=FOLD):
         out += ch
     return out
 
-def check_post(t):
+BOTS = ("suno", "interesting-x")
+SECRET = re.compile(r"(sk-[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9]{20,}|xox[abprs]-[A-Za-z0-9-]{10,}|AKIA[0-9A-Z]{16}|"
+                    r"-----BEGIN [A-Z ]*PRIVATE KEY-----|\b(api[_-]?key|secret|password|token)\s*[:=]\s*\S{6,})", re.I)
+
+def check_generic(t, label="post"):
+    """20 Oct 2026, the owner: each bot gets its own post checks. Generic sanity checks only."""
+    p = []
+    if not t.strip(): p.append(f"{label} is empty")
+    if SECRET.search(t): p.append(f"{label} looks like it contains a secret/credential")
+    for u in URL.findall(t):
+        u = u.rstrip(".,;:!?)]}'\"")
+        if not re.match(r"https?://[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+(:\d+)?(/\S*)?$", u): p.append(f"{label} has a malformed link: {u}")
+    w = weighted(t)
+    if w > LIMIT: p.append(f"{label} too long: {w} weighted chars > {LIMIT}")
+    return w, p
+
+def check_post(t, bot="suno"):
+    if bot == "interesting-x": return check_generic(t, "post")
+    if bot != "suno": raise ValueError(f"unknown bot profile {bot!r}; use one of {BOTS}")
     p = []
     if not re.search(r"(?<![\w@])@grok\b", t, re.I): p.append("missing '@grok' mention")
     if not re.search(r"\bGrok Bot\b", t): p.append("missing 'Grok Bot' credit (e.g. 'Made by Grok Bot')")
@@ -49,7 +69,8 @@ def check_post(t):
     if w > LIMIT: p.append(f"post too long: {w} weighted chars > {LIMIT}")
     return w, p
 
-def check_sources(t):
+def check_sources(t, bot="suno"):
+    if bot == "interesting-x": return check_generic(t, "sources reply")
     p = []
     if not re.search(r"https?://(x|twitter)\.com/\w+/status/\d+", t): p.append("sources reply has no story links")
     if not re.search(r"https?://suno\.com/song/", t): p.append("sources reply is missing the Suno link")
@@ -58,12 +79,15 @@ def check_sources(t):
     return w, p
 
 def main(argv):
+    bot = "suno"
+    if "--bot" in argv:
+        i = argv.index("--bot"); bot = argv[i + 1]; argv = argv[:i] + argv[i + 2:]
     if len(argv) < 2: print(__doc__); return 2
     t = open(argv[1], encoding="utf-8").read().strip()
-    w, p = check_post(t)
+    w, p = check_post(t, bot)
     msg = f"post: {w} weighted chars (limit {LIMIT}, fold {FOLD})"
     if len(argv) > 2:
-        sw, sp = check_sources(open(argv[2], encoding="utf-8").read().strip()); p += sp
+        sw, sp = check_sources(open(argv[2], encoding="utf-8").read().strip(), bot); p += sp
         msg += f"; sources: {sw}"
     print(msg)
     for x in p: print(" -", x)

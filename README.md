@@ -162,3 +162,6 @@ python3 /home/box/suno-daily/tools/x_source_reply.py /home/box/suno-daily/<day>
 Every Suno Create makes TWO takes for the same credits (no extra spend), so the routine should listen to / compare
 both and keep the take with the more natural, un-autotuned lead vocal (clearer words, less pitch-snapped, no vocoder
 sheen), not just the first one. Note the choice and why in log.md. Docs only: no tool does this automatically yet.
+
+## Per-bot post checks (20 Oct 2026)
+the owner chose: each bot gets its own post checks. `x_post.py --bot suno` (the default) keeps the Grok Bot / @grok / #slopcore / Suno-link rules unchanged. `x_post.py --bot interesting-x` runs only generic checks (non-empty, no secrets, valid links, length). `--lint-only` runs the checks and posts nothing. `post_lint.py --bot interesting-x post.txt sources.txt` does the same from the CLI.
