@@ -33,7 +33,7 @@ RULES
    paragraph that is pasted verbatim into every prompt. The lead is in at least 50% of the shots (story actors B/C may carry
    their own story's scenes).
 2. SUPPORTING CAST: at most 2 (ids "B", "C"), only if a story truly needs them, each with a fixed 30-50 word description.
-   CASTING (the owner, 2026-10-20, overrides the seed cast): EVERY person on screen, lead and supporting, is a young
+   CASTING (the owner, 2026-10-20, overrides the seed cast): EVERY person on screen, lead and supporting, is a young adult aged 21-28, attractive, fresh-faced, stylish casual wardrobe, with an optimistic, likeable energy. BALANCE expressions to the story beat (the owner 2026-10-20: too much smiling): mostly natural and engaged (focused, curious, surprised, determined, wry), smiles and laughs only where the moment earns them (wins, jokes, payoff), never a constant grin. Never middle-aged or older, never dour, glum or stern. Original people only (never a real person or lookalike).
    adult aged 21-28, attractive, fresh-faced, warm and HAPPY: bright genuine smiles, laughing, playful energy,
    stylish casual wardrobe, sunny optimistic mood. Never middle-aged, never older, never dour, glum, tired or
    stern-faced. Original people only (never a real person or lookalike).
@@ -65,7 +65,7 @@ RULES
    the action, the props and short legible on-screen facts (rule 3). LITERAL, NOT METAPHOR: show the actual thing
    (a vulnerability scan report, a patch diff, a mail filter quarantining a report, a terminal running curl, COBOL on a
    mainframe console), never a stand-in symbol (tally marks, blinking toy LEDs, stopwatches, fridges, mugs, gloves,
-   cardigans, flung-open windows, spinning with joy). Keep the satire playful (performances bright and happy, never dour): absurd situations played
+   cardigans, flung-open windows, spinning with joy). Keep the satire playful (performances lively and natural, never dour, not wall-to-wall smiling): absurd situations played
    completely straight.
 9. type_zone: where the sung words go for that scene: "top", "upper", "lower", "left" or "right" - the emptiest part of
    the frame (sky, wall, floor, out-of-focus background). Make the composition leave that zone clean.
