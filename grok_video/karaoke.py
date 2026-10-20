@@ -1,7 +1,7 @@
 """karaoke mode: the daily video in the ONUG "No Window" format (default since 20 Oct 2026). See README.md "karaoke".
 usage: karaoke.py DAY_DIR [--out FILE] [--work DIR] [--skip-gen] [--replan] [--no-fallback] [--stills N] [--clips N]
                   [--time-limit MIN] [--max-pct P] [--no-16x9]  (+ any grok_video.py args, passed to the fallback)
-Writes <day>/video_karaoke.mp4 (1080x1920, posted), video_karaoke_chat.mp4 (<45 MB), video_karaoke_16x9.mp4.
+Writes <day>/video_karaoke.mp4 (1080x1920, posted), video_karaoke_chat.mp4 (<25 MB), video_karaoke_16x9.mp4.
 On any failure (not exit 6 instrumental / 7 auth) it runs grok_video.py (the Claudia/slopcore chain) with the same args.
 Last stdout line: GROK_VIDEO_STATUS=... out=<mp4> chat=<mp4> (same contract as grok_video.py)."""
 import argparse, json, math, os, re, shutil, subprocess, sys, threading, time, traceback
@@ -13,13 +13,13 @@ FPS = 30
 TEMPLATES = ['headline', 'bignum', 'bars', 'post', 'feed', 'inbox', 'chat', 'code', 'terminal', 'rows', 'stamp', 'quote', 'browser', 'gauge', 'compare', 'countdown', 'screen']
 MAX_PER_TEMPLATE = 2
 MAX_SHOT = float(os.environ.get('GV_KARAOKE_MAX_SHOT', 3.6))
-PLAN_VER = 'karaoke-2'
+PLAN_VER = 'karaoke-3'
 SCHEMA = {"type": "object", "required": ["scenes", "lines", "intro", "breaks", "outro", "story_text", "credit", "design"],
           "properties": {
               "scenes": {"type": "array", "items": {"type": "object", "required": ["id", "prompt", "motion"],
                          "properties": {"id": {"type": "string"}, "prompt": {"type": "string"}, "motion": {"type": "string"}}}},
-              "lines": {"type": "array", "items": {"type": "object", "required": ["i", "v"],
-                        "properties": {"i": {"type": "integer"}, "v": {"type": "array", "items": {"type": "object"}}}}},
+              "lines": {"type": "array", "items": {"type": "object", "required": ["i", "shows", "fact", "v"],
+                        "properties": {"i": {"type": "integer"}, "shows": {"type": "string"}, "fact": {"type": "string"}, "v": {"type": "array", "items": {"type": "object"}}}}},
               "intro": {"type": "array", "items": {"type": "object"}},
               "breaks": {"type": "array", "items": {"type": "object"}},
               "outro": {"type": "array", "items": {"type": "object"}},
@@ -360,109 +360,145 @@ def map_lines(P, L, day):
     return out
 
 
-def timeline(P, L, dur, day, gdir):
+def line_card(text, fact, used, handle=''):
+    """A code-rendered graphic that illustrates THIS line (its words + the story fact behind it); used when the planned
+    visual is missing/rejected/over the template cap. Picks the first template variant still under the cap."""
+    key = max(re.findall(r"[A-Za-z0-9'-]+", text) or ['FIX'], key=len).upper()[:14]
+    opts = [('headline', {'kicker': key, 'text': text, 'sub': (fact or '')[:80]}),
+            ('quote', {'text': text, 'by': ('@' + handle) if handle else (fact or '')[:40]}),
+            ('stamp', {'above': text[:70], 'text': key}),
+            ('browser', {'url': 'news', 'site': 'TODAY', 'headline': text, 'lede': (fact or text)[:120], 'highlight': (fact or text)[:30]}),
+            ('screen', {'device': 'laptop', 'app': 'news', 'text': (fact or text)[:90]})]
+    for g, pp in opts:
+        if used.get(g, 0) < MAX_PER_TEMPLATE:
+            return {'kind': 'gfx', 'g': g, 'p': pp}
+    return {'kind': 'gfx', 'g': 'headline', 'p': opts[0][1]}
+
+
+def timeline(P, L, dur, day, gdir, bad_scenes=()):
+    """LINE-LOCKED (20 Oct, the owner: scenes must match the line being sung): the shot(s) under each sung line are that
+    line's own planned visuals, nothing else; substitutes are redrawn for the same line (line_card). Pools (intro,
+    breaks, outro) are only used where nothing is sung."""
     m = map_lines(P, L, day); inv = {v: k for k, v in m.items()}
-    pv = {ln['i']: ln['v'] for ln in P['lines']}
+    pl = {ln['i']: ln for ln in P['lines']}
     timed = [ln for ln in L if ln.get('words')]
     pools = {k: list(P.get(k) or []) or list(P.get('breaks') or []) for k in ('intro', 'breaks', 'outro')}
-    # fill pool for splitting long shots: alternate live-action scenes with the break graphics (less repetition)
-    sc_ = [{'kind': 'scene', 'id': x['id']} for x in P.get('scenes', [])]
-    br_ = list(P.get('breaks') or [])
-    pools['fill'] = [v for pair in zip(sc_[::-1], (br_ * 4)[:len(sc_)]) for v in pair] or br_
-    fallback = [{'kind': 'gfx', 'g': 'headline', 'p': {'kicker': 'TODAY', 'text': G.read(os.path.join(day, 'title.txt')).strip()}}]
-    ctr = {'intro': 0, 'breaks': 0, 'outro': 0, 'fill': 0}
-
+    title = G.read(os.path.join(day, 'title.txt')).strip()
+    fallback = [{'kind': 'gfx', 'g': 'headline', 'p': {'kicker': 'TODAY', 'text': title}}]
+    ctr = {'intro': 0, 'breaks': 0, 'outro': 0}
     def take(k):
         p = pools[k] or fallback; v = p[ctr[k] % len(p)]; ctr[k] += 1; return v
     end_t = max(dur - 5.5, (timed[-1]['end'] + 0.6) if timed else dur - 5.5); end_t = min(end_t, dur - 3.5)
-    cuts = []                                     # (t, visual)
+    cuts = []                                     # (t, visual, line_index or None)
     first = timed[0]['start'] - 0.08 if timed else end_t
     n_in = max(1, min(len(pools['intro']) or 2, int(first / 2.6)))
     for k in range(n_in):
-        cuts.append((first * k / n_in, take('intro')))
+        cuts.append((first * k / n_in, take('intro'), None))
     for idx, ln in enumerate(timed):
-        n = L.index(ln); vis = pv.get(inv.get(n), None) or [take('breaks')]
+        n = L.index(ln); pi = inv.get(n); spec = pl.get(pi, {})
+        vis = spec.get('v') or [line_card(ln['text'], spec.get('fact', ''), {})]
         t0 = max(0.0, ln['start'] - 0.08)
-        cuts.append((t0, vis[0]))
+        cuts.append((t0, vis[0], n))
         if len(vis) > 1 and len(ln['words']) >= 4:
             mid = ln['words'][len(ln['words']) // 2][1] - 0.05
-            if mid - t0 > 1.0 and ln['end'] - mid > 0.8: cuts.append((mid, vis[1]))
+            if mid - t0 > 1.0 and ln['end'] - mid > 0.8: cuts.append((mid, vis[1], n))
         nxt = timed[idx + 1]['start'] - 0.08 if idx + 1 < len(timed) else end_t
-        gs = ln['end'] + 0.25
-        if nxt - gs > 2.6:                        # instrumental gap: fill with break visuals every ~2.4 s
+        gs = ln['end'] + 0.35
+        if nxt - gs > 2.6:                        # instrumental gap (nothing sung): break visuals every ~2.4 s
             k = int((nxt - gs) / 2.4)
             for q in range(k):
-                cuts.append((gs + (nxt - gs) * q / k, take('breaks' if idx + 1 < len(timed) else 'outro')))
+                cuts.append((gs + (nxt - gs) * q / k, take('breaks' if idx + 1 < len(timed) else 'outro'), None))
     cuts = sorted([c for c in cuts if c[0] < end_t - 0.4], key=lambda c: c[0])
-    # merge too-short shots (< 0.7 s) and split long ones (> 4.6 s) so the cut rate stays fast
     out = []
     for c in cuts:
-        if out and c[0] - out[-1][0] < 0.7: out[-1] = (out[-1][0], c[1]) if c[0] - out[-1][0] < 0.3 else out[-1]; continue
+        if out and c[0] - out[-1][0] < 0.7:
+            if out[-1][2] is None: out[-1] = (out[-1][0], c[1], c[2])     # a sung line beats a filler
+            continue
         out.append(c)
-    fin = []
-    for i, (t, v) in enumerate(out):
-        t1 = out[i + 1][0] if i + 1 < len(out) else end_t
-        fin.append({'t0': t, 't1': t1, 'v': v})
-    shots = []
-    for s in fin:
-        d = s['t1'] - s['t0']
-        if d > MAX_SHOT:                          # keep the cut rate fast (the owner: fast cuts, ONUG avg ~2.3 s)
-            n = int(math.ceil(d / 2.6)); step = d / n
-            for q in range(n):
-                shots.append({'t0': s['t0'] + q * step, 't1': s['t0'] + (q + 1) * step, 'v': s['v'] if q == 0 else take('fill')})
-        else:
-            shots.append(s)
-    # template cap: no graphic template more than MAX_PER_TEMPLATE times; extra uses become live-action scenes
-    have = [x['id'] for x in P.get('scenes', []) if os.path.exists(f"{gdir}/{x['id']}.png")]
-    used_t, k_ = {}, 0
+    shots = [{'t0': t, 't1': (out[i + 1][0] if i + 1 < len(out) else end_t), 'v': v, 'line': li} for i, (t, v, li) in enumerate(out)]
+    # long holds: tail after the line ends -> an instrumental visual; still too long -> a 2nd, redrawn card for the SAME line
+    sp_ = []
     for s_ in shots:
-        v = s_['v']
+        li = s_['line']
+        if li is not None and s_['t1'] - s_['t0'] > MAX_SHOT + 1.2:
+            le = L[li]['end'] + 0.35
+            if s_['t1'] - le > 1.6 and le - s_['t0'] > 1.0:
+                sp_ += [dict(s_, t1=le), {'t0': le, 't1': s_['t1'], 'v': take('breaks'), 'line': None}]; continue
+            if s_['t1'] - s_['t0'] > MAX_SHOT + 1.2:
+                m_ = (s_['t0'] + s_['t1']) / 2; spec = pl.get(inv.get(li), {})
+                sp_ += [dict(s_, t1=m_), {'t0': m_, 't1': s_['t1'], 'v': line_card(L[li]['text'], spec.get('fact', ''), {}), 'line': li}]; continue
+        sp_.append(s_)
+    shots = sp_
+    # template cap and missing/rejected scenes -> redraw for the SAME line
+    used = {}
+    have = {x['id'] for x in P.get('scenes', []) if os.path.exists(f"{gdir}/{x['id']}.png") and x['id'] not in bad_scenes
+            and not dup_halves(f"{gdir}/{x['id']}.png")}
+    for s_ in shots:
+        v = s_['v']; li = s_['line']
+        spec = pl.get(inv.get(li), {}) if li is not None else {}
+        txt = L[li]['text'] if li is not None else title
+        if v.get('kind') == 'scene' and v.get('id') not in have:
+            s_['v'] = v = line_card(txt, spec.get('fact', ''), used); s_['redrawn'] = 'scene missing/rejected'
         if v.get('kind') == 'gfx':
             g = 'terminal' if v.get('g') == 'term' else v.get('g')
-            used_t[g] = used_t.get(g, 0) + 1
-            if used_t[g] > MAX_PER_TEMPLATE and have:
-                cnt = {h: 0 for h in have}
-                for x in shots:
-                    if x['v'].get('kind') == 'scene' and x['v'].get('id') in cnt: cnt[x['v']['id']] += 1
-                prev = shots[shots.index(s_) - 1]['v'].get('id') if shots.index(s_) else None
-                s_['v'] = {'kind': 'scene', 'id': min((h for h in have if h != prev), key=lambda h: (cnt[h], h), default=have[0])}
-    # scene overuse: no scene more than 3 times; later uses go to the least-used other scene
-    cnt = {h: 0 for h in have}
-    for i_, s_ in enumerate(shots):
-        sid = s_['v'].get('id') if s_['v'].get('kind') == 'scene' else None
-        if sid in cnt:
-            if cnt[sid] >= 3:
-                nb = {shots[i_ - 1]['v'].get('id') if i_ else None, shots[i_ + 1]['v'].get('id') if i_ + 1 < len(shots) else None}
-                alt = min((h for h in have if h not in nb), key=lambda h: (cnt[h], h), default=sid)
-                s_['v'] = {'kind': 'scene', 'id': alt}; sid = alt
-            cnt[sid] += 1
-    shots.append({'t0': end_t, 't1': dur, 'v': {'kind': 'gfx', 'g': 'endcard', 'p': {}}})
-    # resolve scenes: clip > still > gfx headline; vary clip offsets on reuse
+            if used.get(g, 0) >= MAX_PER_TEMPLATE:
+                s_['v'] = v = line_card(txt, spec.get('fact', ''), used); s_['redrawn'] = f'template {g} over cap'
+                g = v['g']
+            used[g] = used.get(g, 0) + 1
+    shots.append({'t0': end_t, 't1': dur, 'v': {'kind': 'gfx', 'g': 'endcard', 'p': {}}, 'line': None})
     seen = {}
     for s in shots:
         v = s['v']
         if v.get('kind') == 'scene':
             sid = v.get('id'); clip, png = f"{gdir}/{sid}.mp4", f"{gdir}/{sid}.png"
             k = seen.get(sid, 0); seen[sid] = k + 1
-            if os.path.exists(clip) and os.path.getsize(clip) > 10000:
-                s['src'] = ('clip', clip, [0.0, 2.6, 1.2][k % 3])
-            elif os.path.exists(png) and not dup_halves(png):
-                s['src'] = ('still', png, k)
-            else:                                  # missing/bad picture: another scene that exists, else a headline card
-                alt = [f for f in sorted(os.listdir(gdir)) if f.endswith('.png') and not f.endswith(('.dup.png', '.screen.png', '.screen2.png')) and not dup_halves(os.path.join(gdir, f))] if os.path.isdir(gdir) else []
-                sc = next((x for x in P.get('scenes', []) if x['id'] == sid), {})
-                if seen.get('_screen', 0) < 2 and re.search(r'laptop|screen|monitor|phone|inbox|email', sc.get('prompt', ''), re.I):
-                    seen['_screen'] = seen.get('_screen', 0) + 1     # rejected device shot -> code-rendered screen insert
-                    st_ = (G.story_list(day) or [{'text': G.read(os.path.join(day, 'title.txt'))}])[0]
-                    s['src'] = ('gfx', 'screen', {'device': 'phone' if 'phone' in sc.get('prompt', '').lower() else 'laptop',
-                                                  'app': 'news', 'text': st_['text']})
-                elif alt:
-                    s['src'] = ('still', os.path.join(gdir, alt[(len(seen) * 5 + k) % len(alt)]), k + 1)
-                else:
-                    s['src'] = ('gfx', 'headline', {'kicker': 'TODAY', 'text': G.read(os.path.join(day, 'title.txt')).strip()})
+            s['src'] = ('clip', clip, [0.0, 2.6, 1.2][k % 3]) if os.path.exists(clip) and os.path.getsize(clip) > 10000 else ('still', png, k)
         else:
             s['src'] = ('gfx', v.get('g'), dict(v.get('p') or {}))
     return shots
+
+
+MATCH_SCHEMA = {"type": "object", "required": ["rows"], "properties": {"rows": {"type": "array", "items": {
+    "type": "object", "required": ["n", "match", "why"], "properties": {"n": {"type": "integer"}, "match": {"type": "boolean"},
+                                                                       "why": {"type": "string"}}}}}}
+
+
+def describe(s, P):
+    v = s['v']
+    if v.get('kind') == 'scene':
+        sc = next((x for x in P.get('scenes', []) if x['id'] == v.get('id')), {})
+        return f"photo scene {v.get('id')}: {sc.get('prompt', '')[:300]}", sc
+    return f"graphic {v.get('g')}: " + json.dumps(v.get('p') or {}, ensure_ascii=False)[:300], None
+
+
+def match_check(shots, L, P, work, gdir, status):
+    """Claude reads every (sung line, shot) pair (scene stills are opened with Read) and says whether the shot
+    literally illustrates the words being sung. Mismatched shots are redrawn for their line (line_card)."""
+    import slop_opus as SO
+    rows = []
+    for k, s in enumerate(shots):
+        if s.get('line') is None: continue
+        d, sc = describe(s, P)
+        img = f"{s['v']['id']}.png" if sc else ''
+        rows.append({'n': k, 'line': L[s['line']]['text'], 'shot': d, 'image': img})
+    pf = os.path.join(gdir, 'match_check.txt')
+    open(pf, 'w').write(
+        "Music-video edit check. For each row, a lyric line is sung while the shot plays. Decide `match`: does the shot "
+        "LITERALLY illustrate what the line says (its people/objects/actions/numbers/story), so a viewer instantly sees the "
+        "connection? A generic or merely mood-related shot is NOT a match. For photo scenes, open the image file with Read "
+        "(in this directory) and judge the picture itself, not only the description. Reply for every n.\n\n"
+        + '\n'.join(json.dumps(r, ensure_ascii=False) for r in rows))
+    try:
+        res, meta = SO.run_claude(pf, gdir, MATCH_SCHEMA, 600, tools='Read', effort='medium')
+        got = {r['n']: r for r in (res or {}).get('rows', [])}
+    except Exception as e:
+        G.log(f"karaoke: match check unavailable ({str(e)[:150]})"); status['warnings'].append('match check unavailable'); return None
+    table = []
+    for r in rows:
+        g = got.get(r['n'], {'match': False, 'why': 'no verdict'})
+        table.append(dict(r, match=bool(g.get('match')), why=g.get('why', '')))
+    G.save_json(table, os.path.join(work, 'match_table_pre.json'))
+    return table
 
 
 # ---------------------------------------------------------------- rendering
@@ -521,7 +557,7 @@ def render_seg(job):
                            '-i', '-'] + (['-vf', tv] if tv else []) + ENC + [out], stdin=subprocess.PIPE)
     for k in range(nfr):
         try:
-            im = f(W, H, k / FPS, dur, p)
+            im = kgfx.render(src if src in kgfx.R else 'headline', W, H, k / FPS, dur, p)
         except Exception:
             im = kgfx.R['headline'](W, H, k / FPS, dur, {'text': str(p.get('text') or p.get('title') or '')})
         if im.size != (W, H): im = im.resize((W, H))
@@ -669,6 +705,25 @@ def spelling(texts, day):
     return sorted(bad)
 
 
+def fit_check(fitlog, texts, day):
+    """21 Oct: kgfx2 logs text that could not be shrunk to fit, and every string on each shot's final frame. A final-frame
+    word that is not in the source text but is a strict prefix of a source word is a truncated fragment = failure."""
+    srcw = set(norm(' '.join(texts) + ' ' + G.read(os.path.join(day, 'stories.md')) + ' ' + G.read(os.path.join(day, 'lyrics.txt'))).split())
+    fails, trunc = [], set()
+    recs = []
+    if os.path.exists(fitlog):
+        for ln in open(fitlog):
+            try: recs.append(json.loads(ln))
+            except Exception: pass
+    for r in recs:
+        if r.get('fail'): fails.append(f"{r.get('shot')}: {r.get('text')!r}"[:120])
+        elif 'final' in r:
+            for w in norm(r['final']).split():
+                if len(w) >= 2 and w not in srcw and any(sw.startswith(w) and sw != w for sw in srcw):
+                    trunc.add(w)
+    return sorted(set(fails)), sorted(trunc)
+
+
 def all_texts(shots, story, endp):
     out = []
     def walk(o):
@@ -772,6 +827,29 @@ def main():
         rep = sanitize(L)
         if rep: status['warnings'].append(f"timing sanity: re-spread the tail of {len(rep)} line(s): {rep}")
         shots = timeline(P, L, dur, day, gdir)
+        pl_ = {ln['i']: ln for ln in P['lines']}; inv_ = {v: k for k, v in map_lines(P, L, day).items()}
+        tab = match_check(shots, L, P, work, gdir, status)
+        if tab:
+            used = {}
+            for s_ in shots:
+                if s_['src'][0] == 'gfx': used[s_['src'][1]] = used.get(s_['src'][1], 0) + 1
+            bad_n = [r['n'] for r in tab if not r['match']]
+            for n_ in bad_n:
+                s_ = shots[n_]; li = s_['line']; spec = pl_.get(inv_.get(li), {})
+                if s_['src'][0] == 'gfx': used[s_['src'][1]] -= 1
+                v = line_card(L[li]['text'], spec.get('fact', ''), used); used[v['g']] = used.get(v['g'], 0) + 1
+                s_['v'] = v; s_['src'] = ('gfx', v['g'], dict(v['p'])); s_['redrawn'] = 'match check: ' + next(r['why'] for r in tab if r['n'] == n_)[:120]
+            G.log(f"karaoke: match check: {len(tab) - len(bad_n)}/{len(tab)} matched; redrew {len(bad_n)} for their own line")
+            if bad_n:
+                tab2 = match_check(shots, L, P, work, gdir, status) or tab
+            else:
+                tab2 = tab
+            G.save_json(tab2, os.path.join(work, 'match_table.json'))
+            status['match'] = {'first_pass': f"{len(tab) - len(bad_n)}/{len(tab)}", 'final': f"{sum(r['match'] for r in tab2)}/{len(tab2)}"}
+            with open(os.path.join(work, 'match_table.md'), 'w') as f_:
+                f_.write('| shot | line | shot shown | match | note |\n|---|---|---|---|---|\n')
+                for r in tab2:
+                    f_.write(f"| {r['n']} | {r['line']} | {r['shot'][:90].replace('|', '/')} | {'yes' if r['match'] else 'NO'} | {r['why'][:80].replace('|', '/')} |\n")
         end_t = shots[-1]['t0']
         story = story_events(P, L, day, dur, end_t)
         stills = sorted(f for f in os.listdir(gdir) if f.endswith('.png'))
@@ -782,7 +860,7 @@ def main():
             for v in P.get('outro', [])[::-1]:
                 if v.get('kind') == 'scene' and os.path.exists(os.path.join(gdir, f"{v['id']}.png")):
                     endp['bg'] = os.path.join(gdir, f"{v['id']}.png"); break
-        G.save_json({'shots': [{'t0': round(s['t0'], 2), 't1': round(s['t1'], 2), 'src': [s['src'][0], s['src'][1]]} for s in shots],
+        G.save_json({'shots': [{'t0': round(s['t0'], 2), 't1': round(s['t1'], 2), 'src': [s['src'][0], s['src'][1]], 'line': s.get('line'), 'redrawn': s.get('redrawn')} for s in shots],
                      'story': story}, os.path.join(work, 'timeline.json'))
         sizes = [(1080, 1920)] + ([] if a.no_16x9 else [(1920, 1080)])
         jobs = []
@@ -790,6 +868,7 @@ def main():
             sd = os.path.join(work, f'seg_{W}x{H}'); os.makedirs(sd, exist_ok=True)
             jobs += [(s, W, H, os.path.join(sd, f'{i:03d}.mp4'), endp, DES, i) for i, s in enumerate(shots)]
         rt = time.time()
+        fitlog = os.path.join(work, 'fit_log.jsonl'); open(fitlog, 'w').close(); os.environ['KGFX_FITLOG'] = fitlog  # 21 Oct
         with Pool(min(8, os.cpu_count() or 4)) as pool:
             segs = pool.map(render_seg, jobs, chunksize=1)
         results = {}
@@ -807,21 +886,43 @@ def main():
             dst = out if H > W else wide
             tmp = dst + '.part.mp4'
             subprocess.run(['ffmpeg', '-v', 'error', '-y', '-i', bg, '-i', bandf, '-i', audio, '-filter_complex',
-                            f"[0:v][1:v]overlay=0:0,ass='{assf}'[v]",
-                            '-map', '[v]', '-map', '2:a', '-c:v', 'libx264', '-preset', 'medium', '-crf', '20', '-pix_fmt', 'yuv420p',
+                            f"[0:v][1:v]overlay=0:0,ass='{assf}',scale=in_range=auto:out_range=tv,format=yuv420p[v]",  # 21 Oct: jpeg-range sources gave yuvj420p
+                            '-map', '[v]', '-map', '2:a', '-c:v', 'libx264', '-preset', 'medium', '-crf', '20', '-pix_fmt', 'yuv420p', '-color_range', 'tv',
                             '-profile:v', 'high', '-r', str(FPS), '-c:a', 'aac', '-b:a', '192k', '-t', f'{dur:.3f}', '-movflags', '+faststart', tmp], check=True)
             os.replace(tmp, dst); results[tag] = dst
-        # chat copy < 45 MB
-        kbps = int((40 * 8 * 1024) / dur) - 160
-        subprocess.run(['ffmpeg', '-v', 'error', '-y', '-i', out, '-c:v', 'libx264', '-preset', 'medium', '-b:v', f'{kbps}k',
-                        '-maxrate', f'{int(kbps * 1.4)}k', '-bufsize', f'{kbps * 2}k', '-c:a', 'aac', '-b:a', '128k',
-                        '-movflags', '+faststart', chat + '.part.mp4'], check=True)
+        # chat copy < 25 MB (21 Oct): two-pass at a bitrate derived from the duration, 22 MB target, retry lower if over
+        for tgt in (22, 19, 16):
+            kbps = max(300, int((tgt * 8 * 1024) / dur) - 128)
+            pl = os.path.join(work, 'chat2pass')
+            common = ['-c:v', 'libx264', '-preset', 'medium', '-profile:v', 'high', '-b:v', f'{kbps}k', '-maxrate', f'{int(kbps * 1.3)}k',
+                      '-bufsize', f'{kbps * 2}k', '-vf', 'scale=in_range=auto:out_range=tv,format=yuv420p', '-pix_fmt', 'yuv420p',
+                      '-color_range', 'tv', '-passlogfile', pl]
+            subprocess.run(['ffmpeg', '-v', 'error', '-y', '-i', out] + common + ['-pass', '1', '-an', '-f', 'mp4', os.devnull], check=True)
+            subprocess.run(['ffmpeg', '-v', 'error', '-y', '-i', out] + common + ['-pass', '2', '-c:a', 'aac', '-b:a', '128k',
+                            '-movflags', '+faststart', chat + '.part.mp4'], check=True)
+            if os.path.getsize(chat + '.part.mp4') < 25 * 1048576: break
         os.replace(chat + '.part.mp4', chat)
         status['render_s'] = round(time.time() - rt)
         vr = GV.verify(out, audio, L, {}, os.path.join(work, 'verify_frames'))
         cs = os.path.join(work, 'contact_sheet.jpg')
         subprocess.run(['ffmpeg', '-v', 'error', '-y', '-i', out, '-vf', f"fps=16/{dur:.1f},scale=270:-2,tile=8x2", '-frames:v', '1', cs])
         bad = spelling(texts, day)
+        try:
+            import margin_check as MC
+            P['_title'] = endp['title']
+            mc = MC.run(work, P, [x['text'] for x in (G.story_list(day) or [])] + [c['text'] for c in story], [ln['text'] for ln in L], DZ.theme(DES), dur)
+            status['margin_ok'] = mc['ok']
+            status['margin_fail'] = [f"{r['g']}/{r['case']}/{r['size']}" for r in mc['gfx'] if not r['ok']] + [f"lyrics {k}: {a['n_fail']} frames" for k, a in mc['ass'].items() if a['n_fail']]
+            if not mc['ok']: status['warnings'].append(f"margin check failed: {status['margin_fail']}")
+        except Exception as e:
+            status['warnings'].append(f'margin check error: {e!r}')
+        # 21 Oct 2026 (the owner: no on-screen text is ever cut off): fit failures and truncated words fail the build
+        fit_fail, trunc = fit_check(fitlog, texts, day)
+        status.update(fit_fail=fit_fail, truncated_words=trunc, fit_ok=not fit_fail and not trunc)
+        if fit_fail or trunc:
+            status['warnings'].append(f"text fit check failed: {fit_fail[:5]} truncated {trunc}")
+            vr['ok'] = False; vr['checks']['text_fits'] = False
+        else: vr['checks']['text_fits'] = True
         status.update(ok=vr['ok'], verify=vr['checks'], sync=sync, sync_ok=sync_ok, spelling_unknown=bad, contact_sheet=cs,
                       shots=len(shots), avg_shot=round(end_t / max(1, len(shots) - 1), 2),
                       scenes=sum(1 for s in shots if s['src'][0] in ('clip', 'still')), clips_used=sum(1 for s in shots if s['src'][0] == 'clip'),

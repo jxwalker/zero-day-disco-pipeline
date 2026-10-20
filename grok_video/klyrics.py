@@ -23,12 +23,12 @@ def build(path, L, W, H, dur, story, sync_ok, design, th, line_ok):
     hot, dim, ink = th['a1'], th['ink'], th['ink']
     outline = th['bg'] if not light else th['panel']
     if pos == 'bottom-band':
-        ybase = int(H * (0.885 if v else 0.90)); maxw = W * 0.88; align = 'c'
+        ybase = int(H * (0.80 if v else 0.86)); maxw = W * 0.85; align = 'c'
     elif pos == 'lower-left':
         ybase = int(H * (0.76 if v else 0.82)); maxw = W * (0.84 if v else 0.6); align = 'l'
     else:
-        ybase = int(H * (0.755 if v else 0.82)); maxw = W * 0.88; align = 'c'
-    x_left = int(W * 0.07)
+        ybase = int(H * (0.755 if v else 0.82)); maxw = W * 0.85; align = 'c'
+    x_left = int(W * 0.075); cm = int(W * 0.075)   # safe area: >= 6% sides incl. borders/boxes
     bord = 6 if st not in ('neon',) else 3
     hdr = f"""[Script Info]
 ScriptType: v4.00+
@@ -44,8 +44,8 @@ Style: Hot,{fam},{AZ(fam, fs)},{_c(hot if st not in ('block', 'neon', 'marker') 
 Style: Box,{fam},{AZ(fam, fs)},{_c(th['panel'] if not light else th['bg'])},{_c(hot)},{_c(hot)},{_c(hot)},0,0,0,0,100,100,0,0,3,10,0,5,0,0,0,1
 Style: Shape,{fam},20,{_c(hot)},{_c(hot)},{_c(hot)},{_c(hot)},0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1
 Style: Next,{fam},{AZ(fam, fs * 0.6)},{_c(ink, 0x60)},{_c(ink, 0x60)},{_c(outline, 0x60)},{_c((0, 0, 0), 0xB0)},0,0,0,0,100,100,0,0,1,4,0,5,0,0,0,1
-Style: Kick,{th['mono_name']},{AZ(th['mono_name'], 30 if v else 24)},{_c(th['panel'] if not light else th['bg'])},{_c(th['a2'])},{_c(th['a2'])},{_c(th['a2'])},0,0,0,0,100,100,1,0,3,8,0,7,40,40,40,1
-Style: Chip,{th['body_name']},{AZ(th['body_name'], 40 if v else 32)},{_c(ink)},{_c(ink)},{_c(th['bg'] if not light else th['panel'])},{_c(th['bg'] if not light else th['panel'], 0x30)},0,0,0,0,100,100,0,0,3,10,0,7,40,40,40,1
+Style: Kick,{th['mono_name']},{AZ(th['mono_name'], 30 if v else 24)},{_c(th['panel'] if not light else th['bg'])},{_c(th['a2'])},{_c(th['a2'])},{_c(th['a2'])},0,0,0,0,100,100,1,0,3,8,0,7,{cm},{cm},40,1
+Style: Chip,{th['body_name']},{AZ(th['body_name'], 40 if v else 32)},{_c(ink)},{_c(ink)},{_c(th['bg'] if not light else th['panel'])},{_c(th['bg'] if not light else th['panel'], 0x30)},0,0,0,0,100,100,0,0,3,10,0,7,{cm},{cm},40,1
 Style: Band,{fam},20,{_c(th['panel'] if light else th['bg'], 0x30)},{_c(hot)},{_c(hot)},{_c(hot)},0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1
 
 [Events]
@@ -53,7 +53,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """
     ev = []
     if pos == 'bottom-band':
-        y0, y1 = int(H * (0.80 if v else 0.80)), int(H * (0.96 if v else 0.985))
+        y0, y1 = int(H * (0.62 if v else 0.74)), int(H * (0.85 if v else 0.95))
         ev.append(f"Dialogue: 0,{_ts(0)},{_ts(dur)},Band,,0,0,0,,{{\\pos(0,{y0})\\p1}}m 0 0 l {W} 0 {W} {y1 - y0} 0 {y1 - y0}{{\\p0}}")
     T = [ln for ln in L if ln.get('words') or ln.get('start') is not None]
     pend = 0.0; nll = 0
@@ -78,25 +78,30 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 sc = max(l1, l2)
                 if best is None or sc < best[0]: best = (sc, k)
             rows = [list(range(best[1])), list(range(best[1], len(toks)))]
-        lh = fs * 1.08; xy = {}
+        # auto-shrink: any row still wider than the safe width (measured) scales the whole line down
+        rmax = max(sum(wid[j] for j in idx) + sp * (len(idx) - 1) for idx in rows)
+        k = min(1.0, maxw / rmax) if rmax else 1.0
+        wid = [w_ * k for w_ in wid]; spk = sp * k
+        SC = f"\\fscx{100 * k:.0f}\\fscy{100 * k:.0f}" if k < 0.999 else ''
+        lh = fs * 1.08 * k; xy = {}
         for r, idx in enumerate(rows):
-            rw = sum(wid[j] for j in idx) + sp * (len(idx) - 1)
+            rw = sum(wid[j] for j in idx) + spk * (len(idx) - 1)
             x = (W - rw) / 2 if align == 'c' else x_left
             yy = ybase - (len(rows) - 1 - r) * lh
-            for j in idx: xy[j] = (x + wid[j] / 2, yy); x += wid[j] + sp
+            for j in idx: xy[j] = (x + wid[j] / 2, yy); x += wid[j] + spk
         inpar = False
         for j, w in enumerate(words):
             x, y = xy[j]; ws, we = w[1], max(w[2], w[1] + 0.12)
             nws = words[j + 1][1] if j + 1 < len(words) else we
             tok = toks[j]
             if '(' in tok: inpar = True
-            ad = "\\i1\\fscx85\\fscy85" + f"\\1c{_c(th['a2'])}" if inpar else ''
+            ad = (f"\\i1\\fscx{85 * k:.0f}\\fscy{85 * k:.0f}" + f"\\1c{_c(th['a2'])}") if inpar else SC
             if ')' in tok: inpar = False
             P = f"\\an5\\pos({x:.0f},{y:.0f})"
             if st != 'reveal':
                 ev.append(f"Dialogue: 1,{_ts(a)},{_ts(ws)},Dim,,0,0,0,,{{{P}\\fad(80,0){ad}}}{tok}")
             if st == 'pop':
-                ev.append(f"Dialogue: 2,{_ts(ws)},{_ts(end)},Hot,,0,0,0,,{{{P}\\fscx135\\fscy135\\t(0,170,\\fscx100\\fscy100){ad}}}{tok}")
+                ev.append(f"Dialogue: 2,{_ts(ws)},{_ts(end)},Hot,,0,0,0,,{{{P}\\fscx{135 * k:.0f}\\fscy{135 * k:.0f}\\t(0,170,\\fscx{100 * k:.0f}\\fscy{100 * k:.0f}){ad if inpar else ''}}}{tok}")
             elif st == 'block':
                 ev.append(f"Dialogue: 2,{_ts(ws)},{_ts(we)},Box,,0,0,0,,{{{P}{ad}}}{tok}")
                 ev.append(f"Dialogue: 2,{_ts(we)},{_ts(end)},Hot,,0,0,0,,{{{P}\\1c{_c(hot)}{ad}}}{tok}")
@@ -127,10 +132,12 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             nxp = W / 2 if align == 'c' else x_left
             an = 5 if align == 'c' else 4
             if pos == 'bottom-band': ny = min(ny, ybase - fs * 1.05)
-            ev.append(f"Dialogue: 0,{_ts(a)},{_ts(end)},Next,,0,0,0,,{{\\an{an}\\pos({nxp:.0f},{ny:.0f})\\fad(80,0)}}{_esc(T[i + 1]['text'])}")
+            nt = _esc(T[i + 1]['text']); nw_ = ImageFont.truetype(ffile, int(fs * 0.6)).getlength(nt)
+            kn = min(1.0, maxw / nw_) if nw_ else 1.0
+            ev.append(f"Dialogue: 0,{_ts(a)},{_ts(end)},Next,,0,0,0,,{{\\an{an}\\pos({nxp:.0f},{ny:.0f})\\fscx{100 * kn:.0f}\\fscy{100 * kn:.0f}\\fad(80,0)}}{nt}")
     for c in story:
-        y = 40 if v else 24
-        ev.append(f"Dialogue: 4,{_ts(c['t0'])},{_ts(c['t1'])},Kick,,0,0,0,,{{\\an7\\pos(40,{y})\\fad(150,150)}}{_esc(c['kicker'].upper())}")
-        ev.append(f"Dialogue: 4,{_ts(c['t0'])},{_ts(c['t1'])},Chip,,0,0,0,,{{\\an7\\pos(40,{y + (62 if v else 50)})\\fad(150,150)\\q0}}{_esc(c['text'])}")
+        y = int(H * 0.068)   # kicker box border (8px) must stay inside the 5% top margin
+        ev.append(f"Dialogue: 4,{_ts(c['t0'])},{_ts(c['t1'])},Kick,,0,0,0,,{{\\an7\\pos({cm},{y})\\fad(150,150)}}{_esc(c['kicker'].upper())}")
+        ev.append(f"Dialogue: 4,{_ts(c['t0'])},{_ts(c['t1'])},Chip,,0,0,0,,{{\\an7\\pos({cm},{y + (62 if v else 50)})\\fad(150,150)\\q0}}{_esc(c['text'])}")
     open(path, 'w').write(hdr + '\n'.join(ev) + '\n')
     return nll

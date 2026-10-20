@@ -1,3 +1,4 @@
+import json
 """Themed karaoke graphics (v2, 20 Oct 2026). Every renderer: f(W, H, t, dur, p) -> RGB image, styled by the per-video
 theme (design.theme): palette, fonts, texture. Story-domain templates; exact text from the plan only.
 Graphics keep the lower ~36% of the frame calm for the lyrics."""
@@ -51,12 +52,22 @@ def wrap(d, s, font, maxw):
     return out
 
 
+def clip_w(d, s, f, maxw):
+    """Shorten a string (with an ellipsis) until its MEASURED width fits."""
+    s = str(s)
+    if d.textlength(s, font=f) <= maxw: return s
+    while s and d.textlength(s + '…', font=f) > maxw: s = s[:-1]
+    return s.rstrip() + '…'
+
+
 def fit(d, s, kind, size, maxw, maxlines, minsize=22):
     while size > minsize:
         f = F(kind, size); ls = wrap(d, s, f, maxw)
         if len(ls) <= maxlines and all(d.textlength(l, font=f) <= maxw for l in ls): return f, ls
         size = int(size * 0.9)
-    f = F(kind, minsize); return f, wrap(d, s, f, maxw)[:maxlines]
+    f = F(kind, minsize); ls = wrap(d, s, f, maxw)
+    if len(ls) > maxlines: ls = ls[:maxlines]; ls[-1] = ls[-1] + ' …'
+    return f, [clip_w(d, l, f, maxw) for l in ls]
 
 
 def card(d, box, fill=None, u=1.0, accent=None):
@@ -76,9 +87,9 @@ def headline(W, H, t, dur, p):
         fk = F('mono', 34 * u); tw = d.textlength(p['kicker'], font=fk)
         d.rectangle([x0, y, x0 + tw + 36 * u, y + 60 * u], fill=C(p.get('color'), 'a1'))
         d.text((x0 + 18 * u, y + 30 * u), p['kicker'], font=fk, fill=T['bg'] if not T['light'] else T['panel'], anchor='lm'); y += 100 * u
-    f, ls = fit(d, p.get('text', ''), 'display', int(104 * u), mw, 5 if H > W else 3)
+    f, ls = fit(d, p.get('text', ''), 'display', int(104 * u), mw - 120 * u, 5 if H > W else 3)
     for i, l in enumerate(ls):
-        dx = slide_in(t, i, 120 * u); d.text((x0 - dx, y + i * f.size * 1.12), l, font=f, fill=T['ink'])
+        dx = slide_in(t, i, 120 * u); d.text((x0 + dx, y + i * f.size * 1.12), l, font=f, fill=T['ink'])
     y += len(ls) * f.size * 1.12 + 30 * u
     if p.get('sub') and t > 0.4:
         fs, sl = fit(d, p['sub'], 'mono', int(40 * u), mw, 3)
@@ -379,7 +390,7 @@ def endcard(W, H, t, dur, p):
         fc, cl = fit(d, p['credit'], 'body', int(48 * u), W * 0.82, 3)
         for i, l in enumerate(cl): d.text((W / 2, yb + 70 * u + i * fc.size * 1.3), l, font=fc, fill=T['ink'], anchor='mm')
     fh = F('mono', 28 * u if H > W else 26 * u)
-    d.text((W / 2, H * (0.88 if H > W else 0.94)), 'X: @jxwalker  ·  scorpion-labs.com', font=fh, fill=T['muted'], anchor='mm')
+    d.text((W / 2, H * (0.82 if H > W else 0.90)), 'X: @jxwalker  ·  scorpion-labs.com', font=fh, fill=T['muted'], anchor='mm')
     return im
 
 
@@ -387,3 +398,61 @@ R = dict(headline=headline, bignum=bignum, bars=bars, post=post, feed=feed, inbo
          terminal=terminal, term=terminal, rows=rows, stamp=stamp, quote=quote, browser=browser, gauge=gauge,
          compare=compare, countdown=countdown, screen=screen_insert, endcard=endcard)
 TEMPLATES = sorted(k for k in R if k not in ('term', 'endcard'))
+
+
+# ---- safe area (20 Oct, the owner: text cut off at the margins). 6% left/right, 5% top, bottom 15% (vertical, X UI) or 5%.
+def safe_rect(W, H):
+    return (int(W * 0.06), int(H * 0.05), int(W * 0.94), int(H * (0.85 if H > W else 0.95)))
+
+
+def content_bbox(im, ref, thr=28):
+    import numpy as np
+    a = np.asarray(im.convert('RGB'), dtype=np.int16); b = np.asarray(ref.convert('RGB'), dtype=np.int16)
+    m = np.abs(a - b).max(axis=2) > thr
+    ys, xs = np.nonzero(m)
+    if not len(xs): return None
+    return int(xs.min()), int(ys.min()), int(xs.max()) + 1, int(ys.max()) + 1
+
+
+_FITK = {}
+
+
+def _fitk(name, W, H, dur, p):
+    """Scale factor + placement so the graphic's content box (max over its animation) lies inside the safe area."""
+    key = (name, W, H, round(dur, 2), json.dumps(p, sort_keys=True, default=str))
+    if key in _FITK: return _FITK[key]
+    q = {k: v for k, v in p.items() if k != 'bg'}; bb = None
+    for t in (0.1, 0.25, dur * 0.35, dur * 0.7, max(0, dur - 0.05)):
+        b = content_bbox(R[name](W, H, t, dur, q), base(W, H, t)[0])
+        if b: bb = b if bb is None else (min(bb[0], b[0]), min(bb[1], b[1]), max(bb[2], b[2]), max(bb[3], b[3]))
+    sx0, sy0, sx1, sy1 = safe_rect(W, H); r = None
+    if bb and (bb[0] < sx0 or bb[1] < sy0 or bb[2] > sx1 or bb[3] > sy1):
+        k = min(1.0, (sx1 - sx0) / (bb[2] - bb[0]), (sy1 - sy0) / (bb[3] - bb[1]))
+        nw, nh = (bb[2] - bb[0]) * k, (bb[3] - bb[1]) * k
+        cx = min(max((bb[0] + bb[2]) / 2, sx0 + nw / 2), sx1 - nw / 2); cy = min(max((bb[1] + bb[3]) / 2, sy0 + nh / 2), sy1 - nh / 2)
+        r = (bb, k, int(cx - nw / 2), int(cy - nh / 2))
+    _FITK[key] = r
+    return r
+
+
+def render(name, W, H, t, dur, p):
+    """Template render with safe-area enforcement: anything that would touch the margins is shrunk inside it."""
+    name = name if name in R else 'headline'
+    im = R[name](W, H, t, dur, p)
+    r = _fitk(name, W, H, dur, p)
+    if not r: return im
+    bb, k, x, y = r
+    if name == 'endcard':                       # photo background: redraw text layer on the plain theme bg, then place
+        lay = R[name](W, H, t, dur, {kk: vv for kk, vv in p.items() if kk != 'bg'})
+        ref = base(W, H, t)[0]
+        import numpy as np
+        m = (np.abs(np.asarray(lay, dtype=np.int16) - np.asarray(ref, dtype=np.int16)).max(axis=2) > 28).astype('uint8') * 255
+        out = im.copy(); bgc = p.get('bg')
+        if bgc is not None:
+            ov = Image.new('RGBA', (W, H), T['bg'] + (int(200 * ease(t / 0.6)),)); out = bgc.copy(); out.paste(ov, (0, 0), ov)
+        crop = lay.crop(bb); mk = Image.fromarray(m).crop(bb)
+        sz = (max(1, int(crop.width * k)), max(1, int(crop.height * k)))
+        out.paste(crop.resize(sz, Image.LANCZOS), (x, y), mk.resize(sz, Image.LANCZOS)); return out
+    out = base(W, H, t)[0]; crop = im.crop(bb)
+    out.paste(crop.resize((max(1, int(crop.width * k)), max(1, int(crop.height * k))), Image.LANCZOS), (x, y))
+    return out

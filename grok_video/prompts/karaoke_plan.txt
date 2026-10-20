@@ -32,9 +32,18 @@ literally about that.
    one concrete moment, who/where/what, lighting, lens; 35-70 words; vertical 9:16. `motion`: one short sentence of
    natural motion for a 6 s clip, or "" for a still only.
 
+LINE-LOCK (most important; the owner: "the scenes and song lyrics don't match"): the shot under each lyric line must
+LITERALLY show what that line's words say at that moment, so a viewer instantly gets it with the sound off. For every
+line write `shows` (the concrete image: who/what is on screen and which of the line's words it depicts) and `fact`
+(the STORIES fact the line refers to, <= 80 chars, verbatim figures). Then `v` must be exactly that image: a scene
+whose prompt depicts it, or a GFX whose text puts the line's key words/figures on screen. Mood shots, generic office
+people, parties or homes that the line doesn't mention are FORBIDDEN under sung lines. A scene used under two lines
+must literally fit both. If a line is abstract, illustrate its words with a GFX (stamp/headline/quote/code with the
+line's key words). Instrumental-only visuals (intro/breaks/outro) may be mood shots.
+
 RULES
 - At most {SCENES_MAX} scenes, `motion` on at most {CLIPS_MAX}. Use each scene id at most 2 times.
-- Visuals for EVERY lyric line (index i as listed): 1, or 2 when the line is long (> ~9 words or two facts). About
+- Visuals for EVERY lyric line (index i as listed, with `shows` and `fact`): 1, or 2 when the line is long (> ~9 words or two facts). About
   45-55% GFX overall; alternate GFX and SCENE often. Repeated choruses: vary the visuals but stay literal.
 - `intro` (instrumental before the first line, ~{INTRO_S}s): 2-3 visuals, first one a scroll-stopper. `breaks`: 4-6
   visuals for instrumental gaps (prefer scenes). `outro`: 1-2 visuals before the end card.
