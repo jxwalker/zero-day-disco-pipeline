@@ -6,6 +6,7 @@ CHECK EVERY SHOT FOR:
 - motion: timestamped steps that start at 0s and reach the shot's duration exactly, one clear plausible action, no
   morphing, no sudden objects, no cuts.
 - the lead (A) is described consistently (wardrobe, hair) and appears in at least 70% of shots; supporting cast max 2.
+- CASTING: every person is a young adult (21-28), attractive, smiling and happy. Rewrite any shot or cast sheet with a middle-aged/older person or a dour, glum, stern or tired expression.
 - NO robots/androids/mascots/toys/holograms; no readable text, logos, legible screens or documents with writing.
 - soft motivated light with a named source; no on-camera flash, no neon soup, no HDR/bloom; a real lens + stock.
 - an uncluttered composed frame with a clean type_zone; one subject; not a busy stock photo.

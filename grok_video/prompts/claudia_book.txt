@@ -27,6 +27,10 @@ RULES
    worn the whole film (exact garments, colours, materials), personal palette. 'description' is one dense 45-70 word
    paragraph that is pasted verbatim into every prompt. The lead is in at least 70% of the shots.
 2. SUPPORTING CAST: at most 2 (ids "B", "C"), only if a story truly needs them, each with a fixed 30-50 word description.
+   CASTING (the owner, 2026-10-20, overrides the seed cast): EVERY person on screen, lead and supporting, is a young
+   adult aged 21-28, attractive, fresh-faced, warm and HAPPY: bright genuine smiles, laughing, playful energy,
+   stylish casual wardrobe, sunny optimistic mood. Never middle-aged, never older, never dour, glum, tired or
+   stern-faced. Original people only (never a real person or lookalike).
    No crowds of named people; extras are anonymous, soft and in the background.
 3. ABSOLUTELY NO robots, androids, humanoid machines, mascots, toys, holograms or "AI characters". AI is shown through
    real people, real screens seen from behind or out of focus, real offices, real objects. No readable text, logos,
@@ -49,7 +53,7 @@ RULES
    size, angle), composition with the negative space side, palette, light source. Do not repeat the lens/stock (they go
    in 'camera', 'lens', 'light').
 8. Each scene acts out its lyric literally enough that a viewer connects picture and line; the story facts come through
-   the action and props, never through readable text in the picture. Keep the satire deadpan: absurd situations played
+   the action and props, never through readable text in the picture. Keep the satire playful (performances bright and happy, never dour): absurd situations played
    completely straight.
 9. type_zone: where the sung words go for that scene: "top", "upper", "lower", "left" or "right" - the emptiest part of
    the frame (sky, wall, floor, out-of-focus background). Make the composition leave that zone clean.
