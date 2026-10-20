@@ -81,3 +81,8 @@ LYRIC LINES (index: text):
 {LINES}
 
 Return ONLY the JSON object matching the schema.
+
+LIVE-ACTION STILLS/CLIPS (the owner, 2026-10-20: text and graphics are excellent; the Grok video and stills were not technical enough and did not tie to the story well):
+- Every Grok scene must depict the concrete technical reality of the story it illustrates: the actual kind of person (security researcher, open-source maintainer, mainframe engineer, SRE), in their real working environment (code on screens facing the camera, terminals, server racks, mainframe consoles, bug trackers, mail servers), doing the specific action in the line (triaging a scan report, merging a patch, reading a flagged email).
+- Name the real-world objects in the prompt (e.g. "GitHub pull request page", "IBM Z mainframe console", "1U servers with blinking NIC LEDs", "mechanical keyboard, two monitors of code"). No generic lifestyle, office-party, home or mood scenes.
+- Prefer technically accurate hardware and setups; a hardcore engineer watching should nod, not wince.
