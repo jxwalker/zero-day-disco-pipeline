@@ -460,8 +460,14 @@ def plan(day, work, plines, dur, deadline=None, reuse=False):
     if not book or [list(x) for x in book.get('_key') or []] != [list(x) for x in key]:   # json lists vs tuples
         pf = os.path.join(od, 'book_prompt.txt'); open(pf, 'w').write(_book_prompt(day, slots, h))
         t0 = time.time()
-        book, meta = SO.run_claude(pf, od, BOOK_SCHEMA, 900, tools='', effort='high')
-        G.log(f"claudia: prompt book written by one Opus context in {meta['secs']}s (${meta.get('cost_usd')})")
+        for attempt in (1, 2):                           # 20 Oct: Opus once returned only the hook scene; retry once
+            book, meta = SO.run_claude(pf, od, BOOK_SCHEMA, 900, tools='', effort='high')
+            G.log(f"claudia: prompt book written by one Opus context in {meta['secs']}s (${meta.get('cost_usd')}) attempt {attempt}")
+            got = {s.get('seg') for s in (book or {}).get('scenes') or []}
+            miss = [s['seg'] for s in slots if s['seg'] not in got]
+            if not miss or attempt == 2:
+                break
+            G.log(f"claudia: book missing {len(miss)}/{len(slots)} scenes ({miss[:6]}); asking Opus again")
         probs = _fit(book, slots)
         probs += cine_lint(book)
         if probs:
