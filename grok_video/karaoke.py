@@ -204,11 +204,11 @@ def plan_template(day):
             pool.append({'kind': 'gfx', 'g': 'post', 'p': {'handle': h, 'name': h, 'text': body[:140]}})
         for n in re.findall(r'\b\d[\d,]*\b', s['detail'].split('http')[0])[:2]:
             if n not in ('2026',):
-                pool.append({'kind': 'gfx', 'g': 'bignum', 'p': {'top': f"STORY {s['idx']}", 'value': n, 'sub': s['text'][:60]}})
+                pool.append({'kind': 'gfx', 'g': 'bignum', 'p': {'top': f"STORY {s['idx']}", 'value': n, 'sub': wcut(s['text'], 60)}})
     P = {'planner': 'template', 'scenes': [], 'lines': [{'i': i, 'v': [pool[i % len(pool)]]} for i in range(len(lines))],
          'intro': pool[:2], 'breaks': pool[2:6] or pool, 'outro': pool[:1],
-         'story_text': [{'from_line': 0, 'to_line': len(lines) - 1, 'kicker': 'MAIN STORY', 'text': stories[0]['text'][:70]}] if stories else [],
-         'credit': stories[0]['text'][:70] if stories else ''}
+         'story_text': [{'from_line': 0, 'to_line': len(lines) - 1, 'kicker': 'MAIN STORY', 'text': wcut(stories[0]['text'], 70)}] if stories else [],
+         'credit': wcut(stories[0]['text'], 70) if stories else ''}
     return P
 
 
@@ -418,15 +418,22 @@ def map_lines(P, L, day):
     return out
 
 
+def wcut(s, n):
+    """21 Oct: shorten on a word boundary (never leave a cut-off word like 'Vir' on screen)."""
+    s = str(s or '').strip()
+    if len(s) <= n: return s
+    return (s[:n].rsplit(' ', 1)[0] if ' ' in s[:n] else s[:n]).rstrip(' ,;:-')
+
+
 def line_card(text, fact, used, handle=''):
     """A code-rendered graphic that illustrates THIS line (its words + the story fact behind it); used when the planned
     visual is missing/rejected/over the template cap. Picks the first template variant still under the cap."""
     key = max(re.findall(r"[A-Za-z0-9'-]+", text) or ['FIX'], key=len).upper()[:14]
-    opts = [('headline', {'kicker': key, 'text': text, 'sub': (fact or '')[:80]}),
-            ('quote', {'text': text, 'by': ('@' + handle) if handle else (fact or '')[:40]}),
-            ('stamp', {'above': text[:70], 'text': key}),
-            ('browser', {'url': 'news', 'site': 'TODAY', 'headline': text, 'lede': (fact or text)[:120], 'highlight': (fact or text)[:30]}),
-            ('screen', {'device': 'laptop', 'app': 'news', 'text': (fact or text)[:90]})]
+    opts = [('headline', {'kicker': key, 'text': text, 'sub': wcut(fact, 80)}),
+            ('quote', {'text': text, 'by': ('@' + handle) if handle else wcut(fact, 60)}),
+            ('stamp', {'above': wcut(text, 70), 'text': key}),
+            ('browser', {'url': 'news', 'site': 'TODAY', 'headline': text, 'lede': wcut(fact or text, 120), 'highlight': wcut(fact or text, 30)}),
+            ('screen', {'device': 'phone', 'app': 'news', 'text': wcut(fact or text, 90)})]
     for g, pp in opts:
         if used.get(g, 0) < MAX_PER_TEMPLATE:
             return {'kind': 'gfx', 'g': g, 'p': pp}
@@ -766,8 +773,13 @@ def spelling(texts, day):
 def fit_check(fitlog, texts, day):
     """21 Oct: kgfx2 logs text that could not be shrunk to fit, and every string on each shot's final frame. A final-frame
     word that is not in the source text but is a strict prefix of a source word is a truncated fragment = failure."""
-    srcw = set(norm(' '.join(texts) + ' ' + G.read(os.path.join(day, 'stories.md')) + ' ' + G.read(os.path.join(day, 'lyrics.txt'))).split())
+    srcw = set(norm(G.read(os.path.join(day, 'title.txt')) + ' ' + G.read(os.path.join(day, 'stories.md')) + ' ' + G.read(os.path.join(day, 'lyrics.txt'))).split())
     fails, trunc = [], set()
+    try:
+        from spellchecker import SpellChecker; _sp = SpellChecker()
+        real = lambda w: not _sp.unknown([w])
+    except ImportError:
+        real = lambda w: False
     recs = []
     if os.path.exists(fitlog):
         for ln in open(fitlog):
@@ -777,7 +789,7 @@ def fit_check(fitlog, texts, day):
         if r.get('fail'): fails.append(f"{r.get('shot')}: {r.get('text')!r}"[:120])
         elif 'final' in r:
             for w in norm(r['final']).split():
-                if len(w) >= 2 and w not in srcw and any(sw.startswith(w) and sw != w for sw in srcw):
+                if len(w) >= 2 and not w.isdigit() and w not in srcw and not real(w) and any(sw.startswith(w) and sw != w for sw in srcw):
                     trunc.add(w)
     return sorted(set(fails)), sorted(trunc)
 
@@ -929,6 +941,7 @@ def main():
         fitlog = os.path.join(work, 'fit_log.jsonl'); open(fitlog, 'w').close(); os.environ['KGFX_FITLOG'] = fitlog  # 21 Oct
         with Pool(min(8, os.cpu_count() or 4)) as pool:
             segs = pool.map(render_seg, jobs, chunksize=1)
+        os.environ.pop('KGFX_FITLOG', None)   # 21 Oct: margin_check's synthetic truncation cases must not count
         results = {}
         texts = all_texts(shots, story, endp) + [ln['text'] for ln in L]
         for W, H in sizes:
