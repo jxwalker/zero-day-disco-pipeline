@@ -15,6 +15,7 @@ PALETTES = {   # bg, panel, ink, muted, a1, a2, a3, good, bad
     'noir-yellow': dict(bg=(20, 20, 22), panel=(38, 38, 42), ink=(245, 245, 240), muted=(140, 140, 140), a1=(255, 214, 0), a2=(255, 255, 255), a3=(255, 140, 0), good=(255, 214, 0), bad=(255, 70, 60)),
     'cobalt-cream':dict(bg=(24, 44, 140), panel=(36, 60, 170), ink=(250, 244, 226), muted=(170, 180, 230), a1=(255, 196, 70), a2=(255, 110, 90), a3=(150, 220, 255), good=(150, 240, 160), bad=(255, 110, 90)),
     'y2k-chrome':  dict(bg=(210, 220, 235), panel=(240, 244, 252), ink=(20, 30, 70), muted=(110, 120, 150), a1=(0, 120, 255), a2=(255, 60, 200), a3=(0, 200, 160), good=(0, 170, 110), bad=(255, 50, 90)),
+    'neon-chrome': dict(bg=(8, 8, 14), panel=(28, 30, 40), ink=(240, 244, 250), muted=(160, 170, 190), a1=(255, 40, 170), a2=(0, 230, 255), a3=(200, 210, 225), good=(0, 230, 255), bad=(255, 40, 170)),   # 21 Oct: hot pink, electric cyan, chrome on black
     'forest-mustard': dict(bg=(26, 48, 36), panel=(38, 66, 50), ink=(244, 236, 214), muted=(160, 180, 150), a1=(232, 180, 60), a2=(230, 110, 70), a3=(170, 220, 160), good=(200, 230, 120), bad=(240, 100, 80)),
 }
 TYPE = {   # display, body (bold), mono  -> (ASS family name, file)
@@ -52,7 +53,7 @@ def history(n=7):
         return []
 
 
-def resolve(day, want):
+def resolve(day, want, force_palette=''):
     """Validate Opus's choice; enforce difference from the previous day on the main axes; fill gaps by hash."""
     prev = [h for h in history() if h.get('day') != os.path.basename(day)]
     last = prev[-1] if prev else {}
@@ -74,6 +75,7 @@ def resolve(day, want):
         d['lyric_pos'] = 'lower-left'                 # never the exact No Window lyric treatment
     if d['type'] == 'pixel' and d['lyric_style'] == 'marker':
         d['lyric_style'] = 'pop'
+    if force_palette in PALETTES: d['palette'] = force_palette     # 21 Oct: day direction.txt can force the palette
     d['why'] = (want or {}).get('why', '')
     return d
 

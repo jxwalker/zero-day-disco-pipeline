@@ -30,6 +30,8 @@ def build(path, L, W, H, dur, story, sync_ok, design, th, line_ok):
         ybase = int(H * (0.755 if v else 0.82)); maxw = W * 0.85; align = 'c'
     x_left = int(W * 0.075); cm = int(W * 0.075)   # safe area: >= 6% sides incl. borders/boxes
     bord = 6 if st not in ('neon',) else 3
+    if st == 'pop':   # 21 Oct: the 'pop' overshoot scales words past the side margins; leave room for it
+        maxw *= 0.88; x_left += int(W * 0.03)
     hdr = f"""[Script Info]
 ScriptType: v4.00+
 PlayResX: {W}
@@ -101,7 +103,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             if st != 'reveal':
                 ev.append(f"Dialogue: 1,{_ts(a)},{_ts(ws)},Dim,,0,0,0,,{{{P}\\fad(80,0){ad}}}{tok}")
             if st == 'pop':
-                ev.append(f"Dialogue: 2,{_ts(ws)},{_ts(end)},Hot,,0,0,0,,{{{P}\\fscx{135 * k:.0f}\\fscy{135 * k:.0f}\\t(0,170,\\fscx{100 * k:.0f}\\fscy{100 * k:.0f}){ad if inpar else ''}}}{tok}")
+                ev.append(f"Dialogue: 2,{_ts(ws)},{_ts(end)},Hot,,0,0,0,,{{{P}\\fscx{118 * k:.0f}\\fscy{118 * k:.0f}\\t(0,170,\\fscx{100 * k:.0f}\\fscy{100 * k:.0f}){ad if inpar else ''}}}{tok}")
             elif st == 'block':
                 ev.append(f"Dialogue: 2,{_ts(ws)},{_ts(we)},Box,,0,0,0,,{{{P}{ad}}}{tok}")
                 ev.append(f"Dialogue: 2,{_ts(we)},{_ts(end)},Hot,,0,0,0,,{{{P}\\1c{_c(hot)}{ad}}}{tok}")

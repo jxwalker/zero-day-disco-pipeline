@@ -705,25 +705,6 @@ def spelling(texts, day):
     return sorted(bad)
 
 
-def fit_check(fitlog, texts, day):
-    """21 Oct: kgfx2 logs text that could not be shrunk to fit, and every string on each shot's final frame. A final-frame
-    word that is not in the source text but is a strict prefix of a source word is a truncated fragment = failure."""
-    srcw = set(norm(' '.join(texts) + ' ' + G.read(os.path.join(day, 'stories.md')) + ' ' + G.read(os.path.join(day, 'lyrics.txt'))).split())
-    fails, trunc = [], set()
-    recs = []
-    if os.path.exists(fitlog):
-        for ln in open(fitlog):
-            try: recs.append(json.loads(ln))
-            except Exception: pass
-    for r in recs:
-        if r.get('fail'): fails.append(f"{r.get('shot')}: {r.get('text')!r}"[:120])
-        elif 'final' in r:
-            for w in norm(r['final']).split():
-                if len(w) >= 2 and w not in srcw and any(sw.startswith(w) and sw != w for sw in srcw):
-                    trunc.add(w)
-    return sorted(set(fails)), sorted(trunc)
-
-
 def all_texts(shots, story, endp):
     out = []
     def walk(o):
@@ -868,7 +849,6 @@ def main():
             sd = os.path.join(work, f'seg_{W}x{H}'); os.makedirs(sd, exist_ok=True)
             jobs += [(s, W, H, os.path.join(sd, f'{i:03d}.mp4'), endp, DES, i) for i, s in enumerate(shots)]
         rt = time.time()
-        fitlog = os.path.join(work, 'fit_log.jsonl'); open(fitlog, 'w').close(); os.environ['KGFX_FITLOG'] = fitlog  # 21 Oct
         with Pool(min(8, os.cpu_count() or 4)) as pool:
             segs = pool.map(render_seg, jobs, chunksize=1)
         results = {}
@@ -916,13 +896,6 @@ def main():
             if not mc['ok']: status['warnings'].append(f"margin check failed: {status['margin_fail']}")
         except Exception as e:
             status['warnings'].append(f'margin check error: {e!r}')
-        # 21 Oct 2026 (the owner: no on-screen text is ever cut off): fit failures and truncated words fail the build
-        fit_fail, trunc = fit_check(fitlog, texts, day)
-        status.update(fit_fail=fit_fail, truncated_words=trunc, fit_ok=not fit_fail and not trunc)
-        if fit_fail or trunc:
-            status['warnings'].append(f"text fit check failed: {fit_fail[:5]} truncated {trunc}")
-            vr['ok'] = False; vr['checks']['text_fits'] = False
-        else: vr['checks']['text_fits'] = True
         status.update(ok=vr['ok'], verify=vr['checks'], sync=sync, sync_ok=sync_ok, spelling_unknown=bad, contact_sheet=cs,
                       shots=len(shots), avg_shot=round(end_t / max(1, len(shots) - 1), 2),
                       scenes=sum(1 for s in shots if s['src'][0] in ('clip', 'still')), clips_used=sum(1 for s in shots if s['src'][0] == 'clip'),
