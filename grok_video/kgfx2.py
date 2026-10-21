@@ -52,7 +52,7 @@ def C(n, d='ink'):
     n = str(n or '').lower()
     m = {'red': 'bad', 'green': 'good', 'amber': 'a3', 'yellow': 'a3', 'blue': 'a2', 'cyan': 'a3', 'pink': 'a1', 'white': 'ink'}
     return T.get(m.get(n, n), T.get(d)) if n else T[d]
-def top0(W, H): return H * (0.13 if H > W else 0.15)   # below the story chip
+def top0(W, H): return H * (0.17 if H > W else 0.20)   # below the story chip (21 Oct: 2-line chips overlapped titles)
 def zone(W, H): return H * (0.60 if H > W else 0.64)
 def ease(x): x = max(0, min(1, x)); return 1 - (1 - x) ** 3
 
@@ -141,7 +141,8 @@ def bignum(W, H, t, dur, p):
     if m and t < 0.5:
         n = int(m.group(2).replace(',', '')); cur = int(round(n * ease(t / 0.5)))
         shown = m.group(1) + (f"{cur:,}" if ',' in m.group(2) else str(cur)) + m.group(3)
-    r = min(W, H) * 0.34 * (0.9 + 0.1 * ease(t / 0.3))
+    r = min(W, H) * (0.34 if H > W else 0.26) * (0.9 + 0.1 * ease(t / 0.3))
+    cy = max(cy, top0(W, H) + min(W, H) * (0.34 if H > W else 0.26) + 90 * u)   # 21 Oct: 'top' label below the story chip
     d.ellipse([W / 2 - r, cy - r, W / 2 + r, cy + r], fill=C(p.get('color'), 'a1'))
     f, _ = fit(d, v, 'display', int(240 * u), r * 1.7, 1, 50)
     d.text((W / 2, cy), shown, font=f, fill=T['panel'] if not T['light'] else T['ink'] if sum(C(p.get('color'), 'a1')) > 500 else (255, 255, 255), anchor='mm')
@@ -299,8 +300,16 @@ def rows(W, H, t, dur, p):
         if t < 0.1 * r: break
         row = list(R_[r]) + ['', '', '', '']; y = y0 + r * lh
         if r % 2 == 0: d.rectangle([W * 0.05, y - 8 * u, W * 0.95, y + lh - 14 * u], fill=T['panel'])
-        d.text((W * 0.07, y), str(row[0]), font=f, fill=T['ink']); d.text((W * 0.47, y), str(row[1]), font=f, fill=T['muted'])
-        d.text((W * 0.93, y), str(row[2]), font=f, fill=C(row[3], 'a1'), anchor='ra')
+        # 21 Oct: cells never overlap: each column shrinks to its own width
+        def cf(txt, maxw):
+            sz = f.size; ff = f
+            while sz > 14 and d.textlength(str(txt), font=ff) > maxw: sz = int(sz * 0.92); ff = ff.font_variant(size=sz)
+            if d.textlength(str(txt), font=ff) > maxw: _log({'fail': 'row cell does not fit', 'text': str(txt), 'shot': CUR['name']})
+            return ff
+        w2 = d.textlength(str(row[2]), font=f); f2 = cf(row[2], W * 0.30); w2 = d.textlength(str(row[2]), font=f2)
+        d.text((W * 0.07, y), str(row[0]), font=cf(row[0], W * 0.37), fill=T['ink'])
+        d.text((W * 0.47, y), str(row[1]), font=cf(row[1], W * 0.93 - w2 - W * 0.49), fill=T['muted'])
+        d.text((W * 0.93, y), str(row[2]), font=f2, fill=C(row[3], 'a1'), anchor='ra')
     return im
 
 
@@ -359,13 +368,14 @@ def browser(W, H, t, dur, p):
 
 def gauge(W, H, t, dur, p):
     """Dial: label, value text, frac 0..1 (position of the needle), sub."""
-    im, d = base(W, H, t); u = U(W, H); cx, cy = W / 2, H * (0.36 if H > W else 0.44); r = min(W, H) * 0.36
+    im, d = base(W, H, t); u = U(W, H); r = min(W, H) * 0.36; cx, cy = W / 2, max(H * (0.36 if H > W else 0.44), top0(W, H) + r + 110 * U(W, H))  # 21 Oct: label below the story chip
     d.arc([cx - r, cy - r, cx + r, cy + r], 180, 360, fill=T['muted'], width=int(40 * u))
     fr = max(0, min(1, float(p.get('frac', 0.9) or 0.9))) * ease(t / 0.8)
     d.arc([cx - r, cy - r, cx + r, cy + r], 180, 180 + 180 * fr, fill=C(p.get('color'), 'a1'), width=int(40 * u))
     a = math.pi * (1 + fr); d.line([(cx, cy), (cx + r * 0.8 * math.cos(a), cy + r * 0.8 * math.sin(a))], fill=T['ink'], width=int(12 * u))
     d.ellipse([cx - 20 * u, cy - 20 * u, cx + 20 * u, cy + 20 * u], fill=T['ink'])
-    d.text((cx, cy - r - 60 * u), p.get('label', ''), font=F('body', 52 * u), fill=T['ink'], anchor='mm')
+    fl, _ = fit(d, p.get('label', ''), 'body', int(52 * u), W * 0.86, 1)
+    d.text((cx, cy - r - 60 * u), p.get('label', ''), font=fl, fill=T['ink'], anchor='mm')
     fv, _ = fit(d, p.get('value', ''), 'display', int(90 * u), W * 0.86, 1)
     d.text((cx, cy + 80 * u), p.get('value', ''), font=fv, fill=C(p.get('color'), 'a1'), anchor='mm')
     if p.get('sub'): d.text((cx, cy + 170 * u), p['sub'], font=F('mono', 34 * u), fill=T['muted'], anchor='mm')
