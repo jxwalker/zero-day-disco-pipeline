@@ -1,7 +1,7 @@
 """karaoke mode: the daily video in the ONUG "No Window" format (default since 20 Oct 2026). See README.md "karaoke".
 usage: karaoke.py DAY_DIR [--out FILE] [--work DIR] [--skip-gen] [--replan] [--no-fallback] [--stills N] [--clips N]
                   [--time-limit MIN] [--max-pct P] [--no-16x9]  (+ any grok_video.py args, passed to the fallback)
-Writes <day>/video_karaoke.mp4 (1080x1920, posted), video_karaoke_chat.mp4 (<45 MB), video_karaoke_16x9.mp4.
+Writes <day>/video_karaoke.mp4 (1080x1920, posted), video_karaoke_chat.mp4 (<25 MB), video_karaoke_16x9.mp4.
 On any failure (not exit 6 instrumental / 7 auth) it runs grok_video.py (the Claudia/slopcore chain) with the same args.
 Last stdout line: GROK_VIDEO_STATUS=... out=<mp4> chat=<mp4> (same contract as grok_video.py)."""
 import argparse, json, math, os, re, shutil, subprocess, sys, threading, time, traceback
@@ -29,9 +29,28 @@ SCHEMA = {"type": "object", "required": ["scenes", "lines", "intro", "breaks", "
               "credit": {"type": "string"},
               "design": {"type": "object", "required": ["palette", "type", "lyric_style", "lyric_pos", "transition", "grade", "texture", "why"],
                          "properties": {k: {"type": "string"} for k in ("palette", "type", "lyric_style", "lyric_pos", "transition", "grade", "texture", "why")}}}}
-SCREEN_RULE = (" Any laptop, monitor or phone: its SCREEN faces the camera (we see the display, shot over the user's shoulder "
-               "from behind them, or a straight-on screen view); never show the back of a laptop lid, never put an image or "
-               "glow on the back of a lid, no screens facing away from camera.")
+SCREEN_RULE = (" NO LAPTOPS anywhere in the frame (21 Oct, the owner: lid-screen laptops). Screens only as wall-mounted displays, "
+               "rack-mounted monitors or holographic HUDs floating in the air, seen straight-on; no handheld tablet or phone "
+               "screen turned toward the camera; never an image or glow on the back of any device.")
+NO_LAPTOP = [(re.compile(r'\b((a|an|the|his|her|their|open|gaming|silver) )*laptops?\b', re.I), 'a wall-mounted display'),
+             (re.compile(r'\b((a|an|the|his|her|their) )*(tablet|ipad|clipboard tablet)s?\b', re.I), 'a floating holographic HUD panel'),
+             (re.compile(r'\b((a|an|the|his|her|their) )*(smart)?phones?\b', re.I), 'a small holographic readout')]
+
+
+def no_laptops(prompt):
+    """21 Oct: swap laptops/tablets/phones for wall displays and holographic HUDs (Grok keeps putting screens on lids)."""
+    for rx, rep in NO_LAPTOP: prompt = rx.sub(rep, prompt)
+    return prompt
+
+
+def direction(day):
+    """21 Oct: optional <day>/direction.txt (or GV_DIRECTION=path). Free text for the planner, plus optional
+    'LEAD: ...' (one consistent lead character, made from a reference still) and 'PALETTE: <name>' lines."""
+    pth = os.environ.get('GV_DIRECTION') or os.path.join(day, 'direction.txt')
+    txt = G.read(pth).strip() if os.path.exists(pth) else ''
+    lead = re.search(r'^LEAD:\s*(.+?)(?=^\w+:|\Z)', txt, re.M | re.S)
+    pal = re.search(r'^PALETTE:\s*([\w-]+)', txt, re.M)
+    return {'text': txt, 'lead': ' '.join(lead.group(1).split()) if lead else '', 'palette': pal.group(1) if pal else ''}
 LOOK = (" Photorealistic cinematic film still, natural skin texture, motivated practical lighting, vertical 9:16 composition. "
         "Cast are young adults aged 21-28, attractive, natural balanced expressions. No robots, no text, no logos, no "
         "readable writing, no famous people." + SCREEN_RULE)
@@ -151,6 +170,12 @@ def plan_opus(day, work, nscenes, nclips):
                      STYLE=G.read(os.path.join(day, 'style.txt')).strip()[:300], STORIES=st[:9000],
                      LINES='\n'.join(f"{i}: {l}" for i, l in enumerate(lines))).items():
         txt = txt.replace('{' + k + '}', str(v))
+    DIR = direction(day)
+    if DIR['text']:
+        txt += ("\n\nTODAY'S DIRECTION OVERRIDE (from the owner; follows and overrides the defaults above):\n" + DIR['text'] +
+                ("\n- Start the prompt of EVERY scene that shows the lead with the token [LEAD] and describe only the setting, her "
+                 "action, pose, expression and lighting (her look comes from a reference image). Most scenes show her." if DIR['lead'] else '')
+                + (f"\n- Use palette '{DIR['palette']}'." if DIR['palette'] else ''))
     od = os.path.join(work, 'opus'); os.makedirs(od, exist_ok=True)
     pf = os.path.join(od, 'plan_prompt.txt'); open(pf, 'w').write(txt)
     last = None
@@ -248,9 +273,10 @@ def dup_halves(png):
 
 
 SCREEN_SCHEMA = {"type": "object", "required": ["results"], "properties": {"results": {"type": "array", "items": {
-    "type": "object", "required": ["id", "device_present", "user_faces_camera_behind_device", "display_visible_to_camera",
-                                   "other_problem", "issue"],
-    "properties": {"id": {"type": "string"}, "device_present": {"type": "boolean"},
+    "type": "object", "required": ["id", "device_present", "laptop_present", "screen_on_outer_lid", "screen_not_facing_camera",
+                                   "user_faces_camera_behind_device", "display_visible_to_camera", "other_problem", "issue"],
+    "properties": {"id": {"type": "string"}, "device_present": {"type": "boolean"}, "laptop_present": {"type": "boolean"},
+                   "screen_on_outer_lid": {"type": "boolean"}, "screen_not_facing_camera": {"type": "boolean"},
                    "user_faces_camera_behind_device": {"type": "boolean"}, "display_visible_to_camera": {"type": "boolean"},
                    "other_problem": {"type": "boolean"}, "issue": {"type": "string"}}}}}}
 DEVICE_RE = re.compile(r'laptop|phone|screen|monitor|tablet|computer|keyboard|display|terminal|inbox|email', re.I)
@@ -270,6 +296,10 @@ def screen_check(gdir, jobs, status, tag):
         "You are a strict continuity checker for photoreal stills in a music video. Read each image file listed below "
         "(use the Read tool on each, in this directory) and answer the fields for each image literally:\n"
         "- device_present: any laptop/phone/monitor/tablet that someone is using.\n"
+        "- laptop_present: ANY laptop or laptop-like folding device anywhere in the frame, even in the background (true = reject).\n"
+        "- screen_on_outer_lid: any image, UI or glow on the OUTSIDE/back of a lid, tablet back or monitor back.\n"
+        "- screen_not_facing_camera: any handheld tablet/phone/laptop whose lit screen we can see while the person holding "
+        "or using it faces the camera (physically the screen would face them, not us), or any screen facing away.\n"
         "- user_faces_camera_behind_device: the person using that device faces the camera with the device between them "
         "and the camera (we see their face over/behind the device).\n"
         "- display_visible_to_camera: we can see that device's lit screen content (UI, code, image).\n"
@@ -281,17 +311,18 @@ def screen_check(gdir, jobs, status, tag):
         "is physically impossible; the frame is two stacked copies of the same picture; a robot or android; garbled "
         "readable text that is prominent; badly malformed hands or faces. A laptop seen from behind is ONLY acceptable if "
         "its lid back is plain (no picture) and we are clearly looking at the person's face, not the screen; when unsure, "
-        "reject.\nGive a short issue for each problem image, '' otherwise. id = the file name without .png.\n\nFILES:\n"
+        "reject. 21 Oct: ANY laptop at all is a reject. Wall displays, rack monitors and holographic HUDs are fine.\nGive a short issue for each problem image, '' otherwise. id = the file name without .png (for _f.png frames use the name without _f.png).\n\nFILES:\n"
         + '\n'.join(names))
     try:
         res, meta = SO.run_claude(pf, gdir, SCREEN_SCHEMA, 420, tools='Read', effort='medium')
     except Exception as e:
         G.log(f"karaoke: screen check unavailable ({str(e)[:150]}); continuing without it")
         status.setdefault('warnings', []).append('screen check unavailable'); return set()
-    rs = {r['id'].replace('.png', ''): r for r in (res or {}).get('results', [])}
+    rs = {r['id'].replace('_f.png', '').replace('.png', '').replace('_f', ''): r for r in (res or {}).get('results', [])}
     G.save_json(rs, os.path.join(gdir, f'screen_check_{tag}.json'))
     for r in rs.values():
-        r['ok'] = not ((r.get('user_faces_camera_behind_device') and r.get('display_visible_to_camera')) or r.get('other_problem'))
+        r['ok'] = not ((r.get('user_faces_camera_behind_device') and r.get('display_visible_to_camera')) or r.get('other_problem')
+                       or r.get('laptop_present') or r.get('screen_on_outer_lid') or r.get('screen_not_facing_camera'))  # 21 Oct: stricter
     bad = {k for k, r in rs.items() if not r.get('ok')}
     G.log(f"karaoke: screen check {tag}: {len(rs)} checked, rejected {sorted(bad)}")
     status.setdefault('screen_checks', {})[tag] = {k: r.get('issue') for k, r in rs.items() if not r.get('ok')}
@@ -307,9 +338,25 @@ def generate(P, work, a, deadline, status):
     used = {}
     for v in [v for ln in P['lines'] for v in ln['v']] + P['intro'] + P['breaks'] + P['outro']:
         if v.get('kind') == 'scene': used[v.get('id')] = used.get(v.get('id'), 0) + 1
-    jobs = [{'id': s['id'], 'kind': 'gen', 'prompt': (DEVICE_PREFIX if DEVICE_RE.search(s['prompt']) else '') + s['prompt'].strip() + LOOK, 'aspect': '9:16', 'out': f"{gdir}/{s['id']}.png"}
-            for s in scenes]
-    b = R.Batcher(gdir, {'gen': len(jobs) + 3}, batch_size=5, max_parallel=3, deadline=deadline - 9 * 60, tag='stills')
+    DIR = direction(os.path.dirname(os.path.abspath(work)) if not getattr(a, 'day', None) else a.day)
+    ref = f"{gdir}/lead_ref.png"
+    if DIR['lead'] and not os.path.exists(ref):     # 21 Oct: one consistent lead from a reference still
+        rb = R.Batcher(gdir, {'gen': 2}, batch_size=1, max_parallel=1, deadline=deadline - 12 * 60, tag='leadref')
+        rb.run([{'id': 'lead_ref', 'kind': 'gen', 'aspect': '9:16', 'out': ref, 'prompt':
+                 "Full-body character reference portrait, plain dark studio background, even soft light, facing camera: "
+                 + DIR['lead'] + " Clearly an adult woman. An original person, not any real person or celebrity. No text, no logos."}])
+    lead_ok = DIR['lead'] and os.path.exists(ref)
+    jobs = []
+    for s in scenes:
+        pr = no_laptops(s['prompt'].strip())
+        is_lead = bool(re.search(r'\[LEAD\]', pr)); pr = pr.replace('[LEAD]', '').strip()
+        if is_lead and lead_ok:
+            jobs.append({'id': s['id'], 'kind': 'edit', 'images': [ref], 'out': f"{gdir}/{s['id']}.png", 'prompt':
+                         "Keep the exact same woman from the reference image: same face, hair, body and outfit. New scene, vertical 9:16: "
+                         + pr + LOOK})
+        else:
+            jobs.append({'id': s['id'], 'kind': 'gen', 'prompt': ((DIR['lead'] + ' ') if is_lead else '') + pr + LOOK, 'aspect': '9:16', 'out': f"{gdir}/{s['id']}.png"})
+    b = R.Batcher(gdir, {'gen': len(jobs) + 3, 'edit': len(jobs) + 3}, batch_size=5, max_parallel=3, deadline=deadline - 9 * 60, tag='stills')
     b.run(jobs)
     dups = [j for j in jobs if os.path.exists(j['out']) and dup_halves(j['out'])]
     if dups and time.time() < deadline - 10 * 60:          # one reroll for stacked-duplicate pictures
@@ -326,9 +373,9 @@ def generate(P, work, a, deadline, status):
                 os.replace(j['out'], j['out'] + '.screen.png')
                 mp = os.path.splitext(j['out'])[0] + '.mp4'
                 if os.path.exists(mp): os.replace(mp, mp + '.screen.mp4')   # clip made from the rejected still
-                rj.append(dict(j, prompt=("Framing: over-the-shoulder from BEHIND the person: we see the back of their head and the "
-                                          "front of their screen; the person does NOT face the camera. " + j['prompt'].replace(DEVICE_PREFIX, ''))))
-        b4 = R.Batcher(gdir, {'gen': len(rj)}, batch_size=5, max_parallel=3, deadline=deadline - 8 * 60, tag='screenfix')
+                rj.append(dict(j, prompt=("STRICT: no laptop, no tablet, no phone anywhere. Any screen is a wall-mounted display or a "
+                                          "holographic HUD seen straight-on. " + j['prompt'].replace(DEVICE_PREFIX, ''))))
+        b4 = R.Batcher(gdir, {'gen': len(rj), 'edit': len(rj)}, batch_size=5, max_parallel=3, deadline=deadline - 8 * 60, tag='screenfix')
         b4.no_salvage = True; b4.run(rj)
         bad2 = screen_check(gdir, [j for j in rj if os.path.exists(j['out'])], status, 'reroll')
         for j in rj:
@@ -343,10 +390,21 @@ def generate(P, work, a, deadline, status):
     mv = sorted([s for s in scenes if s.get('motion') and os.path.exists(f"{gdir}/{s['id']}.png") and not dup_halves(f"{gdir}/{s['id']}.png")],
                 key=lambda s: -used.get(s['id'], 0))[:a.clips]
     cj = [{'id': 'v_' + s['id'], 'kind': 'i2v', 'image': f"{gdir}/{s['id']}.png", 'duration': 6,
-           'prompt': s['motion'] + " Realistic natural motion, cinematic, no text.", 'out': f"{gdir}/{s['id']}.mp4"} for s in mv]
+           'prompt': no_laptops(s['motion'].replace('[LEAD]', '')) + " Realistic natural motion, cinematic, no text, no laptops, keep the same people and outfits.", 'out': f"{gdir}/{s['id']}.mp4"} for s in mv]
     if cj and time.time() < deadline - 6 * 60:
         b2 = R.Batcher(gdir, {'i2v': len(cj) + 2}, batch_size=3, max_parallel=3, timeout=900, deadline=deadline, tag='clips')
         b2.run(cj)
+        # 21 Oct: clips were never checked and i2v can invent lid-screen laptops: check a late frame of every clip
+        fj = []
+        for j in cj:
+            if os.path.exists(j['out']):
+                fp = j['out'][:-4] + '_f.png'
+                subprocess.run(['ffmpeg', '-v', 'error', '-y', '-sseof', '-1.2', '-i', j['out'], '-frames:v', '1', fp])
+                if os.path.exists(fp): fj.append({'id': j['id'], 'out': fp, 'clip': j['out']})
+        badc = screen_check(gdir, fj, status, 'clips') if fj else set()
+        for j in fj:
+            if os.path.basename(j['out']).replace('_f.png', '') in badc:
+                os.replace(j['clip'], j['clip'] + '.screen.mp4'); status.setdefault('clip_rejected', []).append(j['clip'])
 
 
 # ---------------------------------------------------------------- timeline
@@ -705,6 +763,25 @@ def spelling(texts, day):
     return sorted(bad)
 
 
+def fit_check(fitlog, texts, day):
+    """21 Oct: kgfx2 logs text that could not be shrunk to fit, and every string on each shot's final frame. A final-frame
+    word that is not in the source text but is a strict prefix of a source word is a truncated fragment = failure."""
+    srcw = set(norm(' '.join(texts) + ' ' + G.read(os.path.join(day, 'stories.md')) + ' ' + G.read(os.path.join(day, 'lyrics.txt'))).split())
+    fails, trunc = [], set()
+    recs = []
+    if os.path.exists(fitlog):
+        for ln in open(fitlog):
+            try: recs.append(json.loads(ln))
+            except Exception: pass
+    for r in recs:
+        if r.get('fail'): fails.append(f"{r.get('shot')}: {r.get('text')!r}"[:120])
+        elif 'final' in r:
+            for w in norm(r['final']).split():
+                if len(w) >= 2 and w not in srcw and any(sw.startswith(w) and sw != w for sw in srcw):
+                    trunc.add(w)
+    return sorted(set(fails)), sorted(trunc)
+
+
 def all_texts(shots, story, endp):
     out = []
     def walk(o):
@@ -792,7 +869,7 @@ def main():
             status['warnings'] += fact_lint(P, day)
             G.save_json(P, pp)
         import design as DZ
-        DES = DZ.resolve(day, P.get('design')); status['design'] = DES
+        DES = DZ.resolve(day, P.get('design'), force_palette=direction(day)['palette']); status['design'] = DES
         G.log(f"karaoke: design {DES}")
         G.log(f"karaoke: plan ready ({P.get('planner')}, {len(P.get('scenes', []))} scenes) at {time.time() - t_start:.0f}s")
         gt = time.time(); generate(P, work, a, t_start + 26 * 60, status); status['gen_s'] = round(time.time() - gt)
@@ -849,6 +926,7 @@ def main():
             sd = os.path.join(work, f'seg_{W}x{H}'); os.makedirs(sd, exist_ok=True)
             jobs += [(s, W, H, os.path.join(sd, f'{i:03d}.mp4'), endp, DES, i) for i, s in enumerate(shots)]
         rt = time.time()
+        fitlog = os.path.join(work, 'fit_log.jsonl'); open(fitlog, 'w').close(); os.environ['KGFX_FITLOG'] = fitlog  # 21 Oct
         with Pool(min(8, os.cpu_count() or 4)) as pool:
             segs = pool.map(render_seg, jobs, chunksize=1)
         results = {}
@@ -866,15 +944,21 @@ def main():
             dst = out if H > W else wide
             tmp = dst + '.part.mp4'
             subprocess.run(['ffmpeg', '-v', 'error', '-y', '-i', bg, '-i', bandf, '-i', audio, '-filter_complex',
-                            f"[0:v][1:v]overlay=0:0,ass='{assf}'[v]",
-                            '-map', '[v]', '-map', '2:a', '-c:v', 'libx264', '-preset', 'medium', '-crf', '20', '-pix_fmt', 'yuv420p',
+                            f"[0:v][1:v]overlay=0:0,ass='{assf}',scale=in_range=auto:out_range=tv,format=yuv420p[v]",  # 21 Oct: jpeg-range sources gave yuvj420p
+                            '-map', '[v]', '-map', '2:a', '-c:v', 'libx264', '-preset', 'medium', '-crf', '20', '-pix_fmt', 'yuv420p', '-color_range', 'tv',
                             '-profile:v', 'high', '-r', str(FPS), '-c:a', 'aac', '-b:a', '192k', '-t', f'{dur:.3f}', '-movflags', '+faststart', tmp], check=True)
             os.replace(tmp, dst); results[tag] = dst
-        # chat copy < 45 MB
-        kbps = int((40 * 8 * 1024) / dur) - 160
-        subprocess.run(['ffmpeg', '-v', 'error', '-y', '-i', out, '-c:v', 'libx264', '-preset', 'medium', '-b:v', f'{kbps}k',
-                        '-maxrate', f'{int(kbps * 1.4)}k', '-bufsize', f'{kbps * 2}k', '-c:a', 'aac', '-b:a', '128k',
-                        '-movflags', '+faststart', chat + '.part.mp4'], check=True)
+        # chat copy < 25 MB (21 Oct): two-pass at a bitrate derived from the duration, 22 MB target, retry lower if over
+        for tgt in (22, 19, 16):
+            kbps = max(300, int((tgt * 8 * 1024) / dur) - 128)
+            pl = os.path.join(work, 'chat2pass')
+            common = ['-c:v', 'libx264', '-preset', 'medium', '-profile:v', 'high', '-b:v', f'{kbps}k', '-maxrate', f'{int(kbps * 1.3)}k',
+                      '-bufsize', f'{kbps * 2}k', '-vf', 'scale=in_range=auto:out_range=tv,format=yuv420p', '-pix_fmt', 'yuv420p',
+                      '-color_range', 'tv', '-passlogfile', pl]
+            subprocess.run(['ffmpeg', '-v', 'error', '-y', '-i', out] + common + ['-pass', '1', '-an', '-f', 'mp4', os.devnull], check=True)
+            subprocess.run(['ffmpeg', '-v', 'error', '-y', '-i', out] + common + ['-pass', '2', '-c:a', 'aac', '-b:a', '128k',
+                            '-movflags', '+faststart', chat + '.part.mp4'], check=True)
+            if os.path.getsize(chat + '.part.mp4') < 25 * 1048576: break
         os.replace(chat + '.part.mp4', chat)
         status['render_s'] = round(time.time() - rt)
         vr = GV.verify(out, audio, L, {}, os.path.join(work, 'verify_frames'))
@@ -890,6 +974,13 @@ def main():
             if not mc['ok']: status['warnings'].append(f"margin check failed: {status['margin_fail']}")
         except Exception as e:
             status['warnings'].append(f'margin check error: {e!r}')
+        # 21 Oct 2026 (the owner: no on-screen text is ever cut off): fit failures and truncated words fail the build
+        fit_fail, trunc = fit_check(fitlog, texts, day)
+        status.update(fit_fail=fit_fail, truncated_words=trunc, fit_ok=not fit_fail and not trunc)
+        if fit_fail or trunc:
+            status['warnings'].append(f"text fit check failed: {fit_fail[:5]} truncated {trunc}")
+            vr['ok'] = False; vr['checks']['text_fits'] = False
+        else: vr['checks']['text_fits'] = True
         status.update(ok=vr['ok'], verify=vr['checks'], sync=sync, sync_ok=sync_ok, spelling_unknown=bad, contact_sheet=cs,
                       shots=len(shots), avg_shot=round(end_t / max(1, len(shots) - 1), 2),
                       scenes=sum(1 for s in shots if s['src'][0] in ('clip', 'still')), clips_used=sum(1 for s in shots if s['src'][0] == 'clip'),
