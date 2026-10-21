@@ -794,6 +794,19 @@ def fit_check(fitlog, texts, day):
     return sorted(set(fails)), sorted(trunc)
 
 
+def end_tags(day):
+    """Tagged accounts for the end card: source handles from sources.txt then post.txt (in order), then @grok, @suno."""
+    seen, out = set(), []
+    for fn in ('sources.txt', 'post.txt'):
+        pth = os.path.join(day, fn)
+        if not os.path.exists(pth): continue
+        for h in re.findall(r'(?<![\w/])@(\w{1,15})', G.read(pth)):
+            k = h.lower()
+            if k in seen or k in ('jxwalker', 'grok', 'suno'): continue
+            seen.add(k); out.append(h)
+    return out + ['grok', 'suno']
+
+
 def all_texts(shots, story, endp):
     out = []
     def walk(o):
@@ -926,6 +939,7 @@ def main():
         endp = {'title': G.read(os.path.join(day, 'title.txt')).strip(), 'credit': (P.get('credit') or '')[:80],
                 'sub': 'Grok Bot · ' + time.strftime('%-d %b %Y', time.strptime(os.path.basename(day)[:10], '%Y-%m-%d')) if re.match(r'\d{4}-\d\d-\d\d', os.path.basename(day)) else '',
                 'bg': os.path.join(gdir, stills[-1]) if stills else None}
+        endp['tags'] = end_tags(day)   # 21 Oct: end card lists the post's tagged accounts
         if P.get('scenes') and stills:                # prefer the outro scene as the end-card background
             for v in P.get('outro', [])[::-1]:
                 if v.get('kind') == 'scene' and os.path.exists(os.path.join(gdir, f"{v['id']}.png")):

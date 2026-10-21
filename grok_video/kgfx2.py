@@ -448,12 +448,40 @@ def endcard(W, H, t, dur, p):
         fc, cl = fit(d, p['credit'], 'body', int(48 * u), W * 0.82, 3)
         for i, l in enumerate(cl): d.text((W / 2, yb + 70 * u + i * fc.size * 1.3), l, font=fc, fill=T['ink'], anchor='mm')
     # 21 Oct: handle line was faint; larger, full-ink text on a solid pill
+    tags = p.get('tags') or []
+    if tags: featuring_block(d, W, H, u, tags)
     fh = F('mono', 40 * u if H > W else 34 * u); hs = 'X: @jxwalker  ·  scorpion-labs.com'
     hy = H * (0.80 if H > W else 0.88); hw = d.textlength(hs, font=fh)
     while hw > W * 0.80: fh = F('mono', fh.size - 2); hw = d.textlength(hs, font=fh)
     d.rounded_rectangle([W / 2 - hw / 2 - 26 * u, hy - fh.size * 0.9, W / 2 + hw / 2 + 26 * u, hy + fh.size * 0.9], radius=int(fh.size * 0.9), fill=T['panel'], outline=T['a1'], width=max(2, int(4 * u)))
     d.text((W / 2, hy), hs, font=fh, fill=T['ink'], anchor='mm')
     return im
+
+
+
+def featuring_block(d, W, H, u, tags):
+    """21 Oct (the owner: only one tag in the final frame): 'FEATURING / SOURCES' block of the post's tagged handles,
+    centred between the credit and the handle pill, wrapped to fit inside the safe margins."""
+    v = H > W
+    tags = ['@' + t.lstrip('@') for t in tags]
+    y0 = H * (0.555 if v else 0.62); maxw = W * (0.80 if v else 0.70)
+    size = int(40 * u if v else 32 * u)
+    while True:
+        f = F('mono', size); lines, cur = [], ''
+        for t in tags:
+            nx = (cur + '   ' + t) if cur else t
+            if d.textlength(nx, font=f) <= maxw: cur = nx
+            else: lines.append(cur); cur = t
+        lines.append(cur)
+        if len(lines) <= (4 if v else 3) or size <= 18: break
+        size -= 2
+    fk = F('mono', int(size * 0.72)); lh = f.size * 1.45
+    bw = max(d.textlength(l, font=f) for l in lines) + 60 * u
+    bh = fk.size * 1.9 + lh * len(lines) + 30 * u
+    d.rounded_rectangle([W / 2 - bw / 2, y0, W / 2 + bw / 2, y0 + bh], radius=int(24 * u), fill=T['panel'], outline=T['a1'], width=max(2, int(4 * u)))
+    d.text((W / 2, y0 + 18 * u + fk.size * 0.6), 'FEATURING / SOURCES', font=fk, fill=T['a1'], anchor='mm')
+    for i, l in enumerate(lines):
+        d.text((W / 2, y0 + fk.size * 1.9 + 14 * u + lh * (i + 0.5)), l, font=f, fill=T['ink'], anchor='mm')
 
 
 R = dict(headline=headline, bignum=bignum, bars=bars, post=post, feed=feed, inbox=inbox, chat=chat, code=code,
