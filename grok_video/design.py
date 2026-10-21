@@ -75,7 +75,9 @@ def resolve(day, want, force_palette=''):
         d['lyric_pos'] = 'lower-left'                 # never the exact No Window lyric treatment
     if d['type'] == 'pixel' and d['lyric_style'] == 'marker':
         d['lyric_style'] = 'pop'
-    if force_palette in PALETTES: d['palette'] = force_palette     # 21 Oct: day direction.txt can force the palette
+    if force_palette in PALETTES: d['palette'] = force_palette
+    if sum(PALETTES[d['palette']]['bg']) > 500 and d['lyric_style'] in ('neon', 'reveal', 'underline'):
+        d['lyric_style'] = 'block'   # 21 Oct: pale neon lyrics were unreadable on a light (candy) palette     # 21 Oct: day direction.txt can force the palette
     d['why'] = (want or {}).get('why', '')
     return d
 
