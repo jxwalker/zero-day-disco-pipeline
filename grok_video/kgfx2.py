@@ -6,6 +6,40 @@ import math, random, re
 from PIL import Image, ImageDraw, ImageFont
 T = {}
 _fc = {}
+import os as _os
+FITLOG = _os.environ.get('KGFX_FITLOG')     # 21 Oct: jsonl of fit failures + final-frame texts (truncation check)
+CUR = {'name': '', 't': 0.0, 'dur': 1.0}
+
+
+def _log(rec):
+    fl = _os.environ.get('KGFX_FITLOG') or FITLOG
+    if not fl: return
+    try:
+        with open(fl, 'a') as fh: fh.write(json.dumps(rec) + '\n')
+    except Exception: pass
+
+
+class FitDraw(ImageDraw.ImageDraw):
+    """21 Oct 2026 (the owner: no on-screen text is ever cut off). Every text draw is measured; a left/centre-anchored
+    line that would run past the canvas edge (2% margin) is shrunk until it fits; if it still can't fit, it is logged
+    as a failure. On a shot's final frame every drawn string is logged for the truncated-word check."""
+    def text(self, xy, text, fill=None, font=None, anchor=None, *a, **k):
+        s = str(text); W = self.im.size[0]; x = xy[0]; lim = W * 0.98
+        if s.strip() and font is not None and hasattr(font, 'size') and '\n' not in s:
+            an = (anchor or 'la')[0]
+            def over(f):
+                w = self.textlength(s, font=f)
+                return (x + w > lim) if an == 'l' else (x + w / 2 > lim or x - w / 2 < W * 0.02) if an == 'm' else (x - w < W * 0.02)
+            if over(font):
+                sz = font.size
+                while over(font) and sz > 12:
+                    sz = int(sz * 0.92)
+                    try: font = font.font_variant(size=sz)
+                    except Exception: break
+                if over(font): _log({'fail': 'text does not fit', 'text': s, 'shot': CUR['name'], 't': CUR['t']})
+            if CUR['t'] >= CUR['dur'] - 0.12: _log({'final': s, 'shot': CUR['name']})
+        return super().text(xy, text, fill, font, anchor, *a, **k)
+
 
 
 def set_theme(th): T.clear(); T.update(th)
@@ -24,7 +58,7 @@ def ease(x): x = max(0, min(1, x)); return 1 - (1 - x) ** 3
 
 
 def base(W, H, t=0):
-    im = Image.new('RGB', (W, H), T['bg']); d = ImageDraw.Draw(im); u = U(W, H); tx = T.get('texture')
+    im = Image.new('RGB', (W, H), T['bg']); d = FitDraw(im); u = U(W, H); tx = T.get('texture')
     sh = tuple(max(0, min(255, c + (-10 if T['light'] else 10))) for c in T['bg'])
     if tx == 'grid':
         for x in range(0, W, int(60 * u)): d.line([(x, 0), (x, H)], fill=sh)
@@ -56,8 +90,11 @@ def clip_w(d, s, f, maxw):
     """Shorten a string (with an ellipsis) until its MEASURED width fits."""
     s = str(s)
     if d.textlength(s, font=f) <= maxw: return s
+    ws = s.split()                                  # 21 Oct: cut on a word boundary, never mid-word
+    while len(ws) > 1 and d.textlength(' '.join(ws) + ' …', font=f) > maxw: ws.pop()
+    s = ' '.join(ws)
     while s and d.textlength(s + '…', font=f) > maxw: s = s[:-1]
-    return s.rstrip() + '…'
+    return s.rstrip() + ' …'
 
 
 def fit(d, s, kind, size, maxw, maxlines, minsize=22):
@@ -66,7 +103,8 @@ def fit(d, s, kind, size, maxw, maxlines, minsize=22):
         if len(ls) <= maxlines and all(d.textlength(l, font=f) <= maxw for l in ls): return f, ls
         size = int(size * 0.9)
     f = F(kind, minsize); ls = wrap(d, s, f, maxw)
-    if len(ls) > maxlines: ls = ls[:maxlines]; ls[-1] = ls[-1] + ' …'
+    if len(ls) > maxlines:
+        ls = ls[:maxlines]; ls[-1] = ls[-1] + ' …'; _log({'warn': 'ellipsis', 'text': str(s), 'shot': CUR['name']})
     return f, [clip_w(d, l, f, maxw) for l in ls]
 
 
@@ -149,13 +187,14 @@ def feed(W, H, t, dur, p):
     """Scrolling social timeline: items [{handle, text, metric}] (metric e.g. 'active seconds: all-time high')."""
     im, d = base(W, H, t); u = U(W, H); x0 = W * 0.08; mw = W * 0.84
     items = p.get('items', [])[:4] or [{'handle': 'x', 'text': ''}]
-    off = ease(t / max(0.6, dur)) * 200 * u; y = top0(W, H) - off
+    ytop = top0(W, H) + (70 * u if p.get('title') else 20 * u)     # 21 Oct: never overlap the story chip
+    off = ease(t / max(0.6, dur)) * 200 * u; y = ytop - off
     if p.get('title'):
-        d.text((x0, top0(W, H) - 60 * u), p['title'], font=F('display', 46 * u), fill=T['a1'])
+        d.text((x0, top0(W, H) + 10 * u), p['title'], font=F('display', 46 * u), fill=T['a1'])
     for k, it in enumerate(items * 2):
         hgt = 230 * u
-        if y > zone(W, H): break
-        if y + hgt > top0(W, H) - 10 * u:
+        if y + hgt > zone(W, H): break
+        if y >= ytop - 2 * u:
             card(d, [x0, y, x0 + mw, y + hgt - 24 * u], u=u, accent=[T['a1'], T['a2'], T['a3']][k % 3])
             d.text((x0 + 26 * u, y + 20 * u), '@' + it.get('handle', '').lstrip('@'), font=F('mono', 30 * u), fill=T['muted'])
             f, ls = fit(d, it.get('text', ''), 'body', int(42 * u), mw - 52 * u, 2)
@@ -210,8 +249,14 @@ def code(W, H, t, dur, p):
     d.rectangle([x0, y0, x0 + mw, y0 + 60 * u], fill=T['a1'], outline=T['ink'], width=3)
     d.text((x0 + 24 * u, y0 + 30 * u), p.get('file', 'main.c'), font=F('mono', 30 * u), fill=(255, 255, 255), anchor='lm')
     kw = re.compile(r'\b(IDENTIFICATION|DIVISION|PROCEDURE|DISPLAY|MOVE|PERFORM|PROGRAM-ID|STOP|RUN|END|IF|THEN|ELSE|PROGRAM|SUBROUTINE|def|return|import|from|int|void|char|if|for|while|function|const|let|class|Sub|Dim|As|PRINT|CALL)\b')
-    fs = 36 * u; f = F('mono', fs); clock = t * p.get('cps', 50) + 3; y = y0 + 90 * u
-    for i, l in enumerate(p.get('lines', [])[:12]):
+    lines = [str(l) for l in p.get('lines', [])][:12]
+    fs = 36 * u
+    while fs > 18 * u and (max([d.textlength(l, font=F('mono', fs)) for l in lines] or [0]) > mw - 120 * u
+                           or 90 * u + len(lines) * fs * 1.45 > bh): fs *= 0.92
+    while lines and 90 * u + len(lines) * fs * 1.45 > bh: lines = lines[:-1]   # trim whole lines only
+    total = sum(len(l) + 3 for l in lines)
+    f = F('mono', fs); clock = t * max(p.get('cps', 50), total / max(0.3, 0.55 * dur)) + 3; y = y0 + 90 * u
+    for i, l in enumerate(lines):
         if clock <= 0 or y > y0 + bh - fs: break
         s = l[:int(clock)]; clock -= len(l) + 3
         d.text((x0 + 22 * u, y), f"{i + 1:>2}", font=f, fill=T['muted']); x = x0 + 90 * u
@@ -285,7 +330,10 @@ def quote(W, H, t, dur, p):
     y = top0(W, H) + 150 * u
     for i, l in enumerate(ls):
         if t > 0.12 * i: d.text((x0, y + i * f.size * 1.15), l, font=f, fill=T['ink'])
-    if p.get('by') and t > 0.5: d.text((x0, y + len(ls) * f.size * 1.15 + 30 * u), '— ' + p['by'], font=F('mono', 38 * u), fill=T['a2'])
+    if p.get('by') and t > 0.5:    # 21 Oct: credit wraps/shrinks to fit (was one line running off the frame)
+        fb, lb = fit(d, '— ' + p['by'], 'mono', int(38 * u), W * 0.8, 3, minsize=int(24 * u))
+        yb = y + len(ls) * f.size * 1.15 + 30 * u
+        for i, l in enumerate(lb): d.text((x0, yb + i * fb.size * 1.3), l, font=fb, fill=T['a2'])
     return im
 
 
@@ -438,7 +486,9 @@ def _fitk(name, W, H, dur, p):
 def render(name, W, H, t, dur, p):
     """Template render with safe-area enforcement: anything that would touch the margins is shrunk inside it."""
     name = name if name in R else 'headline'
+    CUR.update(name=name, t=t, dur=dur)
     im = R[name](W, H, t, dur, p)
+    CUR.update(t=-1)
     r = _fitk(name, W, H, dur, p)
     if not r: return im
     bb, k, x, y = r

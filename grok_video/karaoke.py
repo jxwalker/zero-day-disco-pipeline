@@ -1,7 +1,7 @@
 """karaoke mode: the daily video in the ONUG "No Window" format (default since 20 Oct 2026). See README.md "karaoke".
 usage: karaoke.py DAY_DIR [--out FILE] [--work DIR] [--skip-gen] [--replan] [--no-fallback] [--stills N] [--clips N]
                   [--time-limit MIN] [--max-pct P] [--no-16x9]  (+ any grok_video.py args, passed to the fallback)
-Writes <day>/video_karaoke.mp4 (1080x1920, posted), video_karaoke_chat.mp4 (<25 MB), video_karaoke_16x9.mp4.
+Writes <day>/video_karaoke.mp4 (1080x1920, posted), video_karaoke_chat.mp4 (<45 MB), video_karaoke_16x9.mp4.
 On any failure (not exit 6 instrumental / 7 auth) it runs grok_video.py (the Claudia/slopcore chain) with the same args.
 Last stdout line: GROK_VIDEO_STATUS=... out=<mp4> chat=<mp4> (same contract as grok_video.py)."""
 import argparse, json, math, os, re, shutil, subprocess, sys, threading, time, traceback
@@ -866,21 +866,15 @@ def main():
             dst = out if H > W else wide
             tmp = dst + '.part.mp4'
             subprocess.run(['ffmpeg', '-v', 'error', '-y', '-i', bg, '-i', bandf, '-i', audio, '-filter_complex',
-                            f"[0:v][1:v]overlay=0:0,ass='{assf}',scale=in_range=auto:out_range=tv,format=yuv420p[v]",  # 21 Oct: jpeg-range sources gave yuvj420p
-                            '-map', '[v]', '-map', '2:a', '-c:v', 'libx264', '-preset', 'medium', '-crf', '20', '-pix_fmt', 'yuv420p', '-color_range', 'tv',
+                            f"[0:v][1:v]overlay=0:0,ass='{assf}'[v]",
+                            '-map', '[v]', '-map', '2:a', '-c:v', 'libx264', '-preset', 'medium', '-crf', '20', '-pix_fmt', 'yuv420p',
                             '-profile:v', 'high', '-r', str(FPS), '-c:a', 'aac', '-b:a', '192k', '-t', f'{dur:.3f}', '-movflags', '+faststart', tmp], check=True)
             os.replace(tmp, dst); results[tag] = dst
-        # chat copy < 25 MB (21 Oct): two-pass at a bitrate derived from the duration, 22 MB target, retry lower if over
-        for tgt in (22, 19, 16):
-            kbps = max(300, int((tgt * 8 * 1024) / dur) - 128)
-            pl = os.path.join(work, 'chat2pass')
-            common = ['-c:v', 'libx264', '-preset', 'medium', '-profile:v', 'high', '-b:v', f'{kbps}k', '-maxrate', f'{int(kbps * 1.3)}k',
-                      '-bufsize', f'{kbps * 2}k', '-vf', 'scale=in_range=auto:out_range=tv,format=yuv420p', '-pix_fmt', 'yuv420p',
-                      '-color_range', 'tv', '-passlogfile', pl]
-            subprocess.run(['ffmpeg', '-v', 'error', '-y', '-i', out] + common + ['-pass', '1', '-an', '-f', 'mp4', os.devnull], check=True)
-            subprocess.run(['ffmpeg', '-v', 'error', '-y', '-i', out] + common + ['-pass', '2', '-c:a', 'aac', '-b:a', '128k',
-                            '-movflags', '+faststart', chat + '.part.mp4'], check=True)
-            if os.path.getsize(chat + '.part.mp4') < 25 * 1048576: break
+        # chat copy < 45 MB
+        kbps = int((40 * 8 * 1024) / dur) - 160
+        subprocess.run(['ffmpeg', '-v', 'error', '-y', '-i', out, '-c:v', 'libx264', '-preset', 'medium', '-b:v', f'{kbps}k',
+                        '-maxrate', f'{int(kbps * 1.4)}k', '-bufsize', f'{kbps * 2}k', '-c:a', 'aac', '-b:a', '128k',
+                        '-movflags', '+faststart', chat + '.part.mp4'], check=True)
         os.replace(chat + '.part.mp4', chat)
         status['render_s'] = round(time.time() - rt)
         vr = GV.verify(out, audio, L, {}, os.path.join(work, 'verify_frames'))
