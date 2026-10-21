@@ -447,8 +447,12 @@ def endcard(W, H, t, dur, p):
     if t > 0.4 and p.get('credit'):
         fc, cl = fit(d, p['credit'], 'body', int(48 * u), W * 0.82, 3)
         for i, l in enumerate(cl): d.text((W / 2, yb + 70 * u + i * fc.size * 1.3), l, font=fc, fill=T['ink'], anchor='mm')
-    fh = F('mono', 28 * u if H > W else 26 * u)
-    d.text((W / 2, H * (0.82 if H > W else 0.90)), 'X: @jxwalker  ·  scorpion-labs.com', font=fh, fill=T['muted'], anchor='mm')
+    # 21 Oct: handle line was faint; larger, full-ink text on a solid pill
+    fh = F('mono', 40 * u if H > W else 34 * u); hs = 'X: @jxwalker  ·  scorpion-labs.com'
+    hy = H * (0.80 if H > W else 0.88); hw = d.textlength(hs, font=fh)
+    while hw > W * 0.80: fh = F('mono', fh.size - 2); hw = d.textlength(hs, font=fh)
+    d.rounded_rectangle([W / 2 - hw / 2 - 26 * u, hy - fh.size * 0.9, W / 2 + hw / 2 + 26 * u, hy + fh.size * 0.9], radius=int(fh.size * 0.9), fill=T['panel'], outline=T['a1'], width=max(2, int(4 * u)))
+    d.text((W / 2, hy), hs, font=fh, fill=T['ink'], anchor='mm')
     return im
 
 

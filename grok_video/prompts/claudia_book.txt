@@ -121,6 +121,12 @@ RULES
      sceptic: Up yours!").
    - 'hook_fact': one key fact or number from the main story, max 8 words, shown at the first chorus.
 
+NARRATIVE (21 Oct 2026, the owner: every future video needs a narrative thread): define a ONE-LINE STORY ARC in which the
+LEAD's own situation mirrors the main news story (e.g. a data centre built but unpowered -> she is dressed up and stood
+up). Map it to song sections: SETUP (intro/verse 1), RISING TENSION (pre-chorus/verse 2), HOOK beats (choruses),
+BREAKDOWN (stripped section, low point), PAYOFF (final chorus: resolution, ideally she takes control). Every scene must
+play one beat and advance the arc while staying in story locations; state the arc in the plan.
+
 CINE VOCAB:
 {{VOCAB}}
 

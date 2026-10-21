@@ -432,8 +432,8 @@ def line_card(text, fact, used, handle=''):
     opts = [('headline', {'kicker': key, 'text': text, 'sub': wcut(fact, 80)}),
             ('quote', {'text': text, 'by': ('@' + handle) if handle else wcut(fact, 60)}),
             ('stamp', {'above': wcut(text, 70), 'text': key}),
-            ('browser', {'url': 'news', 'site': 'TODAY', 'headline': text, 'lede': wcut(fact or text, 120), 'highlight': wcut(fact or text, 30)}),
-            ('screen', {'device': 'phone', 'app': 'news', 'text': wcut(fact or text, 90)})]
+            ('browser', {'url': 'news', 'site': 'TODAY', 'headline': text, 'lede': wcut(fact or text, 120), 'highlight': wcut(fact or text, 30)})]
+    # 21 Oct: no phone 'screen' fallback (the owner: no laptops, tablets or phones)
     for g, pp in opts:
         if used.get(g, 0) < MAX_PER_TEMPLATE:
             return {'kind': 'gfx', 'g': g, 'p': pp}
@@ -642,7 +642,7 @@ def band_png(W, H, path, design=None):
         im.save(path); return
     y0 = int(H * (0.60 if H > W else 0.62))
     for y in range(y0, H):
-        a = int(min(1, (y - y0) / (H * 0.10)) * 175)
+        a = int(min(1, (y - y0) / (H * 0.10)) * 205)   # 21 Oct: was 175, darker band for dark photos
         for xx in range(W): px[xx, y] = bc + (a,)
     im.save(path)
 

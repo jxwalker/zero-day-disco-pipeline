@@ -30,6 +30,8 @@ def build(path, L, W, H, dur, story, sync_ok, design, th, line_ok):
         ybase = int(H * (0.755 if v else 0.82)); maxw = W * 0.85; align = 'c'
     x_left = int(W * 0.075); cm = int(W * 0.075)   # safe area: >= 6% sides incl. borders/boxes
     bord = 6 if st not in ('neon',) else 3
+    # 21 Oct (narrative rebuild): not-yet-sung words were unreadable over dark photos; give them a solid dark outline + shadow
+    dark_ol = tuple(int(c * 0.25) for c in (th['bg'] if not light else (0, 0, 0)))
     if st == 'pop':   # 21 Oct: the 'pop' overshoot scales words past the side margins; leave room for it
         maxw *= 0.88; x_left += int(W * 0.03)
     hdr = f"""[Script Info]
@@ -41,7 +43,7 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Dim,{fam},{AZ(fam, fs)},{_c(dim, 0x70 if st != 'neon' else 0xFF)},{_c(dim)},{_c(outline, 0x30) if st != 'neon' else _c(th['muted'], 0x40)},{_c((0, 0, 0), 0xA0)},0,0,0,0,100,100,0,0,1,{bord},2,5,0,0,0,1
+Style: Dim,{fam},{AZ(fam, fs)},{_c(dim, 0x38 if st != 'neon' else 0x48)},{_c(dim)},{_c(dark_ol, 0x00)},{_c((0, 0, 0), 0x40)},0,0,0,0,100,100,0,0,1,{max(bord, 6)},3,5,0,0,0,1
 Style: Hot,{fam},{AZ(fam, fs)},{_c(hot if st not in ('block', 'neon', 'marker') else ink)},{_c(hot)},{_c(outline if st != 'neon' else hot)},{_c((0, 0, 0), 0x80)},0,0,0,0,100,100,0,0,1,{bord},2,5,0,0,0,1
 Style: Box,{fam},{AZ(fam, fs)},{_c(th['panel'] if not light else th['bg'])},{_c(hot)},{_c(hot)},{_c(hot)},0,0,0,0,100,100,0,0,3,10,0,5,0,0,0,1
 Style: Shape,{fam},20,{_c(hot)},{_c(hot)},{_c(hot)},{_c(hot)},0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1

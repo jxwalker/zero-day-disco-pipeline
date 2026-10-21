@@ -89,3 +89,15 @@ LIVE-ACTION STILLS/CLIPS (the owner, 2026-10-20: text and graphics are excellent
 
 SCREENS IN GROK SCENES (21 Oct 2026, the owner: "the weird laptops with the screens on the lids have returned"):
 - NEVER write laptop, tablet or phone in a scene prompt. Screens in live action are only wall-mounted displays, rack-mounted monitors, or holographic HUDs floating in the air, seen straight-on. Put any screen CONTENT in GFX instead.
+
+NARRATIVE (21 Oct 2026, the owner: "we need to really think of a narrative thread for all our future videos"):
+- Before planning shots, define a ONE-LINE STORY ARC in which the lead character's personal situation MIRRORS today's
+  news (e.g. a data centre built but with no grid power -> a girl dressed up for a date who stands her up).
+- Map the arc to the song sections: SETUP (intro + verse 1), RISING TENSION (pre-chorus, verse 2), CHEEKY/HOOK
+  moments (choruses, playing the double meaning, PG-13), BREAKDOWN (stripped section: alone, low point), PAYOFF
+  (final key-change chorus: the resolution, ideally she takes control herself) and a short outro button.
+- EVERY scene must play one beat of that arc AND literally match its lyric line (LINE-LOCK still applies). Mood shots
+  that do not advance the arc are forbidden. Keep the same lead (same face, hair, outfit) across the whole video;
+  GFX carry the exact facts, scenes carry the story.
+- Put the arc in the plan: begin each scene prompt's intent with its beat name in your reasoning, and state the arc in
+  the design `why` sentence (e.g. "Arc: ... ").
