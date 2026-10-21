@@ -133,6 +133,7 @@ the access token is read-only: the owner must regenerate it after setting Read a
 
 ## Lyric rules (pre-Suno)
 See `LYRICS_RULES.md`. Before pasting lyrics into Suno run `python3 tools/lyrics_lint.py <day>/lyrics.txt` (exit 1 = fix lines first). No sung "AI news"/meta lines; no instrument/genre/production words in sung lines (those live in style.txt only).
+**21 Oct 2026: viral-hit format is the default** (chant hook first, chorus in ~25 s, energy tags, pre-chorus/post-chorus/breakdown/final chorus, female lead high-energy pop). See LYRICS_RULES.md "Viral-hit format"; lyrics_lint.py and style_lint.py enforce it.
 
 ## Suno vocal/style rules (16 Oct 2026)
 the owner called the 16 Oct "Cap in Hand" (comedy news jingle / brassy swing) "auto tuned garbage". Standing rules:

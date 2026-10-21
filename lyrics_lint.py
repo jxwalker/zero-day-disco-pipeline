@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Pre-Suno lyric lint. Flags meta/'AI news' lines and style words in sung lines, and (17 Oct) lyric density over
-the BPM/metre limits in lyric_metrics.py (reads style.txt beside lyrics.txt, or --style=PATH; --no-density skips).
+the BPM/metre limits in lyric_metrics.py, and (21 Oct) the viral-hit format (--no-viral skips; title from title.txt or --title=) (reads style.txt beside lyrics.txt, or --style=PATH; --no-density skips).
 Exit 0 clean, 1 violations (or 0 after --fix removes them)."""
 import os, re, sys, shutil
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -13,6 +13,51 @@ STYLE = [r"\bjangly\b", r"\bguitars?\b", r"\bsynths?\b", r"\bsynthesi[sz]ers?\b"
          r"\bauto-?tune\b", r"\bfalsetto\b", r"\bindie\s+rock\b", r"\bedm\b", r"\blo-?fi\b", r"\bchiptune\b",
          r"\b(male|female)\s+(lead\s+)?vocals?\b", r"\binstrumental\b", r"\btempo\b", r"\bmix\b",
          r"\bmaster(ed|ing)\b", r"\bsidechain\b", r"\bpiano\b", r"\bchords?\b", r"\briffs?\b", r"\bstrings\b", r"\bbanger\b", r"\bgenre\b"]
+# 21 Oct 2026 (the owner: "make sure we always follow the viral hit format"). --no-viral skips.
+REQ = {"pre-chorus": r"pre-?chorus", "post-chorus": r"post-?chorus", "breakdown": r"breakdown", "final chorus": r"final chorus"}
+def viral(text, title=""):
+    p, secs, cur = [], [], None
+    for ln in text.splitlines():
+        s = ln.strip()
+        if s.lower() == "[end]": break
+        if not s: continue
+        if s.startswith("[") and s.endswith("]"):
+            inner = s[1:-1].strip()
+            base = re.split(r":|\s+-\s+|,", inner)[0].strip().lower()
+            if re.match(r"(intro|verse|pre-?chorus|chorus|final chorus|post-?chorus|bridge|breakdown|outro|hook|interlude)\b", base):
+                cur = {"tag": inner, "base": base, "lines": []}; secs.append(cur)
+            elif cur is None:
+                cur = {"tag": inner, "base": base, "lines": []}; secs.append(cur)
+            continue
+        if cur is None:
+            cur = {"tag": "", "base": "", "lines": []}; secs.append(cur)
+        cur["lines"].append(s)
+    if not secs: return ["no sections"]
+    f = secs[0]
+    if "instrumental" in f["tag"].lower() or not f["lines"] or not re.match(r"(intro|hook|chorus)", f["base"]):
+        p.append("first section must be a sung chant hook ([Intro - chant] with the hook line), no instrumental intro")
+    if re.search(r"\[[^\]]*instrumental intro[^\]]*\]", text, re.I):
+        p.append("no [Instrumental Intro] tags")
+    before, found = 0, False
+    for x in secs:
+        if re.fullmatch(r"chorus", x["base"]): found = True; break
+        before += len(x["lines"])
+    if not found: p.append("no [Chorus] section")
+    elif before > 7:
+        p.append(f"first chorus too late: {before} sung lines before it (max 7 = 1 hook + 4 verse + 2 pre-chorus, ~25 s)")
+    for x in secs:
+        if not re.search(r"\s-\s*\S|,", x["tag"]):
+            p.append(f"section [{x['tag'] or 'untagged'}] has no energy tag (e.g. [Chorus - full energy])")
+    for name, rx in REQ.items():
+        if not any(re.fullmatch(rx, x["base"]) for x in secs): p.append(f"missing [{name.title()} - ...] section")
+    if title:
+        t = re.sub(r"[^a-z ]", "", title.lower()).strip()
+        for name, rx in (("chorus", r"chorus"), ("post-chorus", r"post-?chorus"), ("outro", r"outro")):
+            body = " ".join(" ".join(x["lines"]) for x in secs if re.fullmatch(rx, x["base"]))
+            if t and t not in re.sub(r"[^a-z ]", "", body.lower()):
+                p.append(f"title phrase '{title}' not sung in the {name}")
+    return p
+
 def check(line):
     l = line.lower(); hits = []
     for p in META:
@@ -54,6 +99,13 @@ def main():
         bad += len(dp)
         if dp: print("TRIM: cut whole lines and filler words; keep each story plain and literal but in fewer words; "
                      "verses 4 lines, chorus 4 short lines with a repeated hook.")
+    if "--no-viral" not in sys.argv:
+        tp = next((a.split("=", 1)[1] for a in sys.argv if a.startswith("--title=")),
+                  os.path.join(os.path.dirname(os.path.abspath(path)), "title.txt"))
+        title = open(tp, encoding="utf-8").read().strip() if os.path.exists(tp) else ""
+        vp = viral("\n".join(out), title)
+        for x in vp: print(f"{path}: viral: {x}")
+        bad += len(vp)
     print("lint: clean" if not bad else f"lint: {bad} violation(s)")
     sys.exit(1 if bad else 0)
 if __name__ == "__main__": main()

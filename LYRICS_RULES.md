@@ -18,3 +18,13 @@
 - uptempo (120+ BPM): max 10 / 9, 180 total
 - verses 4 lines, chorus 4 lines with a repeated hook, final chorus 5, bridge 4 (spoken max 12 words/line), intro/outro 1
 See `tools/lyric_metrics.py <lyrics.txt>` for the measurements. BPM/metre come from style.txt next to lyrics.txt.
+
+## Viral-hit format (21 Oct 2026, the owner: "make sure we always follow the viral hit format")
+Default for every daily song (model: 21 Oct "Turn Me On"). lyrics_lint.py fails (use --no-viral to skip) unless:
+- the first section is a sung chant hook ([Intro - chant] + title line), no instrumental intro
+- the first [Chorus] has at most 7 sung lines before it (hook 1 + verse 4 + pre-chorus 2, ~25 s)
+- every section tag has an energy tag ("[Chorus - full energy]")
+- there are [Pre-Chorus - build], [Post-Chorus - chant] (oh-oh), [Breakdown - stripped], [Final Chorus - key change, biggest]
+- the title phrase (title.txt, or --title=) is sung in the chorus, post-chorus and outro
+style_lint.py also requires "female lead vocal", high-energy wording, "pop", and at most 200 characters.
+Plus: under 2:30, a cheeky PG-13 double entendre, 1-2 geeky jokes, pop flavour rotates daily.

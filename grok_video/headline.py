@@ -90,7 +90,7 @@ def lyrics_text(res):
 
 def check(res, day):
     probs = []
-    ch = [[l['text'].strip().lower() for l in s['lines']] for s in res['sections'] if re.fullmatch(r'chorus', s['tag'].strip('[] ').lower())]
+    ch = [[l['text'].strip().lower() for l in s['lines']] for s in res['sections'] if re.fullmatch(r'chorus', re.split(r':|\s+-\s+|,', s['tag'].strip('[] '))[0].strip().lower())]
     if len(ch) < 2 or any(c != ch[0] for c in ch[1:]):
         probs.append('the [Chorus] sections must be identical')
     fc = [s for s in res['sections'] if 'final' in s['tag'].lower()]
@@ -102,8 +102,9 @@ def check(res, day):
     n = sum(len(s['lines']) for s in res['sections'])
     if not 16 <= n <= 28:   # 17 Oct: sparser lyrics
         probs.append(f'{n} lines (want about 20-24; cut lines if over)')
-    if not any(s.get('meta') for s in res['sections'] if 'bridge' in s['tag'].lower()):
-        probs.append('the bridge has no Suno meta-tag surprise')
+    if not any('breakdown' in s['tag'].lower() for s in res['sections']):   # 21 Oct viral format
+        probs.append('missing [Breakdown - stripped] before the final chorus')
+    probs += ['style: ' + x for x in SL.problems(SL.fix(res['style']))]
     if any(v < 8 for v in res['scores'].values()):
         probs.append(f"self-scores under 8: {res['scores']}")
     st = {s['n']: s for s in stories(day)}
@@ -179,6 +180,7 @@ def write(src, out):
         lp = os.path.join(out, 'lyrics.txt')
         open(lp, 'w').write(lyrics_text(res))
         open(os.path.join(out, 'style.txt'), 'w').write(SL.fix(res['style']).strip() + '\n')  # density lint reads BPM/metre
+        open(os.path.join(out, 'title.txt'), 'w').write(res['title'].strip() + '\n')  # 21 Oct: viral lint checks the title hook
         ok, msg = lint(lp)
         probs = check(res, out) + ([] if ok else [f'lint: {msg}'])
         if not probs or attempt == 2:

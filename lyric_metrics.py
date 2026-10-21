@@ -26,8 +26,8 @@ def parse(text):
         if not s: continue
         if s.startswith("[") and s.endswith("]"):
             inner = s[1:-1].strip()
-            base = inner.split(":")[0].strip().lower()
-            if re.match(r"(intro|verse|pre-?chorus|chorus|final chorus|post-?chorus|bridge|outro|hook|interlude)\b", base) and ":" not in inner or \
+            base = re.split(r":|\s+-\s+|,", inner)[0].strip().lower()   # 21 Oct: energy tags "[Chorus - full energy]"
+            if re.match(r"(intro|verse|pre-?chorus|chorus|final chorus|post-?chorus|bridge|breakdown|outro|hook|interlude)\b", base) and ":" not in inner or \
                re.match(r"(verse|chorus|final chorus|bridge|outro)\b", base):
                 cur = [base, [], False]; secs.append(cur)
             elif cur is not None and re.search(r"spoken", inner, re.I):
@@ -53,7 +53,7 @@ LIMITS = {
     "mid":     {"syl_max": 9,  "words_line_max": 8,  "total_words_max": 165},
     "uptempo": {"syl_max": 10, "words_line_max": 9,  "total_words_max": 180},
 }
-COMMON = {"verse_lines_max": 4, "chorus_lines_max": 4, "final_chorus_lines_max": 5, "bridge_lines_max": 4,
+COMMON = {"verse_lines_max": 4, "chorus_lines_max": 4, "final_chorus_lines_max": 5, "bridge_lines_max": 4, "breakdown_lines_max": 4,
           "intro_lines_max": 1, "outro_lines_max": 1, "spoken_words_line_max": 12, "song_secs": 150}
 
 def measure(text, style=""):
