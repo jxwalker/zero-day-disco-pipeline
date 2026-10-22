@@ -91,7 +91,7 @@ def problems(text, style=""):
         lim = L.get(f"{key}_lines_max")
         if lim and len(lines) > lim:
             p.append(f"[{tag}] has {len(lines)} lines (max {lim})")
-        if key == "chorus": choruses.append(lines)
+        if key == "chorus" and not re.match(r"(pre|post)[- ]?chorus", tag): choruses.append(lines)  # 2026-10-22: pre/post-chorus are not the hook chorus
     if choruses:
         bi = lambda l: set(zip(*[re.sub(r"[^a-z ]", "", l.lower()).split()[i:] for i in range(2)]))
         sets = [bi(l) for l in choruses[0]]
