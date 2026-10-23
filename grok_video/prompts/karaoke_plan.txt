@@ -29,8 +29,8 @@ literally about that.
    faces the camera: over-the-shoulder from behind the user, or a straight-on screen view; NEVER show the back of a
    laptop lid (it reads as a screen on the wrong side) and never a screen facing away from camera. Prefer showing the
    person's reaction (face, hands, body) and leave screen CONTENT to GFX (`screen`, `inbox`, `feed`, ...). Prompt:
-   one concrete moment, who/where/what, lighting, lens; 35-70 words; vertical 9:16. `motion`: one short sentence of
-   natural motion for a 6 s clip, or "" for a still only.
+   one concrete moment, who/where/what, lighting, lens; 35-70 words; vertical 9:16. `motion`: REQUIRED, one short sentence of
+   strong, energetic natural motion (body + camera move) for a 6 s clip; never "" (no still images, 23 Oct 2026).
 
 LINE-LOCK (most important; the owner: "the scenes and song lyrics don't match"): the shot under each lyric line must
 LITERALLY show what that line's words say at that moment, so a viewer instantly gets it with the sound off. For every
@@ -42,7 +42,7 @@ must literally fit both. If a line is abstract, illustrate its words with a GFX 
 line's key words). Instrumental-only visuals (intro/breaks/outro) may be mood shots.
 
 RULES
-- At most {SCENES_MAX} scenes, `motion` on at most {CLIPS_MAX}. Use each scene id at most 2 times.
+- At most {SCENES_MAX} scenes, every one with `motion` (all are animated into clips, at most {CLIPS_MAX}). Use each scene id at most 2 times.
 - Visuals for EVERY lyric line (index i as listed, with `shows` and `fact`): 1, or 2 when the line is long (> ~9 words or two facts). About
   45-55% GFX overall; alternate GFX and SCENE often. Repeated choruses: vary the visuals but stay literal.
 - `intro` (instrumental before the first line, ~{INTRO_S}s): 2-3 visuals, first one a scroll-stopper. `breaks`: 4-6
@@ -101,3 +101,17 @@ NARRATIVE (21 Oct 2026, the owner: "we need to really think of a narrative threa
   GFX carry the exact facts, scenes carry the story.
 - Put the arc in the plan: begin each scene prompt's intent with its beat name in your reasoning, and state the arc in
   the design `why` sentence (e.g. "Arc: ... ").
+
+NO STILL IMAGES + ENERGY-MATCHED PACING (23 Oct 2026, the owner: "the still images are a big energy downer"; we need the
+energy and momentum of the Claudia videos):
+- EVERY shot must be in motion. Only three kinds of shot exist: (1) a Grok Imagine video clip (every scene gets a
+  `motion` and is animated; a still is never shown on its own), (2) a terminal typing authentic, real-looking
+  commands (`terminal`/`code`: real CLI syntax, real flags, plausible output), (3) animated graphs and dashboards
+  (`bars`, `gauge`, `rows`, `feed`, `bignum` counting up). Prefer these over text-only cards (headline/quote/browser).
+- Write motion that matches the section's energy: big moves (dance steps, spins, slams, whip pans, fast dollies) in
+  choruses, post-chorus chants, drops and the final lift; gentler moves (slow push-in, drift, breath) in the breakdown.
+- Pacing is done by the editor in code: cuts land on the beat, about 0.5-1 s per shot in choruses and chants, 1-2 s in
+  verses, never more than about 2.5 s (even in the breakdown); long shots are split into beat-synced sub-cuts that
+  alternate the line's clip moments with its graphic. So give choruses and chants 2 visuals per line when you can.
+- Stamp/slam effects at most TWICE in the whole video (the `stamp` template and terminal `stamp`s count together).
+- No story banner/chip over the video.

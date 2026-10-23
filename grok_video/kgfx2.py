@@ -68,11 +68,18 @@ def base(W, H, t=0):
             for x in range(0, W, int(26 * u)):
                 r = 3 * u * (0.4 + 0.6 * y / H); d.ellipse([x - r, y - r, x + r, y + r], fill=sh)
     elif tx == 'scanlines':
-        for y in range(0, H, 4): d.line([(0, y), (W, y)], fill=sh)
+        o = int(t * 24) % 4
+        for y in range(o, H, 4): d.line([(0, y), (W, y)], fill=sh)
     elif tx in ('paper', 'grain'):
         random.seed(int(t * 12))
         for _ in range(int(W * H / 900)):
             x, y = random.randrange(W), random.randrange(H); d.point((x, y), fill=sh)
+    # 23 Oct 2026 (the owner: no static shots): a soft light sweep always moves down the background
+    sy = int((t * 0.9 % 1.0) * (H + 200 * u)) - int(100 * u); hb = max(2, int(90 * u))
+    for k in range(hb):
+        a_ = 1 - abs(k - hb / 2) / (hb / 2)
+        c = tuple(max(0, min(255, int(b + (s2 - b) * 1.6 * a_))) for b, s2 in zip(T['bg'], sh))
+        d.line([(0, sy + k), (W, sy + k)], fill=c)
     return im, d
 
 

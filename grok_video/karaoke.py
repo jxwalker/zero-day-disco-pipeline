@@ -387,6 +387,9 @@ def generate(P, work, a, deadline, status):
             if j['id'] in bad and os.path.exists(j['out']):
                 os.replace(j['out'], j['out'] + '.screen.png'); status.setdefault('screen_rejected', []).append(j['id'])
     status['stills_made'] = sum(1 for j in jobs if os.path.exists(j['out']))
+    for s in scenes:                               # 23 Oct (the owner: no still images): every scene is animated
+        if not (s.get('motion') or '').strip():
+            s['motion'] = "Energetic natural movement of the person with a smooth handheld camera push-in."
     mv = sorted([s for s in scenes if s.get('motion') and os.path.exists(f"{gdir}/{s['id']}.png") and not dup_halves(f"{gdir}/{s['id']}.png")],
                 key=lambda s: -used.get(s['id'], 0))[:a.clips]
     cj = [{'id': 'v_' + s['id'], 'kind': 'i2v', 'image': f"{gdir}/{s['id']}.png", 'duration': 6,
@@ -431,7 +434,6 @@ def line_card(text, fact, used, handle=''):
     key = max(re.findall(r"[A-Za-z0-9'-]+", text) or ['FIX'], key=len).upper()[:14]
     opts = [('headline', {'kicker': key, 'text': text, 'sub': wcut(fact, 80)}),
             ('quote', {'text': text, 'by': ('@' + handle) if handle else wcut(fact, 60)}),
-            ('stamp', {'above': wcut(text, 70), 'text': key}),
             ('browser', {'url': 'news', 'site': 'TODAY', 'headline': text, 'lede': wcut(fact or text, 120), 'highlight': wcut(fact or text, 30)})]
     # 21 Oct: no phone 'screen' fallback (the owner: no laptops, tablets or phones)
     for g, pp in opts:
@@ -517,10 +519,132 @@ def timeline(P, L, dur, day, gdir, bad_scenes=()):
         if v.get('kind') == 'scene':
             sid = v.get('id'); clip, png = f"{gdir}/{sid}.mp4", f"{gdir}/{sid}.png"
             k = seen.get(sid, 0); seen[sid] = k + 1
-            s['src'] = ('clip', clip, [0.0, 2.6, 1.2][k % 3]) if os.path.exists(clip) and os.path.getsize(clip) > 10000 else ('still', png, k)
+            if os.path.exists(clip) and os.path.getsize(clip) > 10000:
+                s['src'] = ('clip', clip, [0.0, 2.6, 1.2][k % 3])
+            else:                                  # 23 Oct: NO still images; a scene without a clip becomes its line's graphic
+                li = s['line']; spec = pl.get(inv.get(li), {}) if li is not None else {}
+                v = line_card(L[li]['text'] if li is not None else title, spec.get('fact', ''), used)
+                used[v['g']] = used.get(v['g'], 0) + 1
+                s['v'] = v; s['redrawn'] = 'scene has no clip (no stills rule)'; s['src'] = ('gfx', v['g'], dict(v.get('p') or {}))
         else:
             s['src'] = ('gfx', v.get('g'), dict(v.get('p') or {}))
+    # 23 Oct: stamp/slam effects at most STAMP_MAX per video (stamp template + terminal stamps)
+    ns = 0
+    for s in shots:
+        if s['src'][0] != 'gfx': continue
+        g, p_ = s['src'][1], s['src'][2]
+        if g == 'stamp' or (g == 'terminal' and p_.get('stamp')):
+            ns += 1
+            if ns > STAMP_MAX:
+                if g == 'terminal': p_.pop('stamp', None)
+                else:
+                    li = s['line']; spec = pl.get(inv.get(li), {}) if li is not None else {}
+                    v = line_card(L[li]['text'] if li is not None else title, spec.get('fact', ''), used)
+                    s['v'] = v; s['src'] = ('gfx', v['g'], dict(v['p'])); s['redrawn'] = 'stamp cap'
     return shots
+
+
+# ---------------------------------------------------------------- pacing (23 Oct 2026, the owner)
+# "cuts need to be quick throughout ... roughly 1-2 s per shot, landing on the beat; about 0.5-1 s in the choruses and
+# post-chorus chants; never hold longer than about 2.5 s, even in the breakdown; split long clips into beat-synced sub-cuts"
+STAMP_MAX = 2
+PACE_BEATS = {'fast': 2, 'mid': 3, 'calm': 4}     # beats per sub-cut (126 BPM: 0.95 / 1.43 / 1.9 s)
+PACE_MAX_S = float(os.environ.get('GV_KARAOKE_MAX_HOLD', 2.5))
+
+
+def beat_grid(audio, dur):
+    """Tempo + phase from an onset envelope (numpy only): returns beat times across the song."""
+    import numpy as np
+    sr = 11025; hop = 128
+    raw = subprocess.run(['ffmpeg', '-v', 'error', '-i', audio, '-ac', '1', '-ar', str(sr), '-f', 's16le', '-'], capture_output=True, check=True).stdout
+    x = np.frombuffer(raw, dtype=np.int16).astype(np.float32) / 32768
+    n = len(x) // hop; fr = x[:n * hop].reshape(n, hop)
+    win = 1024; spec = []
+    for i in range(0, len(x) - win, hop): spec.append(np.abs(np.fft.rfft(x[i:i + win] * np.hanning(win)))[:200])
+    S = np.log1p(10 * np.array(spec)); fl = np.maximum(0, np.diff(S, axis=0)).sum(1)
+    fl = (fl - fl.mean()) / (fl.std() + 1e-9); fps = sr / hop
+    best = (0, 120.0)
+    for bpm in np.arange(90, 181, 0.25):
+        per = 60 * fps / bpm; lag = per
+        ac = 0
+        for m in (1, 2, 4):
+            L_ = int(round(lag * m)); ac += (fl[:-L_] * fl[L_:]).mean() / m
+        if ac > best[0]: best = (ac, bpm)
+    bpm = best[1]
+    while bpm < 100: bpm *= 2
+    while bpm > 180: bpm /= 2
+    per = 60 / bpm; idx = np.arange(len(fl)) / fps
+    ph_best = (-1e9, 0)
+    for ph in np.arange(0, per, 0.005):
+        k = np.round((np.arange(ph, dur, per)) * fps).astype(int); k = k[k < len(fl)]
+        sc = fl[k].sum()
+        if sc > ph_best[0]: ph_best = (sc, ph)
+    return float(bpm), [float(t) for t in np.arange(ph_best[1], dur, per)]
+
+
+def energy_at(t, L, day):
+    """fast (chorus/chant/hook/intro chant/final lift), mid (verse/pre), calm (breakdown/bridge/stripped) for time t."""
+    secs = lyric_sections(day); timed = [i for i, ln in enumerate(L) if ln.get('start') is not None]
+    if not timed or t < L[timed[0]]['start']: return 'fast'
+    cur = None
+    for i in timed:
+        if L[i]['start'] - 0.1 <= t: cur = i
+    if cur is None or cur >= len(secs): return 'fast'
+    name = norm(secs[cur][1]) + ' ' + secs[cur][2]
+    if any(k in name for k in ('breakdown', 'bridge', 'stripped', 'whisper')): return 'calm'
+    if 'pre' in name: return 'mid'
+    if any(k in name for k in ('chorus', 'chant', 'hook', 'refrain', 'drop', 'outro', 'intro')): return 'fast'
+    return 'mid'
+
+
+def pace(shots, L, day, audio, dur):
+    """Split every shot into beat-synced sub-cuts sized to the section energy. Sub-cuts of a clip show other moments of
+    the same clip (alternating punch-in); sub-cuts of a graphic alternate with the line's own scene clip (or the
+    nearest scene clip) and the graphic resumes where its animation left off."""
+    bpm, beats = beat_grid(audio, dur)
+    end_shot = shots[-1]; body = shots[:-1]; out = []
+    clips_seen = {}
+    def clip_src(path):
+        k = clips_seen.get(path, 0); clips_seen[path] = k + 1
+        return ('clip', path, [0.0, 2.4, 1.2, 3.6, 0.6, 3.0, 1.8, 4.2][k % 8], {'zoom': [1.0, 1.16][k % 2]})
+    def near_clip(i):
+        li = body[i]['line']
+        for j in list(range(i, -1, -1)) + list(range(i + 1, len(body))):   # same line first, then nearest earlier/later
+            if body[j]['src'][0] == 'clip' and (j == i or body[j]['line'] == li): return body[j]['src'][1]
+        for d_ in range(1, len(body)):
+            for j in (i - d_, i + d_):
+                if 0 <= j < len(body) and body[j]['src'][0] == 'clip': return body[j]['src'][1]
+        return None
+    for i, s in enumerate(body):
+        t0, t1 = s['t0'], s['t1']
+        e = energy_at((t0 + t1) / 2, L, day); nb = PACE_BEATS[e]
+        bs = [b for b in beats if t0 + 0.3 < b < t1 - 0.3]
+        cutsp = [t0]
+        k = 0
+        for b in bs:
+            k += 1
+            if k >= nb and b - cutsp[-1] >= 0.4: cutsp.append(b); k = 0
+        if t1 - cutsp[-1] < 0.35 and len(cutsp) > 1: cutsp.pop()
+        cutsp.append(t1)
+        pieces = list(zip(cutsp[:-1], cutsp[1:]))
+        fin = []
+        for a, b in pieces:                         # hard cap ~2.5 s
+            m = max(1, math.ceil((b - a) / PACE_MAX_S))
+            fin += [(a + (b - a) * q / m, a + (b - a) * (q + 1) / m) for q in range(m)]
+        alt = near_clip(i) if s['src'][0] == 'gfx' else None
+        for q, (a, b) in enumerate(fin):
+            n_ = dict(s, t0=a, t1=b, energy=e)
+            if s['src'][0] == 'clip':
+                n_['src'] = clip_src(s['src'][1])
+            elif s['src'][0] == 'gfx':
+                if q % 2 == 1 and alt: n_['src'] = clip_src(alt); n_['sub_of'] = 'gfx'
+                else:
+                    p_ = dict(s['src'][2]); p_['_toff'] = a - t0; p_['_dur'] = t1 - t0
+                    n_['src'] = ('gfx', s['src'][1], p_)
+            if q: n_['sub'] = q
+            out.append(n_)
+    out.append(end_shot)
+    return out, bpm
 
 
 MATCH_SCHEMA = {"type": "object", "required": ["rows"], "properties": {"rows": {"type": "array", "items": {
@@ -600,11 +724,13 @@ def render_seg(job):
     grade = DZ.GRADE.get(design.get('grade'), '')
     ENC = ENC0
     nfr = max(1, round(s['t1'] * FPS) - round(s['t0'] * FPS)); dur = nfr / FPS
-    kind, src, x = s['src']
+    kind, src, x = s['src'][:3]; opt = s['src'][3] if len(s['src']) > 3 else {}
     if kind == 'clip':
         spd = min(1.0, max(0.4, (6.0 - x) / dur))
+        z = opt.get('zoom', 1.0)
+        zf = f",scale=iw*{z}:ih*{z},crop={W}:{H}" if z != 1.0 else ''
         subprocess.run(['ffmpeg', '-v', 'error', '-y', '-ss', str(x), '-i', src, '-filter_complex',
-                        f"setpts=PTS/{spd},{_vf_fill(W, H)},fps={FPS}" + (',' + grade if grade else '') + (',' + tv if tv else ''), '-frames:v', str(nfr), '-an'] + ENC + [out], check=True)
+                        f"setpts=PTS/{spd},{_vf_fill(W, H)}{zf},fps={FPS}" + (',' + grade if grade else '') + (',' + tv if tv else ''), '-frames:v', str(nfr), '-an'] + ENC + [out], check=True)
         return out
     if kind == 'still':
         zin = x % 2 == 0
@@ -613,16 +739,29 @@ def render_seg(job):
                f"split[a][b];[a]scale={W*2}:{H*2}:force_original_aspect_ratio=increase,crop={W*2}:{H*2},boxblur=40:3,eq=brightness=-0.15[bg];[b]scale=-2:{H*2}[fg];[bg][fg]overlay=(W-w)/2:0,")
         subprocess.run(['ffmpeg', '-v', 'error', '-y', '-loop', '1', '-i', src, '-filter_complex', pre + z + (',' + grade if grade else '') + (',' + tv if tv else ''), '-frames:v', str(nfr)] + ENC + [out], check=True)
         return out
-    p = dict(x)
+    p = dict(x); toff = p.pop('_toff', 0.0); tdur = p.pop('_dur', None) or dur
+    bgframes = None
     if src == 'endcard':
         p.update(endp)
-        if p.get('bg'): p['bg'] = _fill(Image.open(p['bg']).convert('RGB'), W, H)
+        bc = p.pop('bg_clip', None)
+        if bc and os.path.exists(bc):              # 23 Oct: moving end-card background (no stills)
+            spd = min(1.0, 6.0 / max(dur, 0.1))
+            raw = subprocess.run(['ffmpeg', '-v', 'error', '-i', bc, '-vf', f"setpts=PTS/{spd},{_vf_fill(W, H)},fps={FPS}",
+                                  '-frames:v', str(nfr), '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'], capture_output=True).stdout
+            fsz = W * H * 3; bgframes = [Image.frombytes('RGB', (W, H), raw[i:i + fsz]) for i in range(0, len(raw) - fsz + 1, fsz)]
+            p['bg'] = bgframes[0] if bgframes else None
+        elif p.get('bg'): p['bg'] = _fill(Image.open(p['bg']).convert('RGB'), W, H)
     f = kgfx.R.get(src, kgfx.R['headline'])
     pr = subprocess.Popen(['ffmpeg', '-v', 'error', '-y', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-s', f'{W}x{H}', '-r', str(FPS),
                            '-i', '-'] + (['-vf', tv] if tv else []) + ENC + [out], stdin=subprocess.PIPE)
     for k in range(nfr):
         try:
-            im = kgfx.render(src if src in kgfx.R else 'headline', W, H, k / FPS, dur, p)
+            if bgframes: p['bg'] = bgframes[min(k, len(bgframes) - 1)]
+            im = kgfx.render(src if src in kgfx.R else 'headline', W, H, toff + k / FPS, tdur, p)
+            if src != 'endcard':                   # 23 Oct: constant gentle push so no graphic ever sits still
+                zz = 1.0 + 0.022 * ((toff + k / FPS) / max(tdur, 0.5))
+                cw, ch = int(W / zz), int(H / zz)
+                im = im.crop(((W - cw) // 2, (H - ch) // 2, (W - cw) // 2 + cw, (H - ch) // 2 + ch)).resize((W, H), Image.BILINEAR)
         except Exception:
             im = kgfx.R['headline'](W, H, k / FPS, dur, {'text': str(p.get('text') or p.get('title') or '')})
         if im.size != (W, H): im = im.resize((W, H))
@@ -788,7 +927,11 @@ def fit_check(fitlog, texts, day):
     for r in recs:
         if r.get('fail'): fails.append(f"{r.get('shot')}: {r.get('text')!r}"[:120])
         elif 'final' in r:
-            for w in norm(r['final']).split():
+            fw = norm(r['final']).split()
+            for i, w in enumerate(fw):
+                # 24 Oct: 'NBC News' vs source handle '@NBCNews' is not truncation; skip if w+next word is a source word
+                if i + 1 < len(fw) and (w + fw[i + 1]) in srcw: continue
+                if (w + '-') in r['final'].lower(): continue  # hyphenated prefix like 'ex-editors'
                 if len(w) >= 2 and not w.isdigit() and w not in srcw and not real(w) and any(sw.startswith(w) and sw != w for sw in srcw):
                     trunc.add(w)
     return sorted(set(fails)), sorted(trunc)
@@ -826,7 +969,7 @@ def main():
     ap.add_argument('--skip-gen', action='store_true'); ap.add_argument('--replan', action='store_true')
     ap.add_argument('--no-fallback', action='store_true'); ap.add_argument('--no-16x9', action='store_true')
     ap.add_argument('--stills', type=int, default=int(os.environ.get('GV_KARAOKE_STILLS', 14)))
-    ap.add_argument('--clips', type=int, default=int(os.environ.get('GV_KARAOKE_CLIPS', 8)))
+    ap.add_argument('--clips', type=int, default=int(os.environ.get('GV_KARAOKE_CLIPS', 14)))   # 23 Oct: no stills -> every scene is a clip
     ap.add_argument('--time-limit', type=float, default=float(os.environ.get('GV_KARAOKE_LIMIT_MIN', 40)))
     ap.add_argument('--whisper-model', default='medium')
     a, passthru = ap.parse_known_args()
@@ -933,8 +1076,10 @@ def main():
                 f_.write('| shot | line | shot shown | match | note |\n|---|---|---|---|---|\n')
                 for r in tab2:
                     f_.write(f"| {r['n']} | {r['line']} | {r['shot'][:90].replace('|', '/')} | {'yes' if r['match'] else 'NO'} | {r['why'][:80].replace('|', '/')} |\n")
+        shots, bpm_ = pace(shots, L, day, audio, dur); status['bpm'] = round(bpm_, 1)
+        G.log(f'karaoke: paced {len(shots)} shots at {bpm_:.1f} BPM')
         end_t = shots[-1]['t0']
-        story = story_events(P, L, day, dur, end_t)
+        story = []   # 23 Oct: no story banner/chip over the video (standing rule)
         stills = sorted(f for f in os.listdir(gdir) if f.endswith('.png'))
         endp = {'title': G.read(os.path.join(day, 'title.txt')).strip(), 'credit': (P.get('credit') or '')[:80],
                 'sub': 'Grok Bot · ' + time.strftime('%-d %b %Y', time.strptime(os.path.basename(day)[:10], '%Y-%m-%d')) if re.match(r'\d{4}-\d\d-\d\d', os.path.basename(day)) else '',
@@ -943,7 +1088,9 @@ def main():
         if P.get('scenes') and stills:                # prefer the outro scene as the end-card background
             for v in P.get('outro', [])[::-1]:
                 if v.get('kind') == 'scene' and os.path.exists(os.path.join(gdir, f"{v['id']}.png")):
-                    endp['bg'] = os.path.join(gdir, f"{v['id']}.png"); break
+                    endp['bg'] = os.path.join(gdir, f"{v['id']}.png")
+                    if os.path.exists(os.path.join(gdir, f"{v['id']}.mp4")): endp['bg_clip'] = os.path.join(gdir, f"{v['id']}.mp4")
+                    break
         G.save_json({'shots': [{'t0': round(s['t0'], 2), 't1': round(s['t1'], 2), 'src': [s['src'][0], s['src'][1]], 'line': s.get('line'), 'redrawn': s.get('redrawn')} for s in shots],
                      'story': story}, os.path.join(work, 'timeline.json'))
         sizes = [(1080, 1920)] + ([] if a.no_16x9 else [(1920, 1080)])
@@ -1011,6 +1158,7 @@ def main():
         status.update(ok=vr['ok'], verify=vr['checks'], sync=sync, sync_ok=sync_ok, spelling_unknown=bad, contact_sheet=cs,
                       shots=len(shots), avg_shot=round(end_t / max(1, len(shots) - 1), 2),
                       scenes=sum(1 for s in shots if s['src'][0] in ('clip', 'still')), clips_used=sum(1 for s in shots if s['src'][0] == 'clip'),
+                      stills_used=sum(1 for s in shots if s['src'][0] == 'still'), max_hold=round(max(s['t1'] - s['t0'] for s in shots[:-1]), 2),
                       planner=P.get('planner'), wide=results.get('1920x1080'), chat=chat,
                       chat_mb=round(os.path.getsize(chat) / 1048576, 1), elapsed_s=round(time.time() - t_start))
         try:
@@ -1041,6 +1189,13 @@ def main():
         for f in (out, chat, wide):
             if os.path.exists(f) and os.path.getmtime(f) >= t_start:
                 os.replace(f, os.path.splitext(f)[0] + '.failed.mp4')
+        # 24 Oct 2026: a verification-only failure means all paid media already exists in work_karaoke. Falling back to the
+        # Claudia/cine-real chain then burns 50+ min, hits the routine's time limit and loses post/sources. Stop here instead;
+        # fix the check and re-render with: karaoke.py DAY --skip-gen --no-fallback  (no Grok spend).
+        if why.startswith('RuntimeError: verification failed'):
+            G.save_json(dict(stage='media_done_verify_failed', error=why[:500], resume=f'karaoke.py {day} --skip-gen --no-fallback'),
+                        os.path.join(day, 'VIDEO_CHECKPOINT.json'))
+            print(f"GROK_VIDEO_STATUS=failed code=4 style=karaoke resumable=1 reason={why[:300]!r}", flush=True); sys.exit(4)
         if a.no_fallback or a.skip_gen:
             print(f"GROK_VIDEO_STATUS=failed code=3 style=karaoke reason={why[:300]!r}", flush=True); sys.exit(3)
         G.log(f"karaoke FAILED ({why[:200]}); falling back to grok_video.py (Claudia/slopcore chain)")

@@ -637,3 +637,8 @@ Test without spending: `grok_video.sh <day> --style slopcore --plan-only --skip-
 - `claudia.build_ass(..., story=)`: opening card = plain headline + "via @handle"; "ALSO TODAY" caption box when each
   secondary story is first sung; "THE STORY" key fact at the first chorus; placed opposite the lyric zone, <=8 words.
 - Off switch: `GV_STORY_TEXT=0` (text layer only). Rollback of everything: the `.bak-20261019-story` copies.
+
+## Default since 23 Oct 2026: no stills + energy-matched pacing
+- Every scene gets a motion and becomes a Grok clip (--clips default 14). A scene with no clip falls back to an animated line_card graphic, never a still image.
+- pace() splits shots on the detected beat grid: 2 beats in chorus/chant/hook/intro/outro, 3 in verse/pre, 4 in breakdown/bridge, and never holds longer than GV_KARAOKE_MAX_HOLD (2.5 s). Long clips are re-cut at offsets with alternating zoom.
+- At most 2 stamps (STAMP_MAX). No story banner. Status records stills_used, max_hold and bpm.
