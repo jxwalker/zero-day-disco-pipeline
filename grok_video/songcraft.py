@@ -99,6 +99,18 @@ def concept_block(c, sharpen=''):
             + (f"- A&R sharpen note: {sharpen}\n" if sharpen else '') + "\n" + CRAFT)
 
 
+JAMES_RULES = ("HOUSE RULES (the owner; these override the rubric hints, never ask for the opposite):\n"
+    "- A singable natural line beats an exact number, handle or stat. Never ask to add a number/handle that cramps a line; "
+    "a real number counts for specificity only if it sings naturally.\n"
+    "- The video must be filmable with NO device screens, phones, laptops or tablets on screen. Never ask to add them; "
+    "penalise (specificity/thread) lyrics whose story needs a phone/laptop/screen to be seen. Wearables, earbuds, smart "
+    "speakers, voices and objects are fine.\n"
+    "- The second chorus must vary from the first (new 2nd/3rd lines that move the story); identical = story_arc max 6.\n"
+    "- The opener must tell a stranger the premise in under 3 s; unclear = hook_clarity and tiktok_first3s max 6.\n"
+    "- The outro must not introduce new facts or switch who did what.\n"
+    "- Verses are four lines and form an arc (setup -> incident -> consequence).")
+
+
 def judge(lyrics, title, concept_txt, stories_md, od, n):
     pf = os.path.join(od, f'judge_{n}.txt')
     open(pf, 'w').write(
@@ -115,7 +127,7 @@ def judge(lyrics, title, concept_txt, stories_md, od, n):
         "- tiktok_first3s: the first sung words stop the scroll and say what it is; ending loops\n"
         f"Pass needs every score >= {MIN} and mean >= {MEAN}. Do not inflate. For every weak line give line/problem/fix "
         "(the fix must keep the line short: max 9 words). must_fix = the few changes that would lift the lowest scores. "
-        "Facts must come only from the stories; flag any invented fact.\n\nINTENDED CONCEPT:\n" + concept_txt +
+        "Facts must come only from the stories; flag any invented fact.\n\n" + JAMES_RULES + "\n\nINTENDED CONCEPT:\n" + concept_txt +
         "\n\nTODAY'S STORIES:\n" + stories_md + f"\n\nTITLE: {title}\n\nLYRICS:\n{lyrics}\n\nReply with the JSON only.")
     r = _run(pf, od, JUDGE_SCHEMA, 420, effort='high')
     sc = r['scores']; mean = sum(sc[k] for k in RUBRIC) / len(RUBRIC)
