@@ -583,7 +583,7 @@ def timeline(P, L, dur, day, gdir, bad_scenes=()):
             s_['v'] = v = line_card(txt, spec.get('fact', ''), used); s_['redrawn'] = 'scene missing/rejected'
         if v.get('kind') == 'gfx':
             g = 'terminal' if v.get('g') == 'term' else v.get('g')
-            if used.get(g, 0) >= MAX_PER_TEMPLATE:
+            if used.get(g, 0) >= (MAX_PER_TEMPLATE * 3 if g == 'terminal' else MAX_PER_TEMPLATE):   # 24 Oct the owner: story terminals wanted
                 s_['v'] = v = line_card(txt, spec.get('fact', ''), used); s_['redrawn'] = f'template {g} over cap'
                 g = v['g']
             used[g] = used.get(g, 0) + 1
