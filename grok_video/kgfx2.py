@@ -276,21 +276,36 @@ def code(W, H, t, dur, p):
 
 
 def terminal(W, H, t, dur, p):
-    im, d = base(W, H, t); u = U(W, H); x0 = W * 0.06; mw = W * 0.88; y0 = top0(W, H) - 20 * u; bh = zone(W, H) * 0.8 - y0
-    card(d, [x0, y0, x0 + mw, y0 + bh], fill=T['ink'] if T['light'] else T['panel'], u=u)
-    d.text((x0 + 24 * u, y0 + 22 * u), p.get('title', 'user@host: ~'), font=F('mono', 28 * u), fill=T['muted'])
-    fg = T['panel'] if T['light'] else T['ink']
-    fs = 36 * u; f = F('mono', fs); y = y0 + 80 * u; clock = t * p.get('cps', 34) + 4
-    for kind, txt in p.get('lines', []):
+    """24 Oct (the owner): dense, real-looking session that types live and finishes by ~65% of the shot."""
+    im, d = base(W, H, t); u = U(W, H); x0 = W * 0.05; mw = W * 0.90; y0 = top0(W, H) - 40 * u; bh = zone(W, H) - y0 - 20 * u
+    card(d, [x0, y0, x0 + mw, y0 + bh], fill=(22, 24, 22), u=u)
+    d.rectangle([x0, y0, x0 + mw, y0 + 54 * u], fill=(48, 50, 46))
+    for k, c in enumerate([(237, 106, 94), (245, 191, 79), (98, 197, 84)]):
+        d.ellipse([x0 + (22 + 30 * k) * u, y0 + 17 * u, x0 + (42 + 30 * k) * u, y0 + 37 * u], fill=c)
+    d.text((x0 + mw / 2, y0 + 27 * u), p.get('title', 'juno@bench: ~'), font=F('mono', 24 * u), fill=(170, 170, 160), anchor='mm')
+    L = p.get('lines', []); ps = p.get('prompt', 'juno@bench:~$ ')
+    fs = 30 * u
+    while fs > 18 * u and (75 * u + len(L) * fs * 1.38 > bh or max([d.textlength(ps + x[1] if x[0] == 'cmd' else x[1], font=F('mono', fs)) for x in L] or [0]) > mw - 50 * u): fs *= 0.93
+    f = F('mono', fs)
+    total = sum(len(x[1]) if x[0] == 'cmd' else 6 for x in L) + 1
+    clock = t * total / max(0.3, 0.65 * dur) + 2
+    col = {'out': (205, 205, 195), 'ok': (120, 215, 110), 'add': (120, 215, 110), 'del': (240, 110, 100), 'err': (240, 110, 100),
+           'warn': (245, 191, 79), 'dim': (125, 130, 120), 'hl': (245, 191, 79), 'cyan': (110, 200, 220)}
+    y = y0 + 75 * u; cur = None
+    for kind, txt in L:
         if clock <= 0 or y > y0 + bh - fs: break
-        col = {'cmd': fg, 'out': T['a3'], 'err': T['bad'], 'warn': T['a1'], 'dim': T['muted']}.get(kind, fg)
         if kind == 'cmd':
-            n = int(min(len(txt), clock)); clock -= len(txt) + 6; d.text((x0 + 28 * u, y), '$ ' + txt[:n], font=f, fill=col)
+            n = int(min(len(txt), clock)); clock -= len(txt)
+            d.text((x0 + 24 * u, y), ps, font=f, fill=(120, 215, 110)); xx = x0 + 24 * u + d.textlength(ps, font=f)
+            d.text((xx, y), txt[:n], font=f, fill=(235, 235, 225)); cur = (xx + d.textlength(txt[:n], font=f), y)
             if n < len(txt): break
         else:
-            d.text((x0 + 28 * u, y), txt, font=f, fill=col); clock -= 4
-        y += fs * 1.5
-    if p.get('stamp') and t > dur * 0.55: stamp_over(im, t - dur * 0.55, p['stamp'], 'bad')
+            d.text((x0 + 24 * u, y), txt, font=f, fill=col.get(kind, (205, 205, 195))); clock -= 6; cur = None
+        y += fs * 1.38
+    if cur is None and y <= y0 + bh - fs:
+        d.text((x0 + 24 * u, y), ps, font=f, fill=(120, 215, 110)); cur = (x0 + 24 * u + d.textlength(ps, font=f), y)
+    if cur and int(t * 3) % 2 == 0: d.rectangle([cur[0] + 2, cur[1] + fs * 0.1, cur[0] + fs * 0.55, cur[1] + fs * 1.05], fill=(235, 235, 225))
+    if p.get('stamp') and t > dur * 0.7: stamp_over(im, t - dur * 0.7, p['stamp'], 'bad')
     return im
 
 
