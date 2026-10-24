@@ -927,7 +927,11 @@ def fit_check(fitlog, texts, day):
     for r in recs:
         if r.get('fail'): fails.append(f"{r.get('shot')}: {r.get('text')!r}"[:120])
         elif 'final' in r:
-            for w in norm(r['final']).split():
+            fw = norm(r['final']).split()
+            for i, w in enumerate(fw):
+                # 24 Oct: 'NBC News' vs source handle '@NBCNews' is not truncation; skip if w+next word is a source word
+                if i + 1 < len(fw) and (w + fw[i + 1]) in srcw: continue
+                if (w + '-') in r['final'].lower(): continue  # hyphenated prefix like 'ex-editors'
                 if len(w) >= 2 and not w.isdigit() and w not in srcw and not real(w) and any(sw.startswith(w) and sw != w for sw in srcw):
                     trunc.add(w)
     return sorted(set(fails)), sorted(trunc)
