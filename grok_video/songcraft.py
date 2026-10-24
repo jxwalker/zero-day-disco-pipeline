@@ -12,7 +12,7 @@ HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 import slop_opus as SO
 
 S = {"type": "string"}; I = {"type": "integer"}
-RUBRIC = ['thread_coherence', 'pun_strength', 'hook_clarity', 'story_arc', 'specificity', 'quotability',
+RUBRIC = ['single_story_focus', 'normie_test', 'pun_strength', 'hook_clarity', 'story_arc', 'specificity', 'quotability',
           'singability', 'tiktok_first3s']
 MIN = int(os.environ.get('HL_JUDGE_MIN', 8)); MEAN = float(os.environ.get('HL_JUDGE_MEAN', 8.5))
 
@@ -25,8 +25,8 @@ CONCEPT = {"type": "object", "properties": {
 PITCH_SCHEMA = {"type": "object", "properties": {"concepts": {"type": "array", "items": CONCEPT}}, "required": ["concepts"]}
 PICK_SCHEMA = {"type": "object", "properties": {
     "scores": {"type": "array", "items": {"type": "object", "properties": {
-        "i": I, "pun_strength": I, "real_life_truth": I, "thread_fit": I, "news_clarity": I, "tiktok": I, "note": S},
-        "required": ["i", "pun_strength", "real_life_truth", "thread_fit", "news_clarity", "tiktok", "note"]}},
+        "i": I, "pun_strength": I, "real_life_truth": I, "thread_fit": I, "normie": I, "news_clarity": I, "tiktok": I, "note": S},
+        "required": ["i", "pun_strength", "real_life_truth", "thread_fit", "normie", "news_clarity", "tiktok", "note"]}},
     "chosen": I, "why": S, "sharpen": S}, "required": ["scores", "chosen", "why", "sharpen"]}
 JUDGE_SCHEMA = {"type": "object", "properties": {
     "scores": {"type": "object", "properties": {k: I for k in RUBRIC}, "required": RUBRIC},
@@ -64,8 +64,10 @@ def concepts(stories_md, od):
     open(pf, 'w').write(
         "You are a top-line pop songwriter in a writers' room pitching today's song for the owner's daily AI-news song on X "
         "(bright pop, female lead, 2:30, viral-hit format).\n\n" + CRAFT +
-        "\n\nPitch 5 DIFFERENT concepts. Each uses one unifying thread (one story, or 2-3 stories that genuinely live in the "
-        "same scenario). For each give the title phrase, what it means in real life, what it means in the tech story, the "
+        "\n\nPitch 5 DIFFERENT concepts. ONE MAIN STORY per song (24 Oct, the owner): pick the single strongest story; other stories "
+        "may appear only as one passing line if they live in the same scenario. The chorus hook must be a MAINSTREAM "
+        "CROSSOVER: an inside joke for tech people that ALSO makes sense and is fun for someone who never heard the story "
+        "(benchmarks: 'Take It Apart', 'Turn Me On'). For each give the title phrase, what it means in real life, what it means in the tech story, the "
         "one-line thread, the persona singing, the story numbers used, the arc beats (v1, v2, breakdown, final flip = the "
         "one-word swap and what it flips to), the first-3-seconds visual, the quotable line, a comment prompt, and the lead "
         "character's visual (an original woman aged 21-28, a manic-pixie indie engineer; no real people).\n\n"
@@ -76,7 +78,7 @@ def concepts(stories_md, od):
     open(jf, 'w').write(
         "You are a ruthless A&R judge who has signed novelty-pop hits. Score each pitched concept 1-10 on pun_strength "
         "(a double meaning a non-tech person gets instantly and smiles at), real_life_truth (people really say this "
-        "phrase), thread_fit (one scenario holds the whole song), news_clarity (a stranger can name the story) and "
+        "phrase), thread_fit (ONE main story holds the whole song; multi-story pitches max 5), normie (would someone who never heard the story get and enjoy the hook? must be >= 8 to pick), news_clarity (a stranger can name the story) and "
         "tiktok (scroll-stop + quotable + loop). Benchmark: 'Turn Me On' for a data centre waiting on grid power = 9-10 "
         "pun. Be harsh; 8 means it would really work. Pick the best (index i from 0), say why, and give one 'sharpen' "
         "note that would make it better.\n\n" + CRAFT + "\n\nTODAY'S STORIES:\n" + stories_md + "\n\nCONCEPTS:\n" +
@@ -116,7 +118,8 @@ def judge(lyrics, title, concept_txt, stories_md, od, n):
     open(pf, 'w').write(
         "You are the strictest lyric editor in pop (think a hit-factory topliner plus a TikTok A&R). Judge this song "
         "on its own merits; you did not write it. Score 1-10 each, where 8 = genuinely release-worthy and 10 = hit:\n"
-        "- thread_coherence: one scenario, one persona; verse 2 escalates the same situation (disconnected topics = max 5)\n"
+        "- single_story_focus: the song is built on ONE main story, one scenario, one persona; verse 2 escalates the same situation (two or more separate stories = max 5)\n"
+        "- normie_test: would someone who has never heard the story get AND enjoy the hook? It must be an inside joke for tech people that also works as a mainstream pop line (benchmarks 'Take It Apart', 'Turn Me On' = 9); needs >= 8\n"
         "- pun_strength: the title works as an everyday real-life phrase AND literally in the tech story; the chorus "
         "turns; the final flip lands (benchmark 'Turn Me On' for a data centre waiting on power = 9)\n"
         "- hook_clarity: title chant is first, plain, chantable; a stranger names the story after one listen\n"
