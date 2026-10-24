@@ -218,6 +218,9 @@ def line_check(P, scenes, jobs, gdir, lines, status, look, deadline):
 # Runway is reached only through the user-Runway MCP (agent side), so the pipeline writes the jobs and the routine's
 # agent runs them: see prompts/runway_hero_runbook.md. Budget ~300 credits/day; any failure keeps the Grok clip.
 HERO_COST = {'kling-4': 15.7, 'wan3': 10.0}       # credits per second at 720p (Runway MCP docs, 24 Oct 2026)
+HERO_FRAME_COST = 4                                # nano-banana-2.1 1K reference frame (Runway generate_image)
+HOUSE_FRAME = ("Acid Deadpan house style: Klein blue, acid green and orange palette, symmetrical wide framing, flat even "
+               "light, deadpan expressions (no tongue out, no pulled faces), 35mm grain, no readable or mirrored text. ")
 HERO_BUDGET = float(os.environ.get('GV_HERO_BUDGET', 300)); HERO_SECS = 5
 
 
@@ -260,14 +263,16 @@ def hero_plan(P, day, gdir):
         if not s or not os.path.exists(f"{gdir}/{p['id']}.png"): continue
         prop = bool(re.search(r'\b(screen|display|terminal|monitor|dashboard|close-up of|insert|hand[s]? on|prop|log)\b', s['prompt'], re.I)) and 'chorus' not in p['why']
         model = 'wan3' if prop else 'kling-4'
-        cost = HERO_COST[model] * HERO_SECS
+        cost = HERO_COST[model] * HERO_SECS + HERO_FRAME_COST
         if spent + cost > HERO_BUDGET: continue
         spent += cost
         motion = re.sub(r'\[LEAD\]', 'the woman', s.get('motion', ''))
         jobs.append(dict(p, model=model, est_credits=round(cost), image=f"{gdir}/{p['id']}.png", out=f"{gdir}/{p['id']}.mp4",
                          prompt=("Keep the exact same woman, outfit, set and lighting as the image; live-action music video, "
                                  "35mm film look, natural human motion, no morphing, no new people, no text, no laptops or phones. "
-                                 + motion)[:2400], ratio='9:16', resolution='720p', duration=HERO_SECS, status='todo'))
+                                 + motion)[:2400], ratio='9:16', resolution='720p', duration=HERO_SECS, status='todo',
+                         frame_model='nano-banana-2.1', frame_prompt=(HOUSE_FRAME + s['prompt'])[:2400],
+                         path_order=['runway_frame', 'runway_text', 'grok']))
     G.save_json({'budget': HERO_BUDGET, 'est_total': round(spent), 'jobs': jobs}, os.path.join(gdir, 'hero_jobs.json'))
     G.log(f"storyboard: hero plan {[(j['id'], j['model'], j['why']) for j in jobs]} est {round(spent)} credits")
     return jobs

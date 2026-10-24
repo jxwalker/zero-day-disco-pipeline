@@ -3,7 +3,7 @@ Runway is only reachable through the `user-Runway` MCP, so the agent running the
 1. After the first karaoke build, `<work>/grok/hero_jobs.json` lists 2-4 hero shots (chorus opening, final-chorus drop,
    final payoff, scroll-stopper), each with model (kling-4 = high-energy performance, wan3 = prop/screen), prompt,
    still and est_credits. Budget: GV_HERO_BUDGET (default 300 credits/day). Skip any job that would exceed it.
-2. For each job: `init_upload` the still -> curl PUT -> `complete_upload` -> `generate_video` with model, startFrame.url,
+2. (SUPERSEDED by the 24 Oct relay update below; uploads 403 from the box.) Old flow: `init_upload` -> curl PUT -> `complete_upload` -> `generate_video` with model, startFrame.url,
    promptText, ratio 9:16, resolution 720p, duration 5 (kling-4: no generateAudio; wan3: generateAudio false) ->
    `get_task` every 60-120 s -> download -> `python storyboard.py hero-apply <gdir> <id> <file.mp4>`.
    Mark status done/failed and the credits used in hero_jobs.json (checkpoint after every job).
@@ -24,3 +24,19 @@ Runway is only reachable through the `user-Runway` MCP, so the agent running the
   (b) fallback that works today: text-to-video, or generate_image, then use that taskId as the start frame for
       image_to_video. No upload is needed.
   Do not upload stills to any public host.
+
+## 24 Oct 2026 relay update: reference-frame pattern (DEFAULT, tested end to end)
+Claudia pattern: make a reference frame first, then animate it. No uploads.
+Fallback chain per job (`path_order`): runway_frame -> runway_text -> grok.
+1. runway_frame: `generate_image` model=job.frame_model (nano-banana-2.1), ratio 9:16, imageSize 1K, thinkingLevel minimal,
+   promptText=job.frame_prompt (~4 credits, ~15 s). For Pip cameo jobs pass assets/pip_ref_9x16.png only if a Runway-hosted
+   URL exists; otherwise describe Pip in text. Check the frame with Read (tongue-out, flipped text, off-style -> regenerate once).
+   Then `generate_video` model=job.model, startFrame.taskId=<image task id>, promptText=job.prompt, ratio 9:16,
+   resolution 720p, duration 5 (wan3: generateAudio false; kling-4: omit generateAudio). Poll `get_task` every 60-120 s,
+   curl the artifact URL to job.out, then `python storyboard.py hero-apply <gdir> <id> <file.mp4>`.
+2. runway_text: if the frame step fails or is refused, `generate_video` text-only with frame_prompt + job.prompt.
+3. grok: any further failure keeps the Grok clip (automatic). Never retry the same model more than once.
+Keep GV_HERO_BUDGET (300/day, frame cost included in est_credits). GV_HERO=0 disables.
+DGX Spark relay (option a) is APPROVED by the owner but NOT usable from the box right now: the box has no ssh client and no
+tailnet route ($SPARK_HOST:22 times out). tools/runway_relay.sh was not created. Revisit only if the box gets tailnet access.
+Test 24 Oct: frame eafe361e (nano-banana-2.1) -> wan3 480p 4 s i2v task 592ab7e5; clip runway_test/wan3_frame_relaytest.mp4.
