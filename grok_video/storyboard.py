@@ -292,6 +292,71 @@ def hero_apply(gdir, hid, mp4):
     return False
 
 
+# ---------------------------------------------------------------- Runway shot sheets (24 Oct, the owner: "exact descriptions")
+SHEET_FIELDS = ['set', 'character', 'blocking', 'camera', 'composition', 'lighting', 'palette', 'texture', 'start_state',
+                'end_state', 'constant', 'negatives', 'frame_prompt', 'motion_prompt']
+SHEET_SCHEMA = {'type': 'object', 'required': SHEET_FIELDS, 'properties': {k: {'type': 'string'} for k in SHEET_FIELDS}}
+SHEET_SCHEMA['properties'].update(blocking={'type': 'array', 'items': {'type': 'string'}}, negatives={'type': 'array', 'items': {'type': 'string'}})
+REVIEW_SCHEMA = {'type': 'object', 'required': ['score', 'vague_words', 'problems', 'fixes'], 'properties': {
+    'score': {'type': 'number'}, 'vague_words': {'type': 'array', 'items': {'type': 'string'}},
+    'problems': {'type': 'array', 'items': {'type': 'string'}}, 'fixes': {'type': 'string'}}}
+VAGUE = re.compile(r'\b(cool|cinematic|nice|beautiful|stunning|epic|dynamic|vibrant|moody|aesthetic|interesting|dramatic|'
+                   r'professional|high[- ]quality|amazing|sleek|modern|gorgeous|vibe|energetic|various|etc)\b', re.I)
+
+
+def shot_sheet(job, scene, gdir, min_score=8.0, rounds=4, start=0, sheet=None, fb=''):
+    """Write a director's shot sheet for one Runway job, have Opus review it (score 0-10, vague words auto-fail),
+    revise until score >= min_score. Sets job['spec_score'], job['spec_ok'], and replaces frame_prompt/prompt."""
+    import slop_opus as SO
+    tpl = G.read(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'prompts', 'runway_shot.txt'))
+    d = os.path.join(gdir, 'shot_sheets'); os.makedirs(d, exist_ok=True)
+    brief = (f"SHOT {job['id']} ({job['why']}, model {job['model']}, duration {job['duration']} s, 9:16). Storyboard still prompt: "
+             f"{scene['prompt']}\nStoryboard motion: {scene.get('motion', '')}\nThe start still is {os.path.basename(job['image'])} "
+             "(Read it: match its character, wardrobe and set exactly).")
+    rv = {}
+    for k in range(start, rounds):
+        pf = os.path.join(d, f"{job['id']}_write{k}.txt")
+        open(pf, 'w').write(tpl + '\n\n' + brief + (f"\n\nREVIEWER FEEDBACK ON YOUR LAST SHEET (fix all of it):\n{fb}\n"
+                            + json.dumps(sheet) if fb else ''))
+        sheet, _ = SO.run_claude(pf, gdir, SHEET_SCHEMA, 900, tools='Read', effort='medium')
+        G.save_json(sheet, os.path.join(d, f"{job['id']}_sheet{k}.json"))
+        txt = json.dumps(sheet)
+        vague = sorted({m.lower() for m in VAGUE.findall(txt.replace('no ', ' '))})
+        rf = os.path.join(d, f"{job['id']}_review{k}.txt")
+        open(rf, 'w').write(
+            "You are a demanding film producer reviewing a Runway shot sheet before credits are spent. Score 0-10. "
+            "Score <= 5 if ANY vague word without a number/concrete noun (cool, cinematic, nice, beautiful, dynamic, moody...), "
+            "if any field lacks measurements (set dimensions in m, prop positions, lens mm, camera height and distance, move "
+            "travel and speed, start/end framing, light direction and Kelvin, hex palette, film stock), if blocking beats do "
+            "not cover the full duration with timings, if the motion_prompt re-describes the subject instead of motion, has "
+            "more than one camera move, or a push-in over 15%, or if negatives miss text/mirrored text/tongue/pulled faces/"
+            "extra limbs. Check it against the Acid Deadpan house style (Klein blue #002FA7, acid green #B0FF00, safety "
+            "orange #FF6700, centred symmetrical wide, deadpan cast) and that it would pass a strict QC (hands, framing, face "
+            "drift). List the vague words found and the concrete fixes.\n\nSHEET:\n" + txt)
+        rv, _ = SO.run_claude(rf, gdir, REVIEW_SCHEMA, 400, tools='Read', effort='medium')
+        G.save_json(rv, os.path.join(d, f"{job['id']}_review{k}.json"))
+        if vague: rv['vague_words'] = sorted(set(rv.get('vague_words', [])) | set(vague)); rv['score'] = min(rv['score'], 5)
+        G.log(f"storyboard: shot sheet {job['id']} round {k}: score {rv['score']} vague {rv.get('vague_words')}")
+        if rv['score'] >= min_score: break
+        fb = '; '.join(rv.get('problems', [])) + ' FIXES: ' + rv.get('fixes', '') + (f" Remove vague words: {rv['vague_words']}" if rv.get('vague_words') else '')
+    G.save_json({'sheet': sheet, 'review': rv}, os.path.join(d, f"{job['id']}.json"))
+    job.update(spec_score=rv.get('score'), spec_ok=rv.get('score', 0) >= min_score, spec=os.path.join(d, f"{job['id']}.json"))
+    if job['spec_ok']:
+        job.update(frame_prompt=sheet['frame_prompt'][:2400], prompt=sheet['motion_prompt'][:2400])
+    else:
+        job['status'] = 'spec_rejected'          # no credits are spent on a sheet under 8
+    return job
+
+
+def hero_sheets(P, gdir):
+    path = os.path.join(gdir, 'hero_jobs.json'); H = json.load(open(path))
+    byid = {s['id']: s for s in P.get('scenes', [])}
+    for j in H['jobs']:
+        try: shot_sheet(j, byid[j['id']], gdir)
+        except Exception as e: j.update(spec_ok=False, status='spec_failed', spec_error=str(e)[:200])
+    G.save_json(H, path); return H['jobs']
+
+
 if __name__ == '__main__':        # storyboard.py hero-apply <gdir> <id> <downloaded.mp4>
     if sys.argv[1:2] == ['hero-apply']:
         print(hero_apply(sys.argv[2], sys.argv[3], sys.argv[4]))

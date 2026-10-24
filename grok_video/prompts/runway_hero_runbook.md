@@ -40,3 +40,18 @@ Keep GV_HERO_BUDGET (300/day, frame cost included in est_credits). GV_HERO=0 dis
 DGX Spark relay (option a) is APPROVED by the owner but NOT usable from the box right now: the box has no ssh client and no
 tailnet route ($SPARK_HOST:22 times out). tools/runway_relay.sh was not created. Revisit only if the box gets tailnet access.
 Test 24 Oct: frame eafe361e (nano-banana-2.1) -> wan3 480p 4 s i2v task 592ab7e5; clip runway_test/wan3_frame_relaytest.mp4.
+
+## 24 Oct 2026 evening: shot sheets + clip QC + local tiers (the owner: "runway needs very very good prompting",
+## "be much more of a movie producer... exact descriptions"; LTX "fast and good just prone to mistakes")
+Tiers in karaoke.generate (GV_LOCAL=1 default, `local_clips`): premium = hero_jobs (Runway, this runbook);
+hero = the 2 most-used other scenes (GV_WAN_HEROES) -> Wan 2.2 on the Spark; b-roll = LTX 2B 0.9.8 distilled draft
+(3 s, 73 frames, anti-overshoot prompt via local_gen.gentle) -> clip_qc -> one LTX re-roll (new seed) -> Wan 2.2 -> Grok.
+ComfyUI on the Spark is started and always stopped by the pipeline. Failures + reasons: <gdir>/local_qc_log.jsonl.
+1. Shot sheet BEFORE any credit: `storyboard.hero_sheets` (run automatically after hero_plan; GV_SHEETS=0 disables) writes
+   <gdir>/shot_sheets/<id>.json from prompts/runway_shot.txt (set in metres with prop positions, character/wardrobe hex,
+   timed blocking, lens mm/height/distance/move speed/start+end framing, key/fill/practicals with K, hex palette, stock,
+   constants, negatives). Opus reviews it (0-10; any vague word like cool/cinematic/nice caps it at 5), up to 3 rounds.
+   ONLY run jobs with `spec_ok: true` (score >= 8). Use job.frame_prompt for nano-banana and job.prompt (motion only)
+   for generate_video. `spec_rejected` jobs: spend nothing; the Grok clip stays.
+2. After download, before hero-apply: `python ../local_gen/clip_qc.py qc <clip.mp4> --prompt "<job.prompt>" --image <still>`.
+   ok=false -> do not apply; log the reasons in hero_jobs.json (one paid retry max, only if budget allows).

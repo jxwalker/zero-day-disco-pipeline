@@ -14,7 +14,39 @@ SERVER = os.environ.get("LOCAL_GEN_SERVER", "http://localhost:8188")
 NEG = ("色调艳丽，过曝，静态，细节模糊不清，字幕，风格，作品，画作，画面，静止，整体发灰，最差质量，低质量，JPEG压缩残留，丑陋的，残缺的，"
        "多余的手指，画得不好的手部，画得不好的脸部，畸形的，毁容的，形态畸形的肢体，手指融合，静止不动的画面，杂乱的背景，三条腿，背景人很多，倒着走")
 
+# 24 Oct 2026: LTX-Video 2B 0.9.8 distilled "draft" mode for b-roll (~30 s/clip). QC lives in clip_qc.py.
+NEG_LTX = ("low quality, worst quality, deformed, distorted, extra fingers, fused fingers, warped hands, melting objects, "
+           "text, letters, mirrored text, upside-down text, watermark, tongue out, open mouth, grimace, pouting, duck face, "
+           "face morphing, identity change, extreme close-up, zoom, crash zoom, fast camera, motion blur, jittery, shaky")
+LTX_MOTION = (" Camera: locked-off tripod with at most a very slow, subtle drift; no zoom, no push-in beyond 5 percent, "
+              "framing at the end is the same as the start. The subject moves calmly and naturally; hands and objects stay solid.")
+
+def gentle(prompt):
+    """Anti-overshoot: strip aggressive camera words and pin the camera (LTX overshoots push-ins)."""
+    import re
+    p = re.sub(r"\b(PUSH(?:ES|ING)?\s*(?:in|IN)?|push(?:es|ing)?[- ]in|crash zoom|zoom(?:s|ing)? in|whip(?: pan)?|WHIP|RACK|rack(?:s)? focus|"
+               r"ARC|arc(?:s)? round|TRACK(?:S)? in|dolly in|HANDHELD|jolting)\b", "", prompt)
+    return re.sub(r"\s+", " ", p).strip() + LTX_MOTION
+
+def workflow_ltx(image_name, prompt, w, h, frames, fps, seed, prefix):
+    return {
+     "1": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": "ltxv-2b-0.9.8-distilled.safetensors"}},
+     "2": {"class_type": "CLIPLoader", "inputs": {"clip_name": "t5xxl_fp8_e4m3fn_scaled.safetensors", "type": "ltxv", "device": "default"}},
+     "3": {"class_type": "LoadImage", "inputs": {"image": image_name}},
+     "4": {"class_type": "CLIPTextEncode", "inputs": {"text": gentle(prompt), "clip": ["2", 0]}},
+     "5": {"class_type": "CLIPTextEncode", "inputs": {"text": NEG_LTX, "clip": ["2", 0]}},
+     "6": {"class_type": "LTXVImgToVideo", "inputs": {"positive": ["4", 0], "negative": ["5", 0], "vae": ["1", 2], "image": ["3", 0],
+            "width": w, "height": h, "length": frames, "batch_size": 1, "strength": 1.0}},
+     "7": {"class_type": "LTXVConditioning", "inputs": {"positive": ["6", 0], "negative": ["6", 1], "frame_rate": float(fps)}},
+     "8": {"class_type": "KSampler", "inputs": {"model": ["1", 0], "positive": ["7", 0], "negative": ["7", 1], "latent_image": ["6", 2],
+            "seed": seed, "steps": 8, "cfg": 1.0, "sampler_name": "euler", "scheduler": "simple", "denoise": 1.0}},
+     "9": {"class_type": "VAEDecode", "inputs": {"samples": ["8", 0], "vae": ["1", 2]}},
+     "10": {"class_type": "CreateVideo", "inputs": {"images": ["9", 0], "fps": float(fps)}},
+     "11": {"class_type": "SaveVideo", "inputs": {"video": ["10", 0], "filename_prefix": prefix, "format": "mp4", "codec": "h264"}}}
+
 def workflow(image_name, prompt, w, h, frames, fps, mode, seed, prefix):
+    if mode == "draft":
+        return workflow_ltx(image_name, prompt, w, h, frames, fps, seed, prefix)
     fast = mode == "fast"
     steps, cfg, split = (4, 1.0, 2) if fast else (20, 3.5, 10)
     g = {
@@ -133,16 +165,19 @@ def probe(path):
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--image", required=True); p.add_argument("--prompt", required=True); p.add_argument("--out", required=True)
-    p.add_argument("--mode", choices=["fast", "full"], default="fast")
+    p.add_argument("--mode", choices=["fast", "full", "draft"], default="fast")
     p.add_argument("--w", type=int, default=720); p.add_argument("--h", type=int, default=1280)
     p.add_argument("--frames", type=int, default=81); p.add_argument("--fps", type=int, default=16)
     p.add_argument("--seed", type=int, default=42); p.add_argument("--timeout", type=int, default=3600)
     p.add_argument("--fallback", choices=["grok", "none"], default="none")
     p.add_argument("--server", default=SERVER)
     a = p.parse_args()
+    if a.mode == "draft":     # LTX defaults: 736x1280, 121 frames @ 24 fps (~5 s)
+        a.w, a.h, a.fps = (736 if a.w == 720 else a.w), a.h, (24 if a.fps == 16 else a.fps)
+        a.frames = 121 if a.frames == 81 else a.frames
     t0 = time.time(); res = {"out": a.out, "mode": a.mode}
     try:
-        render_local(a); res.update(backend="local-wan2.2-i2v-a14b", ok=True)
+        render_local(a); res.update(backend="local-ltxv-2b-0.9.8" if a.mode == "draft" else "local-wan2.2-i2v-a14b", ok=True)
     except Exception as e:
         res.update(local_error=str(e)[:300])
         if a.fallback != "grok":

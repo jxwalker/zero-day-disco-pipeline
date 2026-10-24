@@ -342,6 +342,41 @@ def screen_check(gdir, jobs, status, tag):
     return bad
 
 
+SPARK_SSH = ['ssh', '-o', 'ConnectTimeout=10', '-o', 'BatchMode=yes', '-i', os.path.expanduser(os.environ.get('SPARK_SSH_KEY', '~/.ssh/id_ed25519')), os.environ.get('SPARK_SSH', 'user@spark-host')]
+
+def local_clips(cj, mv, status, gdir, deadline):
+    """24 Oct 2026 (the owner approved LTX for b-roll): tiers per clip.
+    premium = Runway hero_jobs (left to the Grok batch here; the agent replaces them via the Runway runbook);
+    hero = the GV_WAN_HEROES (2) most-used other scenes -> Wan 2.2 on the Spark;
+    b-roll = everything else -> LTX draft + strict QC -> one LTX re-roll -> Wan 2.2 -> Grok/Runway.
+    Starts ComfyUI on the Spark and always stops it. Returns the jobs that still need Grok."""
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'local_gen'))
+    import clip_qc as Q
+    premium = set(status.get('hero_jobs') or [])
+    order = [s['id'] for s in mv if s['id'] not in premium]
+    heroes = set(order[:int(os.environ.get('GV_WAN_HEROES', 2))])
+    log = os.path.join(gdir, 'local_qc_log.jsonl'); left = []
+    if subprocess.run(SPARK_SSH + ['/opt/comfyui/comfy_spark.sh start'], capture_output=True, timeout=120).returncode != 0:
+        status.setdefault('warnings', []).append('Spark ComfyUI unreachable; all clips via Grok'); return cj
+    try:
+        time.sleep(30)
+        for j in cj:
+            sid = j['id'][2:]
+            if sid in premium or time.time() > deadline - 20 * 60:
+                left.append(j); continue
+            if sid in heroes:      # hero: Wan only, then QC; failure -> Grok
+                r = Q.broll(j['image'], j['prompt'], j['out'], log=log, wan=True, ltx=False)
+            else:
+                r = Q.broll(j['image'], j['prompt'], j['out'], log=log)
+            status.setdefault('local_clips', {})[sid] = {'tier': 'hero' if sid in heroes else 'broll', 'backend': r['backend'], 'ok': r['ok'],
+                                                         'fails': [h.get('reasons') for h in r['history'] if h.get('ok') is False]}
+            if not r['ok']: left.append(j)
+    finally:
+        subprocess.run(SPARK_SSH + ['/opt/comfyui/comfy_spark.sh stop'], capture_output=True, timeout=120)
+    G.log(f"karaoke: local clips {status.get('local_clips')}; {len(left)} left for Grok")
+    return left
+
+
 def generate(P, work, a, deadline, status):
     import real_gen as R
     gdir = os.path.join(work, 'grok'); os.makedirs(gdir, exist_ok=True)
@@ -421,6 +456,8 @@ def generate(P, work, a, deadline, status):
         try:
             import storyboard as SB
             status['hero_jobs'] = [j['id'] for j in SB.hero_plan(P, getattr(a, 'day', None) or os.path.dirname(os.path.abspath(work)), gdir)]
+            if status['hero_jobs'] and os.environ.get('GV_SHEETS', '1') != '0':   # 24 Oct: director's shot sheet, score >= 8 before credits
+                status['hero_sheets'] = {j['id']: j.get('spec_score') for j in SB.hero_sheets(P, gdir)}
         except Exception as e:
             status.setdefault('warnings', []).append(f'hero plan failed ({str(e)[:120]})')
     for s in scenes:                               # 23 Oct (the owner: no still images): every scene is animated
@@ -430,6 +467,8 @@ def generate(P, work, a, deadline, status):
                 key=lambda s: -used.get(s['id'], 0))[:a.clips]
     cj = [{'id': 'v_' + s['id'], 'kind': 'i2v', 'image': f"{gdir}/{s['id']}.png", 'duration': 6,
            'prompt': no_laptops(s['motion'].replace('[LEAD]', '')) + " Realistic natural motion, cinematic, no text, no laptops, keep the same people and outfits.", 'out': f"{gdir}/{s['id']}.mp4"} for s in mv]
+    if cj and os.environ.get('GV_LOCAL', '1') != '0' and time.time() < deadline - 20 * 60:
+        cj = local_clips(cj, mv, status, gdir, deadline)   # 24 Oct: LTX b-roll / Wan hero on the Spark; leftovers go to Grok
     if cj and time.time() < deadline - 6 * 60:
         b2 = R.Batcher(gdir, {'i2v': len(cj) + 2}, batch_size=3, max_parallel=3, timeout=900, deadline=deadline, tag='clips')
         b2.run(cj)
@@ -1115,7 +1154,7 @@ def main():
                 if s_['src'][0] == 'gfx': used[s_['src'][1]] = used.get(s_['src'][1], 0) + 1
             bad_n = [r['n'] for r in tab if not r['match']]
             _keep = set(filter(None, os.environ.get('GV_MATCH_KEEP', '').split(',')))   # 24 Oct: hand-verified clips are never redrawn
-            bad_n = [n_ for n_ in bad_n if not (shots[n_]['src'][0] == 'clip' and os.path.splitext(os.path.basename(str(shots[n_]['src'][1])))[0] in _keep)]
+            bad_n = [n_ for n_ in bad_n if not ((shots[n_]['src'][0] == 'clip' and os.path.splitext(os.path.basename(str(shots[n_]['src'][1])))[0] in _keep) or (shots[n_]['src'][0] == 'gfx' and shots[n_]['src'][1] in _keep))]
             for n_ in bad_n:
                 s_ = shots[n_]; li = s_['line']; spec = pl_.get(inv_.get(li), {})
                 if s_['src'][0] == 'gfx': used[s_['src'][1]] -= 1
