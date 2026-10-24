@@ -8,7 +8,7 @@ CHECK EVERY SHOT FOR:
 - the lead (A) is described consistently (wardrobe, hair) and appears in at least 50% of shots and is a PARTICIPANT in the main story (its engineer/researcher/
   maintainer), not an invented bystander; reject any book whose lead has a private home/day-in-the-life storyline; supporting cast max 2.
 - CASTING: every person is a young adult (21-28) and attractive. Rewrite any middle-aged/older person or dour, glum or stern expression. Expressions must vary with the beat: mostly natural, focused or reactive, smiling only at earned moments; if more than about a third of shots specify smiling/laughing/grinning, rewrite some to neutral or engaged.
-- NO robots/androids/mascots/toys/holograms; no logos/brand marks. Short legible story facts on screens/printouts are
+- NO robots/androids/mascots/toys/holograms (except Pip, see PIP CAMEO); no logos/brand marks. Short legible story facts on screens/printouts are
   WANTED (exact numbers, "curl", "COBOL", CVE id, max 4 words, copied from STORIES); reject invented words.
 - soft motivated light with a named source; no on-camera flash, no neon soup, no HDR/bloom; a real lens + stock.
 - an uncluttered composed frame with a clean type_zone; one subject; not a busy stock photo.

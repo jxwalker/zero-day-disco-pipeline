@@ -14,6 +14,7 @@ OVERRIDES any older wording about a different design every day, palettes, expres
   on-screen-display mono caps in cyan with a magenta ghost. Both are fixed and automatic.
 - "Distinct design each day" now means VARIATION INSIDE the house style: new sets, props, gags, camera blocking and
   wardrobe each day; palette, type family and lyric treatment are fixed by the renderer.
+- PIP CAMEO (24 Oct, the owner): every video includes our mascot Pip in 1-2 SHORT MOVING shots only (e.g. Pip small in the background of a wide, or a quick reaction cutaway on a chorus drop), styled to the section look (Acid Deadpan colour blocking / Glitch Tape VHS flash). Tag those scene prompts [PIP] (plus [CHORUS] on drops); Pip is made from the locked reference (assets/pip_ref_9x16.png) so it stays on-model - describe only placement and action, not Pip's design. Pip is the ONLY allowed mascot/robot; never the lead, never more than 2 shots.
 - Standing rules unchanged: every shot moves, 1-2 s beat cuts (faster in choruses), no mirrored text, no banner, end
   card, no laptops, screens only facing camera, no real people.
 
@@ -57,7 +58,7 @@ RULES
    stylish casual wardrobe, sunny optimistic mood. Never middle-aged, never older, never dour, glum, tired or
    stern-faced. Original people only (never a real person or lookalike).
    No crowds of named people; extras are anonymous, soft and in the background.
-3. ABSOLUTELY NO robots, androids, humanoid machines, mascots, toys, holograms or "AI characters". AI is shown through
+3. ABSOLUTELY NO robots, androids, humanoid machines, mascots, toys, holograms or "AI characters" (sole exception: the 1-2 shot [PIP] cameo). AI is shown through
    real people, real screens seen from behind or out of focus, real offices, real objects. No logos, brand marks or company
    names in the picture. STORY TEXT IN THE PICTURE IS ALLOWED AND WANTED (the owner, 20 Oct): screens and printouts may show
    SHORT, large, legible story facts copied exactly from STORIES - numbers ("77 critical", "803 high", "114 projects"),

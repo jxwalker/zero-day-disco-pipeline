@@ -41,7 +41,7 @@ GRAMMAR = """CINE GRAMMAR (from the Claudia prompt book, which the owner rates m
   (sound off, a stranger still gets the line). Choruses replay the central gag from new angles and escalate; the
   final-chorus word swap gets its own payoff image. Pure literal word-by-word clip art is banned: the lead DOES it.
 - Banned filler words: cinematic, 4k, 8k, ultra-detailed, masterpiece, stunning, epic, hyperreal, award-winning.
-- No robots/androids/mascots; no laptops, tablets or phones anywhere (any screen is a wall display or terminal seen
+- No robots/androids/mascots except the mandatory Pip cameo (1-2 short moving shots, tag [PIP]); no laptops, tablets or phones anywhere (any screen is a wall display or terminal seen
   straight-on, with real commands); no real or famous people; everyone 21-28; no logos."""
 
 
@@ -122,7 +122,7 @@ def review(P, day, work, lines):
         "\n\nCheck: (1) every scene prompt depicts a specific line's words being acted out by the lead inside the one "
         "story, and follows the grammar (shot size, lens+stop, named light source, negative space, starts with [LEAD] "
         "when she is in it); (2) motion is timestamped 0-2s/2-4s/4-6s with ONE camera move and one action; (3) each "
-        "sung line's scene really matches THAT line (sound off test) and the story reads in order; (4) no banned "
+        "sung line's scene really matches THAT line (sound off test) and the story reads in order; (3b) house style: verses Acid Deadpan, chorus scenes tagged [CHORUS] (Glitch Tape), cast deadpan not smiley, and EXACTLY 1-2 [PIP] mascot cameo scenes that move (FAIL and add one to a wide or a drop reaction if missing); (4) no banned "
         "words, no laptops/phones/tablets, no robots, nobody outside 21-28.\nReturn score 1-10, a verdict, "
         "scene_fixes = full corrected prompt+motion for every scene that is not already excellent (keep the same id; "
         "35-80 words; keep [LEAD] tokens), and line_scene = reassignments where a different EXISTING scene id fits a "

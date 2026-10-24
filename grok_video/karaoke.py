@@ -359,9 +359,20 @@ def generate(P, work, a, deadline, status):
                  "Full-body character reference portrait, plain dark studio background, even soft light, facing camera: "
                  + DIR['lead'] + " Clearly an adult woman. An original person, not any real person or celebrity. No text, no logos."}])
     lead_ok = DIR['lead'] and os.path.exists(ref)
+    if not any('[PIP]' in s['prompt'] for s in scenes) and len(scenes) > 4:   # 24 Oct: Pip cameo is mandatory
+        k = next((i for i, s in enumerate(scenes) if '[CHORUS]' in s['prompt']), len(scenes) // 2)
+        scenes[k] = dict(scenes[k], prompt='[PIP] ' + scenes[k]['prompt'] + ' Our small mascot toy is in the background, reacting with a quick hop.')
+        G.log(f"karaoke: no [PIP] cameo planned; added one to {scenes[k]['id']}")
     jobs = []
     for s in scenes:
         pr = no_laptops(s['prompt'].strip())
+        if '[PIP]' in pr:     # 24 Oct Pip cameo: edit from the locked Pip reference, house look, mascot allowed
+            lk = (LOOK_CHORUS if '[CHORUS]' in pr else LOOK).replace('No robots, ', '')
+            pr = re.sub(r'\[(PIP|CHORUS|LEAD)\]', '', pr).strip()
+            jobs.append({'id': s['id'], 'kind': 'edit', 'images': [G.PIP_REF], 'out': f"{gdir}/{s['id']}.png", 'prompt':
+                         "Keep this exact mascot character from the reference image exactly on-model, as a small physical vinyl toy "
+                         "in a real photographed scene, vertical 9:16, the toy small in frame: " + pr + lk})
+            continue
         is_lead = bool(re.search(r'\[LEAD\]', pr)); pr = pr.replace('[LEAD]', '').strip()
         lk = LOOK_CHORUS if '[CHORUS]' in pr else LOOK; pr = pr.replace('[CHORUS]', '').strip()   # 24 Oct house style
         if is_lead and lead_ok:

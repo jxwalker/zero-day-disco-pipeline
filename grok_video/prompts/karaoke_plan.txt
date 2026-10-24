@@ -14,6 +14,7 @@ OVERRIDES any older wording about a different design every day, palettes, expres
   on-screen-display mono caps in cyan with a magenta ghost. Both are fixed and automatic.
 - "Distinct design each day" now means VARIATION INSIDE the house style: new sets, props, gags, camera blocking and
   wardrobe each day; palette, type family and lyric treatment are fixed by the renderer.
+- PIP CAMEO (24 Oct, the owner): every video includes our mascot Pip in 1-2 SHORT MOVING shots only (e.g. Pip small in the background of a wide, or a quick reaction cutaway on a chorus drop), styled to the section look (Acid Deadpan colour blocking / Glitch Tape VHS flash). Tag those scene prompts [PIP] (plus [CHORUS] on drops); Pip is made from the locked reference (assets/pip_ref_9x16.png) so it stays on-model - describe only placement and action, not Pip's design. Pip is the ONLY allowed mascot/robot; never the lead, never more than 2 shots.
 - Standing rules unchanged: every shot moves, 1-2 s beat cuts (faster in choruses), no mirrored text, no banner, end
   card, no laptops, screens only facing camera, no real people.
 
@@ -43,7 +44,7 @@ literally about that.
    must be real commands. Jokes welcome if technically accurate.
 3. SCENE = photoreal Grok Imagine still (optionally animated) acting out the story. Cast: young adults 21-28,
    quirky and well styled, HOUSE-STYLE attitude (deadpan, unimpressed, dry, side-eye; a wild laugh only on
-   drops; no generic smiling at camera). No robots, mascots, real/famous people, logos, or readable text. Vary the
+   drops; no generic smiling at camera). No robots or mascots (except the [PIP] cameo), real/famous people, logos, or readable text. Vary the
    settings (not only offices at night). SCREENS: whenever a laptop/monitor/phone appears, frame it so its SCREEN
    faces the camera: over-the-shoulder from behind the user, or a straight-on screen view; NEVER show the back of a
    laptop lid (it reads as a screen on the wrong side) and never a screen facing away from camera. Prefer showing the
