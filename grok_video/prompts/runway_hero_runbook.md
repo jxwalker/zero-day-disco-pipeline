@@ -51,7 +51,9 @@ ComfyUI on the Spark is started and always stopped by the pipeline. Failures + r
    <gdir>/shot_sheets/<id>.json from prompts/runway_shot.txt (set in metres with prop positions, character/wardrobe hex,
    timed blocking, lens mm/height/distance/move speed/start+end framing, key/fill/practicals with K, hex palette, stock,
    constants, negatives). Opus reviews it (0-10; any vague word like cool/cinematic/nice caps it at 5), up to 3 rounds.
-   ONLY run jobs with `spec_ok: true` (score >= 8). Use job.frame_prompt for nano-banana and job.prompt (motion only)
+   ONLY run jobs with `spec_ok: true` (score >= 7, GV_SHEET_MIN; lowered from 8 by the owner 24 Oct). Use job.frame_prompt for nano-banana and job.prompt (motion only)
    for generate_video. `spec_rejected` jobs: spend nothing; the Grok clip stays.
 2. After download, before hero-apply: `python ../local_gen/clip_qc.py qc <clip.mp4> --prompt "<job.prompt>" --image <still>`.
    ok=false -> do not apply; log the reasons in hero_jobs.json (one paid retry max, only if budget allows).
+
+- 24 Oct loosen: b-roll QC (`--tier broll`) allows fuzzy text on small/out-of-focus screens; hero and Runway QC stay strict.

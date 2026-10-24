@@ -304,7 +304,7 @@ VAGUE = re.compile(r'\b(cool|cinematic|nice|beautiful|stunning|epic|dynamic|vibr
                    r'professional|high[- ]quality|amazing|sleek|modern|gorgeous|vibe|energetic|various|etc)\b', re.I)
 
 
-def shot_sheet(job, scene, gdir, min_score=8.0, rounds=4, start=0, sheet=None, fb=''):
+def shot_sheet(job, scene, gdir, min_score=float(os.environ.get('GV_SHEET_MIN', 7)), rounds=4, start=0, sheet=None, fb=''):
     """Write a director's shot sheet for one Runway job, have Opus review it (score 0-10, vague words auto-fail),
     revise until score >= min_score. Sets job['spec_score'], job['spec_ok'], and replaces frame_prompt/prompt."""
     import slop_opus as SO

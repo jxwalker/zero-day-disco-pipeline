@@ -26,7 +26,7 @@ def frames(clip, n=6):
         if os.path.exists(p): out.append(p)
     return d, out
 
-def qc(clip, prompt, still=None):
+def qc(clip, prompt, still=None, tier='hero'):
     import slop_opus as SO
     d, fs = frames(clip)
     if still: subprocess.run(['cp', still, os.path.join(d, 'start_still.png')]); 
@@ -39,7 +39,10 @@ def qc(clip, prompt, still=None):
         "chin/forehead, or lands on an awkward body part), lens-in-the-face close-ups, a subject leaving frame.\n"
         "- face_drift: the face, hair or outfit changes identity between frames or versus the start still.\n"
         "- tongue_or_pulled_face: any tongue out, gurning, pouting, duck face, bratty or pulled expression.\n"
-        "- text_flipped: any visible text upside down, mirrored or garbled.\n- prompt_fidelity: the action/camera move in the "
+        "- text_flipped: any visible text upside down, mirrored or garbled.\n" + (
+        "  B-ROLL EXCEPTION (24 Oct, the owner): garbled or fuzzy text is ALLOWED when it sits on a small or out-of-focus "
+        "screen (watch face, background monitor) covering a small part of the frame (under ~5%). Large or in-focus text "
+        "must still be legible and upright; upside-down or mirrored text fails everywhere.\n" if tier == 'broll' else "") + "- prompt_fidelity: the action/camera move in the "
         "prompt is clearly what happens, with no new people, morphing or scene change.\n"
         "ok = every check passes. reasons = one short line per failed check.\n\nSHOT PROMPT: " + prompt
         + "\n\nFILES (Read each one, absolute paths):\n" + "\n".join(fs + ([os.path.join(d, 'start_still.png')] if still else [])))
@@ -70,7 +73,7 @@ def broll(image, prompt, out, log=None, seed=42, wan=True, server=L.SERVER, ltx=
         except Exception as e:
             note(backend=be, seed=sd, ok=False, render_s=round(time.time() - t0, 1), reasons=[f'render failed: {str(e)[:200]}']); continue
         rs = round(time.time() - t0, 1)
-        r = qc(out, a.prompt if be == 'wan' else L.gentle(prompt), still=image)
+        r = qc(out, a.prompt if be == 'wan' else L.gentle(prompt), still=image, tier='broll' if ltx else 'hero')
         note(backend=be, seed=sd, ok=r['ok'], render_s=rs, qc_s=r.get('qc_s'), reasons=r.get('reasons', []))
         if r['ok']:
             return {'ok': True, 'backend': be, 'seed': sd, 'history': hist}
@@ -81,6 +84,6 @@ def broll(image, prompt, out, log=None, seed=42, wan=True, server=L.SERVER, ltx=
 if __name__ == '__main__':
     p = argparse.ArgumentParser(); p.add_argument('cmd', choices=['qc', 'broll']); p.add_argument('clip', nargs='?')
     p.add_argument('--image'); p.add_argument('--prompt', required=True); p.add_argument('--out'); p.add_argument('--log')
-    p.add_argument('--seed', type=int, default=42); p.add_argument('--no-wan', action='store_true')
+    p.add_argument('--seed', type=int, default=42); p.add_argument('--tier', default='hero', choices=['hero', 'broll']); p.add_argument('--no-wan', action='store_true')
     a = p.parse_args()
-    print(json.dumps(qc(a.clip, a.prompt, a.image) if a.cmd == 'qc' else broll(a.image, a.prompt, a.out, a.log, a.seed, not a.no_wan)))
+    print(json.dumps(qc(a.clip, a.prompt, a.image, a.tier) if a.cmd == 'qc' else broll(a.image, a.prompt, a.out, a.log, a.seed, not a.no_wan)))
