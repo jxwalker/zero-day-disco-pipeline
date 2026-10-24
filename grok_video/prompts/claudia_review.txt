@@ -45,3 +45,6 @@ book is ready.
 
 PROMPT BOOK (JSON):
 {{BOOK}}
+
+HARD RULE (the owner, 24 Oct): no tongue out, no pulled or silly faces, no gurning, no bratty faces, no pouting or duck faces; every expression is natural and confident. Reject any shot that shows one.
+Reject any shot whose on-screen text (watch, sign, bubble) is upside down, mirrored or garbled.

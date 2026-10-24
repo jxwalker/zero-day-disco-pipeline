@@ -55,7 +55,7 @@ LOOK = (" Live-action music-video frame shot on 35mm Kodak Vision3 500T film, fi
         "one soft motivated practical light source, natural skin texture with pores, off-centre composition with clean "
         "negative space in the lower third, vertical 9:16. "  # 24 Oct songcraft: Claudia DP grammar, not 'cinematic still'
 
-        "Cast are young adults aged 21-28, attractive, natural balanced expressions. No robots, no text, no logos, no "
+        "Cast are young adults aged 21-28, attractive, natural, confident expressions; no tongue out, no pulled or silly faces, no gurning, no pouting or duck faces. No robots, no text, no logos, no "
         "readable writing, no famous people." + SCREEN_RULE)
 
 
@@ -312,7 +312,7 @@ def screen_check(gdir, jobs, status, tag):
         "phone that the person is using has its screen facing away from the camera while the shot is about what is on it "
         "(we only see the back of the lid/monitor, which looks like a screen); a screen glows on the wrong side; a device "
         "is physically impossible; the frame is two stacked copies of the same picture; a robot or android; garbled "
-        "readable text that is prominent; badly malformed hands or faces. A laptop seen from behind is ONLY acceptable if "
+        "readable text that is prominent; badly malformed hands or faces; anyone sticking their tongue out, pulling a silly/bratty face, gurning, pouting or making a duck face (24 Oct, the owner); any on-screen text (watch, sign, bubble) that is upside down, mirrored or garbled (24 Oct, the owner: 'U up is upside down'). A laptop seen from behind is ONLY acceptable if "
         "its lid back is plain (no picture) and we are clearly looking at the person's face, not the screen; when unsure, "
         "reject. 21 Oct: ANY laptop at all is a reject. Wall displays, rack monitors and holographic HUDs are fine.\nGive a short issue for each problem image, '' otherwise. id = the file name without .png (for _f.png frames use the name without _f.png).\n\nFILES:\n"
         + '\n'.join(names))
