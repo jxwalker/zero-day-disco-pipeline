@@ -16,6 +16,8 @@ import common_gv as G
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 import style_lint as SL
+import copy
+import songcraft as SC   # 24 Oct: one-thread concept + strict Opus judge
 
 LINT = os.path.join(os.path.dirname(HERE), 'lyrics_lint.py')
 S = {"type": "string"}; I = {"type": "integer"}
@@ -150,7 +152,7 @@ def md(res, day):
     o += [f"**Chosen:** \"{h['title']}\" - {res['why_funniest']}", f"**Hook visual (0-3 s):** {h['visual_gag']}",
           f"**Chorus hook words:** {res['hook_words']}  |  **final-chorus callback word:** {res['callback_word']}",
           f"**Bridge surprise:** {res['bridge_surprise']}", f"**Outro punchline shot:** {res['outro_punchline_shot']}",
-          f"**Self-scores:** {res['scores']}  {res.get('rewrite_note', '')}", f"**Headline card:** {res['headline_card']}",
+          f"**Self-scores:** {res['scores']}  {res.get('rewrite_note', '')}", f"**Opus judge:** {(res.get('judge') or {}).get('final')}", f"**Headline card:** {res['headline_card']}",
           '**Ticker:**'] + [f"- (story {t['story']}) {t['text']}" for t in res['ticker']]
     o += ['', '**Cast:**'] + [f"- {c['id']} {c['role']}: {c['description']}" for c in res['cast']]
     o += ['', '## Storyboard draft']
@@ -161,6 +163,56 @@ def md(res, day):
     return '\n'.join(o) + '\n'
 
 
+def _files(res, out):
+    lp = os.path.join(out, 'lyrics.txt')
+    open(lp, 'w').write(lyrics_text(res))
+    open(os.path.join(out, 'style.txt'), 'w').write(SL.fix(res['style']).strip() + '\n')
+    open(os.path.join(out, 'title.txt'), 'w').write(res['title'].strip() + '\n')
+    ok, msg = lint(lp)
+    return check(res, out) + ([] if ok else [f'lint: {msg}'])
+
+
+def judge_loop(res, out, od, pf, stories_md, concept_txt):
+    rounds = int(os.environ.get('HL_JUDGE_ROUNDS', 3))
+    best, log = None, []
+    for n in range(rounds + 1):
+        probs = _files(res, out)
+        try:
+            j = SC.judge(lyrics_text(res), res['title'], concept_txt, stories_md, od, n)
+        except Exception as e:
+            print(f"songcraft judge failed: {e!r}"[:300]); break
+        log.append({'round': n, 'scores': j['scores'], 'mean': j['mean'], 'pass': j['pass'], 'lint_problems': probs,
+                    'must_fix': j['must_fix'], 'verdict': j['verdict']})
+        key = (not probs, j['pass'], j['mean'])
+        if best is None or key > best[0]:
+            best = (key, copy.deepcopy(res), j)
+        if (j['pass'] and not probs) or n == rounds:
+            break
+        rf = os.path.join(od, f'judge_rewrite_{n}.txt')
+        open(rf, 'w').write(
+            "A strict lyric judge REJECTED this song (pass = every score >= %d and mean >= %.1f). Rewrite the song to fix "
+            "every must-fix and line note, keep the concept, thread and pun, keep every format/density rule (cut words, "
+            "never add lines), re-score honestly and return the whole JSON.\n\nJUDGE SCORES: %s\nVERDICT: %s\nMUST FIX:\n- %s"
+            "\nLINE NOTES:\n%s\n%s\nOriginal brief:\n%s\n\nPACKAGE:\n%s" % (
+                SC.MIN, SC.MEAN, json.dumps(j['scores']), j['verdict'], '\n- '.join(j['must_fix']),
+                '\n'.join(f"- {x['line']!r}: {x['problem']} -> {x['fix']}" for x in j['line_notes']),
+                ('ALSO FIX THESE LINT/CHECK PROBLEMS:\n- ' + '\n- '.join(probs)) if probs else '',
+                open(pf).read(), json.dumps(res, ensure_ascii=False)))
+        try:
+            res, meta = SO.run_claude(rf, od, SCHEMA, int(os.environ.get('HL_JUDGE_REWRITE_S', 900)), tools='',
+                                      effort=os.environ.get('HL_JUDGE_EFFORT', 'medium'))   # 24 Oct: high timed out at 700 s
+        except Exception as e:
+            print(f"judge rewrite failed: {e!r}"[:300]); break
+    if best is None:
+        return res
+    res = best[1]
+    res['judge'] = {'final': {'scores': best[2]['scores'], 'mean': best[2]['mean'], 'pass': best[2]['pass'],
+                              'verdict': best[2]['verdict']}, 'rounds': log, 'min': SC.MIN, 'mean_needed': SC.MEAN}
+    json.dump(res['judge'], open(os.path.join(od, 'judge_log.json'), 'w'), indent=1, ensure_ascii=False)
+    _files(res, out)
+    return res
+
+
 def write(src, out):
     os.makedirs(out, exist_ok=True)
     for f in ('stories.md', 'sources.txt'):
@@ -168,8 +220,17 @@ def write(src, out):
             shutil.copyfile(os.path.join(src, f), os.path.join(out, f))
     od = os.path.join(out, 'work_headline'); os.makedirs(od, exist_ok=True)
     pf = os.path.join(od, 'prompt.txt')
+    stories_md = open(os.path.join(out, 'stories.md')).read().strip()
+    concept_txt = ''
+    if os.environ.get('HL_SONGCRAFT', '1') != '0':      # 24 Oct songcraft: pick ONE thread + real-life pun first
+        try:
+            C = SC.concepts(stories_md, od)
+            concept_txt = SC.concept_block(C, C['pick'].get('sharpen', ''))
+            print(f"songcraft concept: {C['chosen']['phrase']!r} :: {C['pick'].get('why', '')[:200]}")
+        except Exception as e:
+            print(f"songcraft concepts failed (writer picks its own angle): {e!r}"[:300])
     open(pf, 'w').write(open(os.path.join(HERE, 'prompts', 'headline_writer.txt')).read()
-                        .replace('{{STORIES}}', open(os.path.join(out, 'stories.md')).read().strip()))
+                        .replace('{{STORIES}}', stories_md).replace('{{CONCEPT}}', concept_txt))
     try:
         res, meta = SO.run_claude(pf, od, SCHEMA, 900, tools='', effort='high')
     except Exception as e:
@@ -196,6 +257,8 @@ def write(src, out):
             res, meta = SO.run_claude(rf, od, SCHEMA, 700, tools='', effort='medium')
         except Exception as e:
             print(f"rewrite failed: {e!r}"[:300]); break
+    if os.environ.get('HL_SONGCRAFT', '1') != '0':      # 24 Oct: strict independent Opus judge, up to N rewrites
+        res = judge_loop(res, out, od, pf, stories_md, concept_txt)
     res['style'] = SL.fix(res['style'])  # 16 Oct: no autotune/vocoder, no jingles
     open(os.path.join(out, 'style.txt'), 'w').write(res['style'].strip() + '\n')
     res['cast'] = (res.get('cast') or [])[:3]      # 19 Oct (Claudia mode): one lead A + at most 2 supporting

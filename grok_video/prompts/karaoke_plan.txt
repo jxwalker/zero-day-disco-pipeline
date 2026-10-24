@@ -41,6 +41,19 @@ people, parties or homes that the line doesn't mention are FORBIDDEN under sung 
 must literally fit both. If a line is abstract, illustrate its words with a GFX (stamp/headline/quote/code with the
 line's key words). Instrumental-only visuals (intro/breaks/outro) may be mood shots.
 
+STORYBOARD (24 Oct 2026, the owner: "the videos should be much more relevant to the lyrics and sync with the words";
+"claudia is much better quality"). Overrides the GFX share below:
+- The film is ONE continuous mini-story played by the lead from TODAY'S DIRECTION (its SHOT LIST is the storyboard:
+  follow it line by line). Sung lines are mostly SCENES (about 65-75%) where the lead ACTS OUT that line's words
+  literally or with a clever visual pun; GFX only for exact facts/figures/terminals (max 2 stamps in the whole video).
+- Every scene prompt is a first frame in Claudia DP grammar, 45-80 words: shot size + lens and stop (35mm f/2, 50mm
+  f/1.8, 85mm f/2), the exact action that depicts the line, where she is in frame and the empty lower third for the
+  words, ONE named motivated light source, the section palette. Never the words cinematic/4k/epic/stunning/masterpiece.
+- `motion` = timestamped 6 s blocking with ONE camera move and one action: "0-2s: ..., 2-4s: ..., 4-6s: ...".
+- Repeated choruses replay the central gag from new angles and escalate; the final-chorus word swap gets its own
+  payoff scene. Intro = the scroll-stopper that already says what the song is about; the outro frame echoes the first
+  frame so the loop is seamless.
+
 RULES
 - At most {SCENES_MAX} scenes, every one with `motion` (all are animated into clips, at most {CLIPS_MAX}). Use each scene id at most 2 times.
 - Visuals for EVERY lyric line (index i as listed, with `shows` and `fact`): 1, or 2 when the line is long (> ~9 words or two facts). About

@@ -927,11 +927,7 @@ def fit_check(fitlog, texts, day):
     for r in recs:
         if r.get('fail'): fails.append(f"{r.get('shot')}: {r.get('text')!r}"[:120])
         elif 'final' in r:
-            fw = norm(r['final']).split()
-            for i, w in enumerate(fw):
-                # 24 Oct: 'NBC News' vs source handle '@NBCNews' is not truncation; skip if w+next word is a source word
-                if i + 1 < len(fw) and (w + fw[i + 1]) in srcw: continue
-                if (w + '-') in r['final'].lower(): continue  # hyphenated prefix like 'ex-editors'
+            for w in norm(r['final']).split():
                 if len(w) >= 2 and not w.isdigit() and w not in srcw and not real(w) and any(sw.startswith(w) and sw != w for sw in srcw):
                     trunc.add(w)
     return sorted(set(fails)), sorted(trunc)
@@ -1189,13 +1185,6 @@ def main():
         for f in (out, chat, wide):
             if os.path.exists(f) and os.path.getmtime(f) >= t_start:
                 os.replace(f, os.path.splitext(f)[0] + '.failed.mp4')
-        # 24 Oct 2026: a verification-only failure means all paid media already exists in work_karaoke. Falling back to the
-        # Claudia/cine-real chain then burns 50+ min, hits the routine's time limit and loses post/sources. Stop here instead;
-        # fix the check and re-render with: karaoke.py DAY --skip-gen --no-fallback  (no Grok spend).
-        if why.startswith('RuntimeError: verification failed'):
-            G.save_json(dict(stage='media_done_verify_failed', error=why[:500], resume=f'karaoke.py {day} --skip-gen --no-fallback'),
-                        os.path.join(day, 'VIDEO_CHECKPOINT.json'))
-            print(f"GROK_VIDEO_STATUS=failed code=4 style=karaoke resumable=1 reason={why[:300]!r}", flush=True); sys.exit(4)
         if a.no_fallback or a.skip_gen:
             print(f"GROK_VIDEO_STATUS=failed code=3 style=karaoke reason={why[:300]!r}", flush=True); sys.exit(3)
         G.log(f"karaoke FAILED ({why[:200]}); falling back to grok_video.py (Claudia/slopcore chain)")

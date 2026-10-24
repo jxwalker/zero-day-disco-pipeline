@@ -6,24 +6,34 @@ allegory.
 TODAY'S STORIES (the only facts, numbers, names and @handles you may use):
 {{STORIES}}
 
+{{CONCEPT}}
+
+24 OCT (the owner): "the stories are disconnected in the song. we need a common thread and the chorus needs to have a good
+pun/crossover with real life". ONE THREAD beats coverage: a song about one scenario is better than a news round-up.
+
 WORK IN THIS ORDER (show your work in the JSON):
 1. RANK every story for clarity (can a viewer get it in one line?) and comedy (is there a funny angle?), 1-10 each.
-   Pick ONE main story and 2 secondary stories (17 Oct: sparser lyrics). The rest are not sung at all.
-2. HOOK OPTIONS: write 3 options, each = a song title (1-4 words) + the main story's headline as a visual gag for the
-   first 3 seconds + the chorus wordplay twist. Pick the funniest and say why.
+   main_story = the first story of TODAY'S CONCEPT; secondary = only the concept's other stories (0-2, may be
+   empty), and they must be events INSIDE the same scenario, never a separate topic. The rest are not sung at all.
+2. HOOK OPTIONS: write 3 options; option 0 MUST be the concept's title phrase as given. The other two are
+   alternative phrasings of the SAME pun. Pick the one with the strongest everyday-phrase double meaning.
 3. LYRICS, always the VIRAL-HIT FORMAT (21 Oct 2026, the owner: "make sure we always follow the viral hit format").
    Every section tag carries a Suno energy tag after " - ". Exactly this order:
    [Intro - chant, full energy] 1 line: the title hook chanted with a call-back, e.g. "Turn me on! (Turn me on!)".
      The hook is the FIRST sung thing, in the first 3-5 seconds. NEVER an instrumental intro.
-   [Verse 1 - punchy] max 4 short lines: the MAIN story told clearly and literally (who, the key number, why).
+   [Verse 1 - punchy] max 4 short lines: SETUP of the one scenario, sung by the concept's persona: the MAIN story
+     told clearly (who, the key number, one concrete image). Its last line hands into the title.
    [Pre-Chorus - build] max 2 lines, rising, a phrase repeated on both lines. The chorus must land within ~25 s
      (max 7 sung lines before the first chorus).
    [Chorus - full energy] 4 short lines, the TITLE phrase sung at least twice, IDENTICAL every time, with a cheeky
-     PG-13 double entendre or wordplay twist on the main story (flirty, clever, never crude: it is a public post).
+     PG-13 double entendre: the title is an everyday real-life phrase that is ALSO literally the tech story (the
+     concept's pun). It must read both ways on every repeat (flirty, clever, never crude: it is a public post).
    [Post-Chorus - chant] 2 lines: "Oh-oh-oh, oh-oh" + the title chant with call-back.
-   [Verse 2 - punchy] max 4 lines: 1-2 secondary stories, literal, who did it.
+   [Verse 2 - punchy] max 4 lines: ESCALATION ("then what happened?") of the SAME scenario and persona; a secondary
+     story only if it is a new event inside it. Never a new topic, never a list.
    [Pre-Chorus - build] identical.  [Chorus - full energy] identical.  [Post-Chorus - chant] identical.
-   [Breakdown - stripped] max 2-4 lines, quiet/whispered, the funniest angle + 1-2 geeky deep-cut tech jokes
+   [Breakdown - stripped] max 2-4 lines, quiet/whispered: the persona's confession / low point that sets up the
+     final flip, the funniest angle + 1-2 geeky deep-cut tech jokes
      (watts per token, thermal throttling, "have you tried turning it off and on").
    [Final Chorus - key change, biggest] the chorus with ONE word or line swapped as a quotable callback twist.
    [Outro - chant] 1 line: the title chant once more.
@@ -55,10 +65,12 @@ LYRIC DENSITY (17 Oct, the owner: "too many words, it felt rushed" - HARD limits
    exactly from stories.md (e.g. "@AnthropicAI cuts distillation ~99%"). HEADLINE CARD: 2-6 words for the big card on
    the main story's first line (exact facts).
 7. STORYBOARD: per section, the location, cast and shots (one line each: shot size + the literal action of the line
-   being sung). Cast: protagonist A (an ORIGINAL person who plays the reporter/everyperson of the song, never a real
+   being sung). Cast: protagonist A (24 Oct: an ORIGINAL woman aged 21-28, a manic-pixie indie engineer
+   who IS the concept's persona; everyone in the cast is aged 21-28; never a real
    person; the ONE lead the viewer follows through the whole film, in most shots) and at most 2 more (B, C; real humans only, no robots), fixed outfits, used consistently. Real people in the news are
    never shown; show their companies' situation literally with original actors (a "lab", "a founder", "a trader").
-   Each secondary story gets its own literal mini scene. The bridge surprise gets a matching visual surprise. The
+   The video is ONE continuous mini-story following the song's arc; every line's shot acts out THAT line
+   literally or with a clever visual pun, inside that story. The bridge surprise gets a matching visual surprise. The
    outro is the deadpan punchline shot. "pip": [] (no Pip, no robots, no mascots).
 
 For "lines": every sung line in order with its section tag and the number of the story it is about (0 for chorus or
