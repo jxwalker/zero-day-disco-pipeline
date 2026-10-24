@@ -65,6 +65,8 @@ def check_post(t, bot="suno"):
     for k, rx in (("@grok", r"(?<![\w@])@grok\b"), ("Grok Bot", r"\bGrok Bot\b"), ("#slopcore", r"#slopcore\b")):
         if re.search(rx, t, re.I) and not re.search(rx, h, re.I):
             p.append(f"'{k}' is below the 280-char 'Show more' fold; move the Grok Bot line up")
+    # 24 Oct 2026 (the owner): credit the inspiration on every daily post
+    if "@anabology" not in t: p.append("missing credit line: 'Inspired by Claudia by @anabology (claudia.gallery)'")
     w = weighted(t)
     if w > LIMIT: p.append(f"post too long: {w} weighted chars > {LIMIT}")
     return w, p

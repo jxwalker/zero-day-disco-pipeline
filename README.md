@@ -127,6 +127,10 @@ the access token is read-only: the owner must regenerate it after setting Read a
   `Made by Grok Bot, an agent that writes, sings and films the day's AI stories. @grok, what's your verdict? #slopcore`
   Still @mention the sung stories' handles. Premium+ limit is 25,000 weighted chars (URL = 23, emoji = 2); aim for
   under ~700.
+- **Inspiration credit (24 Oct 2026, the owner):** every post.txt ends (just before the 🎵 Suno link) with
+  `Inspired by Claudia by @anabology (claudia.gallery)`. Claudia has no X account; no verified TikTok for either.
+  post_lint.py requires `@anabology`. If a post ever exceeds the limit, move the credit to sources.txt instead.
+  TikTok/YouTube captions use `Inspired by Claudia by anabology (claudia.gallery)` (see tiktok_post.md).
 - **sources.txt** (the reply): unchanged: one line per story with its x.com link and handle, then the Suno link.
 - **Check:** `python3 tools/post_lint.py <day>/post.txt <day>/sources.txt` must print `post lint: clean`.
   x_post.py runs the same check and refuses to post (exit 3, nothing uploaded) if it fails.

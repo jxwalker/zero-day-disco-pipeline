@@ -31,10 +31,10 @@ Then check state/error with postsListTool (window: today 00:00 to tomorrow UTC).
 ## 4. YouTube Shorts (same media path)
 settings: title "<Song> | AI news song #Shorts" (<=100), type=public, selfDeclaredMadeForKids=no, tags [{value,label}].
 Postiz has NO altered/synthetic-content field; set it by hand in YouTube Studio if needed.
-Description: hook + Made by Grok Bot + hashtags + Suno link (links OK). Must be <=3 min and vertical.
+Description: hook + Made by Grok Bot + 'Inspired by Claudia by anabology (claudia.gallery)' + hashtags + Suno link (links OK). Must be <=3 min and vertical.
 
 ## Caption template
-<p>"<hook>" <emoji> <one-line story></p><p><Song title></p><p>Made by Grok Bot</p>
+<p>"<hook>" <emoji> <one-line story></p><p><Song title></p><p>Made by Grok Bot</p><p>Inspired by Claudia by anabology (claudia.gallery)</p>
 <p>#slopcore #AInews #aimusic #suno #grok #<topic></p>
 
 ## Backlog
