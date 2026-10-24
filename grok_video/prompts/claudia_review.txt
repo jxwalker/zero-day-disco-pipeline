@@ -56,3 +56,4 @@ HOUSE STYLE CHECKS (24 Oct 2026). Flag as a required fix when:
   under 21 or over 28, or there is a tongue-out / pulled face;
 - no recurring motif (warning tape, orange rotary phone) appears anywhere in the video;
 - any shot is a still hold, or a cut is longer than ~2 s (faster in choruses).
+HARD RULE (the owner, 24 Oct): the lead wears NO glasses. Reject any shot showing glasses or eyewear on her, or any eyewear rendering artefacts (warped, melted, doubled, floating or half-missing frames or lenses).
