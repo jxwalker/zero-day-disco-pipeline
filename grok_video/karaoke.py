@@ -1114,6 +1114,8 @@ def main():
             for s_ in shots:
                 if s_['src'][0] == 'gfx': used[s_['src'][1]] = used.get(s_['src'][1], 0) + 1
             bad_n = [r['n'] for r in tab if not r['match']]
+            _keep = set(filter(None, os.environ.get('GV_MATCH_KEEP', '').split(',')))   # 24 Oct: hand-verified clips are never redrawn
+            bad_n = [n_ for n_ in bad_n if not (shots[n_]['src'][0] == 'clip' and os.path.splitext(os.path.basename(str(shots[n_]['src'][1])))[0] in _keep)]
             for n_ in bad_n:
                 s_ = shots[n_]; li = s_['line']; spec = pl_.get(inv_.get(li), {})
                 if s_['src'][0] == 'gfx': used[s_['src'][1]] -= 1
