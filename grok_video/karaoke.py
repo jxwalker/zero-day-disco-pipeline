@@ -51,7 +51,10 @@ def direction(day):
     lead = re.search(r'^LEAD:\s*(.+?)(?=^\w+:|\Z)', txt, re.M | re.S)
     pal = re.search(r'^PALETTE:\s*([\w-]+)', txt, re.M)
     return {'text': txt, 'lead': ' '.join(lead.group(1).split()) if lead else '', 'palette': pal.group(1) if pal else ''}
-LOOK = (" Photorealistic cinematic film still, natural skin texture, motivated practical lighting, vertical 9:16 composition. "
+LOOK = (" Live-action music-video frame shot on 35mm Kodak Vision3 500T film, fine visible grain, real lens depth of field, "
+        "one soft motivated practical light source, natural skin texture with pores, off-centre composition with clean "
+        "negative space in the lower third, vertical 9:16. "  # 24 Oct songcraft: Claudia DP grammar, not 'cinematic still'
+
         "Cast are young adults aged 21-28, attractive, natural balanced expressions. No robots, no text, no logos, no "
         "readable writing, no famous people." + SCREEN_RULE)
 
@@ -386,7 +389,18 @@ def generate(P, work, a, deadline, status):
         for j in jobs:
             if j['id'] in bad and os.path.exists(j['out']):
                 os.replace(j['out'], j['out'] + '.screen.png'); status.setdefault('screen_rejected', []).append(j['id'])
+    try:                                           # 24 Oct songcraft: vision check each still vs its sung line
+        import storyboard as SB
+        SB.line_check(P, scenes, jobs, gdir, lyric_lines(getattr(a, 'day', None) or os.path.dirname(os.path.abspath(work))), status, LOOK, deadline)
+    except Exception as e:
+        status.setdefault('warnings', []).append(f'line check failed ({str(e)[:120]})')
     status['stills_made'] = sum(1 for j in jobs if os.path.exists(j['out']))
+    if os.environ.get('GV_HERO', '1') != '0':     # 24 Oct: Runway hero-shot jobs (agent runs them via MCP; Grok clip is the fallback)
+        try:
+            import storyboard as SB
+            status['hero_jobs'] = [j['id'] for j in SB.hero_plan(P, getattr(a, 'day', None) or os.path.dirname(os.path.abspath(work)), gdir)]
+        except Exception as e:
+            status.setdefault('warnings', []).append(f'hero plan failed ({str(e)[:120]})')
     for s in scenes:                               # 23 Oct (the owner: no still images): every scene is animated
         if not (s.get('motion') or '').strip():
             s['motion'] = "Energetic natural movement of the person with a smooth handheld camera push-in."
@@ -1028,7 +1042,12 @@ def main():
         if not P or P.get('ver') != PLAN_VER:
             t0 = time.time()
             try:
+                import storyboard as SB                    # 24 Oct songcraft: treatment + lead bible + shot list
+                try: SB.ensure_direction(day, lyric_lines(day))
+                except Exception as e: status['warnings'].append(f'storyboard direction failed ({str(e)[:120]})')
                 P = plan_opus(day, work, a.stills, a.clips)
+                try: SB.review(P, day, work, lyric_lines(day))  # Opus storyboard review before any Grok spend
+                except Exception as e: status['warnings'].append(f'storyboard review failed ({str(e)[:120]})')
             except Exception as e:
                 status['warnings'].append(f'opus planner failed ({str(e)[:120]}); template plan, no Grok scenes')
                 P = plan_template(day)
@@ -1189,6 +1208,13 @@ def main():
         for f in (out, chat, wide):
             if os.path.exists(f) and os.path.getmtime(f) >= t_start:
                 os.replace(f, os.path.splitext(f)[0] + '.failed.mp4')
+        # 24 Oct 2026: a verification-only failure means all paid media already exists in work_karaoke. Falling back to the
+        # Claudia/cine-real chain then burns 50+ min, hits the routine's time limit and loses post/sources. Stop here instead;
+        # fix the check and re-render with: karaoke.py DAY --skip-gen --no-fallback  (no Grok spend).
+        if why.startswith('RuntimeError: verification failed'):
+            G.save_json(dict(stage='media_done_verify_failed', error=why[:500], resume=f'karaoke.py {day} --skip-gen --no-fallback'),
+                        os.path.join(day, 'VIDEO_CHECKPOINT.json'))
+            print(f"GROK_VIDEO_STATUS=failed code=4 style=karaoke resumable=1 reason={why[:300]!r}", flush=True); sys.exit(4)
         if a.no_fallback or a.skip_gen:
             print(f"GROK_VIDEO_STATUS=failed code=3 style=karaoke reason={why[:300]!r}", flush=True); sys.exit(3)
         G.log(f"karaoke FAILED ({why[:200]}); falling back to grok_video.py (Claudia/slopcore chain)")
