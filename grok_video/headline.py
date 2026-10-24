@@ -93,14 +93,15 @@ def lyrics_text(res):
 def check(res, day):
     probs = []
     ch = [[l['text'].strip().lower() for l in s['lines']] for s in res['sections'] if re.fullmatch(r'chorus', re.split(r':|\s+-\s+|,', s['tag'].strip('[] '))[0].strip().lower())]
-    if len(ch) < 2 or any(c != ch[0] for c in ch[1:]):
-        probs.append('the [Chorus] sections must be identical')
+    if len(ch) < 2 or any(not c or c[0] != ch[0][0] for c in ch[1:]):   # 24 Oct (the owner): chorus 2 may vary; hook line identical
+        probs.append('every [Chorus] must open with the same hook line')
     fc = [s for s in res['sections'] if 'final' in s['tag'].lower()]
     if ch and fc:
-        a, b = ch[0], [l['text'].strip().lower() for l in fc[0]['lines']][:len(ch[0])]
-        diff = sum(len(set(x.split()) ^ set(y.split())) for x, y in zip(a, b))
-        if diff == 0:
-            probs.append('the final chorus needs a one-word callback swap')
+        b = [l['text'].strip().lower() for l in fc[0]['lines']]
+        if not b or b[0] != ch[0][0]:
+            probs.append('the final chorus must open with the hook line')
+        elif all(b == c[:len(b)] for c in ch):     # a changed/flipped line counts as the callback
+            probs.append('the final chorus needs a flip or callback line')
     n = sum(len(s['lines']) for s in res['sections'])
     if not 16 <= n <= 28:   # 17 Oct: sparser lyrics
         probs.append(f'{n} lines (want about 20-24; cut lines if over)')
