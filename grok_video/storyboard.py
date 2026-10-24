@@ -18,7 +18,7 @@ import common_gv as G
 
 S = {"type": "string"}; I = {"type": "integer"}
 PALETTES = ['risograph', 'newsprint', 'sunset-pop', 'candy', 'teal-coral', 'noir-yellow', 'cobalt-cream', 'y2k-chrome',
-            'neon-chrome', 'forest-mustard']
+            'neon-chrome', 'forest-mustard', 'acid-deadpan']
 BANNED = r'\b(cinematic|4k|8k|ultra[- ]detailed|highly detailed|masterpiece|stunning|epic|hyperreal\w*|award[- ]winning|breathtaking)\b'
 
 DIR_SCHEMA = {"type": "object", "properties": {
@@ -63,11 +63,12 @@ def ensure_direction(day, lines=None):
         "You are the director, DP and production designer of today's 2:20 vertical music video. Write the treatment and "
         "storyboard. Template: the 21 Oct 'Turn Me On' video (a data centre personified as a girl dressed up and stood "
         "up waiting for grid power; she finally throws the breaker herself) - one lead, one arc, every line acted out.\n\n"
-        + GRAMMAR + "\n\nWRITE:\n- lead: the character bible, ONE dense 55-80 word paragraph pasted into every image "
+        + open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'prompts', 'claudia_book.txt')).read().split('\n\n')[0] + "\n\n" + GRAMMAR + "\n\nWRITE:\n- lead: the character bible, ONE dense 55-80 word paragraph pasted into every image "
         "prompt: an original quirky manic-pixie indie engineer, clearly an adult woman of about 24 (not any real person), "
         "face, hair (one distinctive colour detail), glasses or other signature, ONE exact wardrobe with colours and "
-        "materials that fits the song's pun, footwear, one accessory; 'PG-13, fully clothed'; natural varied "
-        "expressions.\n- palette: one of the enum names that suits the song.\n- arc: ONE-LINE ARC that turns the song's "
+        "materials that fits the song's pun, footwear, one accessory; 'PG-13, fully clothed'; HOUSE-STYLE attitude: deadpan, "
+        "dry, side-eye, sudden wild laugh on drops, never a generic smile at camera; quirky distinctive styling.\n"
+        "- palette: 'acid-deadpan' (the Zero Day Disco house style; chorus drops switch to Glitch Tape automatically).\n- arc: ONE-LINE ARC that turns the song's "
         "pun into a story with a payoff.\n- beats: SETUP / RISING / CHEEKY CHORUSES / BREAKDOWN / PAYOFF with what she does.\n"
         "- setting, locations (max 3, real and technically accurate), props (the story's real objects + 2-3 cheeky cues "
         "for the pun), wardrobe, colour (section palettes and accent).\n- shots: one per sung line index below "

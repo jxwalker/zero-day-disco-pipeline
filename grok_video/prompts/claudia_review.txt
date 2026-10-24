@@ -48,3 +48,11 @@ PROMPT BOOK (JSON):
 
 HARD RULE (the owner, 24 Oct): no tongue out, no pulled or silly faces, no gurning, no bratty faces, no pouting or duck faces; every expression is natural and confident. Reject any shot that shows one.
 Reject any shot whose on-screen text (watch, sign, bubble) is upside down, mirrored or garbled.
+
+HOUSE STYLE CHECKS (24 Oct 2026). Flag as a required fix when:
+- a verse/pre/breakdown shot is not Acid Deadpan (Klein blue / acid green / safety orange blocking, centred symmetric
+  framing, hard top light) or a chorus shot lacks the Glitch Tape VHS look ([CHORUS] tag missing);
+- the cast are generically smiling at camera ("smiley girls") instead of deadpan / dry / expressive, anyone looks
+  under 21 or over 28, or there is a tongue-out / pulled face;
+- no recurring motif (warning tape, orange rotary phone) appears anywhere in the video;
+- any shot is a still hold, or a cut is longer than ~2 s (faster in choruses).

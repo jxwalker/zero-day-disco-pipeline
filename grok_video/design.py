@@ -16,6 +16,9 @@ PALETTES = {   # bg, panel, ink, muted, a1, a2, a3, good, bad
     'cobalt-cream':dict(bg=(24, 44, 140), panel=(36, 60, 170), ink=(250, 244, 226), muted=(170, 180, 230), a1=(255, 196, 70), a2=(255, 110, 90), a3=(150, 220, 255), good=(150, 240, 160), bad=(255, 110, 90)),
     'y2k-chrome':  dict(bg=(210, 220, 235), panel=(240, 244, 252), ink=(20, 30, 70), muted=(110, 120, 150), a1=(0, 120, 255), a2=(255, 60, 200), a3=(0, 200, 160), good=(0, 170, 110), bad=(255, 50, 90)),
     'neon-chrome': dict(bg=(8, 8, 14), panel=(28, 30, 40), ink=(240, 244, 250), muted=(160, 170, 190), a1=(255, 40, 170), a2=(0, 230, 255), a3=(200, 210, 225), good=(0, 230, 255), bad=(255, 40, 170)),   # 21 Oct: hot pink, electric cyan, chrome on black
+    # 24 Oct house style (the owner): Acid Deadpan = Klein blue / acid green / safety orange; Glitch Tape = magenta/cyan on black (chorus drops)
+    'acid-deadpan': dict(bg=(0, 47, 167), panel=(0, 32, 120), ink=(250, 250, 244), muted=(150, 170, 220), a1=(255, 103, 0), a2=(176, 255, 0), a3=(255, 103, 0), good=(176, 255, 0), bad=(255, 103, 0)),
+    'glitch-tape': dict(bg=(8, 6, 14), panel=(26, 20, 40), ink=(240, 244, 250), muted=(150, 150, 180), a1=(0, 240, 255), a2=(255, 40, 200), a3=(255, 255, 255), good=(0, 240, 255), bad=(255, 40, 200)),
     'forest-mustard': dict(bg=(26, 48, 36), panel=(38, 66, 50), ink=(244, 236, 214), muted=(160, 180, 150), a1=(232, 180, 60), a2=(230, 110, 70), a3=(170, 220, 160), good=(200, 230, 120), bad=(240, 100, 80)),
 }
 TYPE = {   # display, body (bold), mono  -> (ASS family name, file)
@@ -79,7 +82,7 @@ def resolve(day, want, force_palette=''):
     if sum(PALETTES[d['palette']]['bg']) > 500 and d['lyric_style'] in ('neon', 'reveal', 'underline'):
         d['lyric_style'] = 'block'   # 21 Oct: pale neon lyrics were unreadable on a light (candy) palette     # 21 Oct: day direction.txt can force the palette
     d['why'] = (want or {}).get('why', '')
-    return d
+    return house(day, d)
 
 
 def record(day, d, templates):
@@ -91,6 +94,33 @@ def record(day, d, templates):
     h = [x for x in h if x.get('day') != os.path.basename(day)]
     h.append(dict(d, day=os.path.basename(day), templates=templates, at=time.strftime('%Y-%m-%d %H:%M')))
     json.dump(h[-60:], open(HIST, 'w'), indent=1)
+
+
+# 24 Oct house style: every day is Acid Deadpan (verses/pre/breakdown) with Glitch Tape on chorus drops. Variation is
+# WITHIN the house style (type, lyric position, grade, texture rotate); palette and lyric treatment are fixed.
+# GV_HOUSESTYLE=0 restores the old free menu.
+HOUSE = os.environ.get('GV_HOUSESTYLE', '1') != '0'
+HOUSE_AXES = dict(type=['poster', 'condensed', 'slab'], lyric_pos=['lower-center', 'bottom-band'],
+                  grade=['punchy', 'cool-clean', 'bleach'], texture=['grain', 'none', 'grain'])
+
+
+def house(day, d):
+    if not HOUSE: return d
+    seed = int(hashlib.md5(os.path.basename(day).encode()).hexdigest(), 16)
+    prev = [h for h in history() if h.get('day') != os.path.basename(day)]
+    last = prev[-1] if prev else {}
+    d = dict(d, palette='acid-deadpan', lyric_style='block', transition='cut', house='acid-deadpan', chorus='glitch-tape')
+    for i, (k, opts) in enumerate(HOUSE_AXES.items()):
+        if d.get(k) not in opts: d[k] = opts[(seed >> (i * 5)) % len(opts)]
+        if k == 'type' and d[k] == last.get('type'):
+            d[k] = [o for o in opts if o != d[k]][seed % (len(opts) - 1)]
+    return d
+
+
+def chorus_theme(d):
+    """Glitch Tape theme for chorus-drop text (VHS OSD: VT323 mono, cyan with magenta RGB split)."""
+    p = theme(dict(d, palette='glitch-tape', type='pixel'))
+    return p
 
 
 def theme(d):

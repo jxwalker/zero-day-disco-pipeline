@@ -51,12 +51,22 @@ def direction(day):
     lead = re.search(r'^LEAD:\s*(.+?)(?=^\w+:|\Z)', txt, re.M | re.S)
     pal = re.search(r'^PALETTE:\s*([\w-]+)', txt, re.M)
     return {'text': txt, 'lead': ' '.join(lead.group(1).split()) if lead else '', 'palette': pal.group(1) if pal else ''}
-LOOK = (" Live-action music-video frame shot on 35mm Kodak Vision3 500T film, fine visible grain, real lens depth of field, "
-        "one soft motivated practical light source, natural skin texture with pores, off-centre composition with clean "
-        "negative space in the lower third, vertical 9:16. "  # 24 Oct songcraft: Claudia DP grammar, not 'cinematic still'
-
-        "Cast are young adults aged 21-28, attractive, natural, confident expressions; no tongue out, no pulled or silly faces, no gurning, no pouting or duck faces. No robots, no text, no logos, no "
-        "readable writing, no famous people." + SCREEN_RULE)
+LOOK = (" Zero Day Disco house style 'Acid Deadpan' (24 Oct 2026): live-action music-video frame on 35mm film, fine grain, "
+        "flat saturated colour blocking in Klein blue, acid green and safety orange (one bold accent, never rainbow), "
+        "symmetrical centred composition, 24mm wide lens, hard clean top light, Wes-Anderson-meets-Kubrick framing, "
+        "recurring props: orange-and-black warning tape, an orange rotary phone; clean negative space in the lower third, vertical 9:16. "
+        "Cast are young adults aged 21-28 with invented faces, quirky distinctive styling, deadpan / unimpressed / dry expressive "
+        "attitude (side-eye, raised brow, bored stare, sudden laugh), never generic smiling at camera; no tongue out, no pulled or "
+        "silly faces, no gurning, no pouting or duck faces. No robots, no text, no logos, no readable writing, no famous people." + SCREEN_RULE)
+LOOK_CHORUS = (" Zero Day Disco chorus-drop look 'Glitch Tape': 1990s VHS camcorder at night, harsh on-camera flash, magenta and cyan "
+        "chromatic aberration, scan lines, motion smear, low fisheye or dutch angle, whip-pan energy, neon magenta/cyan haze; "
+        "the same cast, wild and cheeky (laughing, crowd-surfing, winking), vertical 9:16. Cast young adults 21-28, invented faces; "
+        "no tongue out, no pulled faces. No robots, no text, no logos, no readable writing, no famous people." + SCREEN_RULE)
+if os.environ.get('GV_HOUSESTYLE', '1') == '0':
+    LOOK = (" Live-action music-video frame shot on 35mm Kodak Vision3 500T film, fine visible grain, real lens depth of field, "
+            "off-centre composition with clean negative space in the lower third, vertical 9:16. Cast are young adults aged 21-28; "
+            "no tongue out, no pulled faces. No robots, no text, no logos, no readable writing, no famous people." + SCREEN_RULE)
+    LOOK_CHORUS = LOOK
 
 
 def norm(s): return re.sub(r'[^a-z0-9]+', ' ', s.lower()).strip()
@@ -353,12 +363,13 @@ def generate(P, work, a, deadline, status):
     for s in scenes:
         pr = no_laptops(s['prompt'].strip())
         is_lead = bool(re.search(r'\[LEAD\]', pr)); pr = pr.replace('[LEAD]', '').strip()
+        lk = LOOK_CHORUS if '[CHORUS]' in pr else LOOK; pr = pr.replace('[CHORUS]', '').strip()   # 24 Oct house style
         if is_lead and lead_ok:
             jobs.append({'id': s['id'], 'kind': 'edit', 'images': [ref], 'out': f"{gdir}/{s['id']}.png", 'prompt':
                          "Keep the exact same woman from the reference image: same face, hair, body and outfit. New scene, vertical 9:16: "
-                         + pr + LOOK})
+                         + pr + lk})
         else:
-            jobs.append({'id': s['id'], 'kind': 'gen', 'prompt': ((DIR['lead'] + ' ') if is_lead else '') + pr + LOOK, 'aspect': '9:16', 'out': f"{gdir}/{s['id']}.png"})
+            jobs.append({'id': s['id'], 'kind': 'gen', 'prompt': ((DIR['lead'] + ' ') if is_lead else '') + pr + lk, 'aspect': '9:16', 'out': f"{gdir}/{s['id']}.png"})
     b = R.Batcher(gdir, {'gen': len(jobs) + 3, 'edit': len(jobs) + 3}, batch_size=5, max_parallel=3, deadline=deadline - 9 * 60, tag='stills')
     b.run(jobs)
     dups = [j for j in jobs if os.path.exists(j['out']) and dup_halves(j['out'])]
@@ -726,7 +737,20 @@ def trans_vf(design, i, nfr):
     return {'flash': 'fade=in:st=0:d=0.1:color=white', 'dip': 'fade=in:st=0:d=0.12:color=black',
             'punch': "scale=iw*1.08:ih*1.08,crop=iw/1.08:ih/1.08" if False else "zoompan=z='if(lt(on,5),1.10-0.02*on,1)':d=1:s=WxH:fps=30",
             'slide': "fade=in:st=0:d=0.08",
-            'glitch': "rgbashift=rh=-8:bh=8:enable='lt(t,0.12)'"}.get(t, '')
+            'glitch': "rgbashift=rh=-8:bh=8:enable='lt(t,0.12)'",
+            # 24 Oct house style: Glitch Tape on chorus drops = RGB split hit + VHS line noise + whip smear on entry
+            'vhs': "rgbashift=rh=-10:bh=10:enable='lt(t,0.18)',noise=alls=18:allf=t:enable='lt(t,0.18)',tblend=all_mode=average:enable='lt(t,0.1)',rgbashift=rh=-2:bh=2"}.get(t, '')
+
+
+def seg_design(des, s, L, day):
+    """24 Oct house style: chorus-drop shots switch to the Glitch Tape transition/grade; others keep Acid Deadpan."""
+    if not des.get('house') or s.get('src', [''])[1] == 'endcard': return des
+    try:
+        if energy_at((s['t0'] + s['t1']) / 2, L, day) == 'fast' and s['t0'] > 1.0:
+            return dict(des, transition='vhs', grade='punchy')
+    except Exception:
+        pass
+    return des
 
 
 def render_seg(job):
@@ -1116,7 +1140,7 @@ def main():
         jobs = []
         for W, H in sizes:
             sd = os.path.join(work, f'seg_{W}x{H}'); os.makedirs(sd, exist_ok=True)
-            jobs += [(s, W, H, os.path.join(sd, f'{i:03d}.mp4'), endp, DES, i) for i, s in enumerate(shots)]
+            jobs += [(s, W, H, os.path.join(sd, f'{i:03d}.mp4'), endp, seg_design(DES, s, L, day), i) for i, s in enumerate(shots)]
         rt = time.time()
         fitlog = os.path.join(work, 'fit_log.jsonl'); open(fitlog, 'w').close(); os.environ['KGFX_FITLOG'] = fitlog  # 21 Oct
         with Pool(min(8, os.cpu_count() or 4)) as pool:

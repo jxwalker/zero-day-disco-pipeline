@@ -60,6 +60,13 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         y0, y1 = int(H * (0.62 if v else 0.74)), int(H * (0.85 if v else 0.95))
         ev.append(f"Dialogue: 0,{_ts(0)},{_ts(dur)},Band,,0,0,0,,{{\\pos(0,{y0})\\p1}}m 0 0 l {W} 0 {W} {y1 - y0} 0 {y1 - y0}{{\\p0}}")
     T = [ln for ln in L if ln.get('words') or ln.get('start') is not None]
+    # 24 Oct house style: chorus drops get the Glitch Tape VHS on-screen-display treatment (VT323, cyan + magenta split)
+    osd = bool(design.get('house'))
+    if osd:
+        import design as DZ
+        ct = DZ.chorus_theme(design); ofam, offile = ct['body_name'], ct['body']; ofs = (96 if v else 80)
+        opil = ImageFont.truetype(offile, int(ofs)); osp = max(opil.getlength(' '), ofs * 0.30)
+        hdr = hdr.replace('[Events]', f"Style: Osd,{ofam},{AZ(ofam, ofs)},{_c(ct['a1'])},{_c(ct['a1'])},{_c((0, 0, 0))},{_c((0, 0, 0), 0x60)},0,0,0,0,100,100,2,0,1,3,2,5,0,0,0,1\nStyle: OsdM,{ofam},{AZ(ofam, ofs)},{_c(ct['a2'], 0x30)},{_c(ct['a2'])},{_c(ct['a2'], 0xFF)},{_c((0, 0, 0), 0xFF)},0,0,0,0,100,100,2,0,1,0,0,5,0,0,0,1\nStyle: OsdDim,{ofam},{AZ(ofam, ofs)},{_c((240, 244, 250), 0x50)},{_c((240, 244, 250))},{_c((0, 0, 0))},{_c((0, 0, 0), 0x60)},0,0,0,0,100,100,2,0,1,3,2,5,0,0,0,1\n[Events]")
     pend = 0.0; nll = 0
     for i, s in enumerate(T):
         st0 = s['start']; nx = T[i + 1]['start'] if i + 1 < len(T) else dur
@@ -72,22 +79,25 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             n = max(1, len(s['text'].split())); step = (s['end'] - st0) / n
             words = [[w, st0 + k * step, st0 + (k + 1) * step - 0.02] for k, w in enumerate(s['text'].split())]
         toks = [_esc(w[0]) for w in words]
-        wid = [pil.getlength(t) for t in toks]
+        isc = osd and s.get('kind') == 'chorus'
+        if isc: toks = [t.upper() for t in toks]
+        wid = [(opil if isc else pil).getlength(t) for t in toks]
+        sp_l, fs_l = (osp, ofs) if isc else (sp, fs)
         # wrap into <= 2 rows, balanced
-        tot = sum(wid) + sp * (len(wid) - 1); rows = [list(range(len(toks)))]
+        tot = sum(wid) + sp_l * (len(wid) - 1); rows = [list(range(len(toks)))]
         if tot > maxw and len(toks) > 1:
             best = None
             for k in range(1, len(toks)):
-                l1 = sum(wid[:k]) + sp * (k - 1); l2 = sum(wid[k:]) + sp * (len(wid) - k - 1)
+                l1 = sum(wid[:k]) + sp_l * (k - 1); l2 = sum(wid[k:]) + sp_l * (len(wid) - k - 1)
                 sc = max(l1, l2)
                 if best is None or sc < best[0]: best = (sc, k)
             rows = [list(range(best[1])), list(range(best[1], len(toks)))]
         # auto-shrink: any row still wider than the safe width (measured) scales the whole line down
-        rmax = max(sum(wid[j] for j in idx) + sp * (len(idx) - 1) for idx in rows)
+        rmax = max(sum(wid[j] for j in idx) + sp_l * (len(idx) - 1) for idx in rows)
         k = min(1.0, maxw / rmax) if rmax else 1.0
-        wid = [w_ * k for w_ in wid]; spk = sp * k
+        wid = [w_ * k for w_ in wid]; spk = sp_l * k
         SC = f"\\fscx{100 * k:.0f}\\fscy{100 * k:.0f}" if k < 0.999 else ''
-        lh = fs * 1.08 * k; xy = {}
+        lh = fs_l * 1.08 * k; xy = {}
         for r, idx in enumerate(rows):
             rw = sum(wid[j] for j in idx) + spk * (len(idx) - 1)
             x = (W - rw) / 2 if align == 'c' else x_left
@@ -102,6 +112,11 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             ad = (f"\\i1\\fscx{85 * k:.0f}\\fscy{85 * k:.0f}" + f"\\1c{_c(th['a2'])}") if inpar else SC
             if ')' in tok: inpar = False
             P = f"\\an5\\pos({x:.0f},{y:.0f})"
+            if isc:   # VHS OSD: dim until sung, then cyan with a magenta ghost offset (RGB split) that jitters in
+                ev.append(f"Dialogue: 1,{_ts(a)},{_ts(ws)},OsdDim,,0,0,0,,{{{P}\\fad(60,0){SC}}}{tok}")
+                ev.append(f"Dialogue: 1,{_ts(ws)},{_ts(end)},OsdM,,0,0,0,,{{\\an5\\move({x + 14:.0f},{y:.0f},{x + 5:.0f},{y:.0f},0,120){SC}}}{tok}")
+                ev.append(f"Dialogue: 2,{_ts(ws)},{_ts(end)},Osd,,0,0,0,,{{{P}{SC}}}{tok}")
+                continue
             if st != 'reveal':
                 ev.append(f"Dialogue: 1,{_ts(a)},{_ts(ws)},Dim,,0,0,0,,{{{P}\\fad(80,0){ad}}}{tok}")
             if st == 'pop':
