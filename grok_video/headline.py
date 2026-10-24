@@ -172,11 +172,40 @@ def _files(res, out):
     return check(res, out) + ([] if ok else [f'lint: {msg}'])
 
 
+CRAFT = ("CRAFT (always): each verse is 4 lines and tells one beat of ONE story arc (set-up -> incident -> consequence); "
+         "the chorus line that the bridge/final chorus flips must be SET UP earlier (we see the accusation before the denial); "
+         "keep ONE motif/object recurring in every section with the same wording; the last chorus + outro must land the point "
+         "(a turn that changes what the hook means), not just repeat it. Make room by trimming chants/post-choruses, not verses.")
+
+
+def _lint_repair(res, probs, out, od, n, tries=2):
+    """Targeted lint repair: minimal edits to the CURRENT draft until _files() is clean (max `tries` Opus passes)."""
+    for t in range(tries):
+        if not probs:
+            break
+        rf = os.path.join(od, f'lint_repair_{n}_{t}.txt')
+        open(rf, 'w').write(
+            "Fix ONLY these lint/format problems in this song package with the smallest possible edits. Do not change the "
+            "concept, story, motif, hook wording or any line that is not implicated. Cut words or whole lines (prefer chant/"
+            "post-chorus lines) rather than rewriting. Keep stories/tickers verbatim from the stories. Return the whole JSON."
+            "\n\nPROBLEMS:\n- %s\n\nPACKAGE:\n%s" % ('\n- '.join(probs), json.dumps(res, ensure_ascii=False)))
+        try:
+            fixed, meta = SO.run_claude(rf, od, SCHEMA, int(os.environ.get('HL_LINT_REPAIR_S', 600)), tools='', effort='medium')
+        except Exception as e:
+            print(f"lint repair failed: {e!r}"[:300]); break
+        p2 = _files(fixed, out)
+        print(f"lint repair {n}.{t}: {len(probs)} -> {len(p2)} problems")
+        if len(p2) <= len(probs):
+            res, probs = fixed, p2
+    _files(res, out)
+    return res, probs
+
+
 def judge_loop(res, out, od, pf, stories_md, concept_txt):
-    rounds = int(os.environ.get('HL_JUDGE_ROUNDS', 3))
+    rounds = int(os.environ.get('HL_JUDGE_ROUNDS', 5))
     best, log = None, []
     for n in range(rounds + 1):
-        probs = _files(res, out)
+        res, probs = _lint_repair(res, _files(res, out), out, od, n)   # 24 Oct: repair THIS draft, never fall back to a weaker clean one
         try:
             j = SC.judge(lyrics_text(res), res['title'], concept_txt, stories_md, od, n)
         except Exception as e:
@@ -197,7 +226,7 @@ def judge_loop(res, out, od, pf, stories_md, concept_txt):
                 SC.MIN, SC.MEAN, json.dumps(j['scores']), j['verdict'], '\n- '.join(j['must_fix']),
                 '\n'.join(f"- {x['line']!r}: {x['problem']} -> {x['fix']}" for x in j['line_notes']),
                 ('ALSO FIX THESE LINT/CHECK PROBLEMS:\n- ' + '\n- '.join(probs)) if probs else '',
-                open(pf).read(), json.dumps(res, ensure_ascii=False)))
+                open(pf).read(), json.dumps(res, ensure_ascii=False)) + '\n\n' + CRAFT)
         try:
             res, meta = SO.run_claude(rf, od, SCHEMA, int(os.environ.get('HL_JUDGE_REWRITE_S', 900)), tools='',
                                       effort=os.environ.get('HL_JUDGE_EFFORT', 'medium'))   # 24 Oct: high timed out at 700 s
@@ -230,7 +259,7 @@ def write(src, out):
         except Exception as e:
             print(f"songcraft concepts failed (writer picks its own angle): {e!r}"[:300])
     open(pf, 'w').write(open(os.path.join(HERE, 'prompts', 'headline_writer.txt')).read()
-                        .replace('{{STORIES}}', stories_md).replace('{{CONCEPT}}', concept_txt))
+                        .replace('{{STORIES}}', stories_md).replace('{{CONCEPT}}', concept_txt) + '\n\n' + CRAFT + '\n')
     try:
         res, meta = SO.run_claude(pf, od, SCHEMA, 900, tools='', effort='high')
     except Exception as e:
