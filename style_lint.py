@@ -16,7 +16,9 @@ def problems(s):
     if not re.search(r"\b(natural|raw|human)\b[^,]*vocal", s, re.I): p.append("missing natural/raw human vocal wording")
     if re.search(r"jingle", s, re.I): p.append("contains 'jingle' (banned style)")
     # 21 Oct 2026 viral-hit format: bright high-energy pop, female lead by default
-    if not re.search(r"\bfemale\b[^,]*\b(lead|vocal|singer)", s, re.I): p.append("missing 'female lead vocal'")
+    # 25 Oct 2026: every ~3rd song is 'Take It Apart'-style pop-punk with a snotty male lead (the owner, 24 Oct), the one exception
+    poppunk_male = re.search(r"pop-?punk", s, re.I) and re.search(r"\bmale\b[^,]*\b(lead|vocal|singer)", s, re.I)
+    if not poppunk_male and not re.search(r"\bfemale\b[^,]*\b(lead|vocal|singer)", s, re.I): p.append("missing 'female lead vocal'")
     if not re.search(r"high-?energy|energetic|euphoric|upbeat", s, re.I): p.append("missing high-energy wording (high-energy / euphoric / upbeat)")
     if not re.search(r"pop", s, re.I): p.append("missing 'pop'")
     if len(s) > 200: p.append(f"{len(s)} chars (max 200)")
@@ -24,7 +26,7 @@ def problems(s):
 
 def fix(s):
     s = BANNED.sub('', s).strip(' ,;.\n')
-    if not re.search(r"\bfemale\b", s, re.I): s = 'female lead vocal, ' + s
+    if not re.search(r"\bfemale\b", s, re.I) and not (re.search(r"pop-?punk", s, re.I) and re.search(r"\bmale\b", s, re.I)): s = 'female lead vocal, ' + s
     if not re.search(r"high-?energy|energetic|euphoric|upbeat", s, re.I): s = 'high-energy ' + s
     if any('vocal wording' in x or 'autotune' in x or 'vocoder' in x for x in problems(s)):  # vocal clause missing
         s = (s + ', ' if s else '') + VOCAL
