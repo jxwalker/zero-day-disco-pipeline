@@ -686,6 +686,18 @@ def beat_grid(audio, dur):
     return float(bpm), [float(t) for t in np.arange(ph_best[1], dur, per)]
 
 
+def section_is_chorus(t, L, day):
+    """True inside a chorus/hook/refrain section (25 Oct: the only place a clip may repeat)."""
+    secs = lyric_sections(day); timed = [i for i, ln in enumerate(L) if ln.get('start') is not None]
+    if not timed or t < L[timed[0]]['start']: return False
+    cur = None
+    for i in timed:
+        if L[i]['start'] - 0.1 <= t: cur = i
+    if cur is None or cur >= len(secs): return False
+    name = norm(secs[cur][1]) + ' ' + secs[cur][2]
+    return any(k in name for k in ('chorus', 'hook', 'refrain')) and 'pre' not in name
+
+
 def energy_at(t, L, day):
     """fast (chorus/chant/hook/intro chant/final lift), mid (verse/pre), calm (breakdown/bridge/stripped) for time t."""
     secs = lyric_sections(day); timed = [i for i, ln in enumerate(L) if ln.get('start') is not None]
@@ -711,14 +723,35 @@ def pace(shots, L, day, audio, dur):
     _gd = os.path.dirname(next((x['src'][1] for x in body if x['src'][0] == 'clip'), '') or '.')
     pool = sorted(f"{_gd}/{f}" for f in os.listdir(_gd) if f.endswith('.mp4') and f.count('.') == 1) if os.path.isdir(_gd) else []
     CAP = int(os.environ.get('GV_CLIP_MAX_USES', '4'))
-    def clip_src(path, strict=False):   # 25 Oct: rotate passing clips, each used at most CAP times
-        if clips_seen.get(path, 0) >= CAP and pool:
-            free = [c for c in pool if clips_seen.get(c, 0) < CAP]
-            if free: path = min(free, key=lambda c: clips_seen.get(c, 0))
-            elif strict: return None
-            else: path = min(pool, key=lambda c: clips_seen.get(c, 0))
+    _dur = {}
+    def cdur(c):
+        if c not in _dur:
+            try: _dur[c] = float(subprocess.run(['ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', c], capture_output=True, text=True).stdout.strip())
+            except Exception: _dur[c] = 0.0
+        return _dur[c]
+    outside = {}; chorus_used = []; use_log = []; ch = {'n': 0, 'prev': False}; ch_last = {}
+    def allowed(c, chorus):
+        # 25 Oct rule (the owner): no repeats outside choruses. A clip >=5 s may give 2 distinct segments outside;
+        # inside choruses a clip may come back as a deliberate callback (total cap CAP).
+        if clips_seen.get(c, 0) >= CAP: return False
+        if chorus: return ch_last.get(c) != ch['n']   # once per chorus; may return on a later chorus
+        return outside.get(c, 0) < (2 if cdur(c) >= 5.0 else 1)
+    def clip_src(path, strict=True, chorus=False, t=None):
+        if not allowed(path, chorus):
+            free = [c for c in pool if allowed(c, chorus)]
+            if chorus:   # callback: prefer a clip already used on an earlier chorus hook, else an unused one
+                cb = [c for c in free if c in chorus_used]
+                free = cb or sorted(free, key=lambda c: clips_seen.get(c, 0))
+            else: free = sorted(free, key=lambda c: clips_seen.get(c, 0))
+            if not free: return None
+            path = free[0]
+        if chorus:
+            ch_last[path] = ch['n']
+            if path not in chorus_used: chorus_used.append(path)
+        else: outside[path] = outside.get(path, 0) + 1
+        use_log.append((path.split('/')[-1], round(t or 0, 2), f"chorus{ch['n']}" if chorus else 'other'))
         k = clips_seen.get(path, 0); clips_seen[path] = k + 1
-        off = [0.0, 2.4, 1.2, 3.6, 0.6, 3.0, 1.8, 4.2][k % 8]
+        off = [0.0, 3.0, 1.5, 4.2, 0.6, 2.4, 1.8, 3.6][k % 8]
         try:   # 25 Oct: short hero clips (2-3 s) - keep the in-point inside the clip
             cd = float(subprocess.run(['ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', path], capture_output=True, text=True).stdout.strip())
             off = off % max(0.01, cd - 1.6) if cd - 1.6 > 0.05 else 0.0
@@ -735,6 +768,9 @@ def pace(shots, L, day, audio, dur):
     for i, s in enumerate(body):
         t0, t1 = s['t0'], s['t1']
         e = energy_at((t0 + t1) / 2, L, day); nb = PACE_BEATS[e]
+        e_ch = section_is_chorus((t0 + t1) / 2, L, day)
+        if e_ch and not ch['prev']: ch['n'] += 1
+        ch['prev'] = e_ch
         bs = [b for b in beats if t0 + 0.3 < b < t1 - 0.3]
         cutsp = [t0]
         k = 0
@@ -752,16 +788,16 @@ def pace(shots, L, day, audio, dur):
         for q, (a, b) in enumerate(fin):
             n_ = dict(s, t0=a, t1=b, energy=e)
             if s['src'][0] == 'clip':
-                cs = clip_src(s['src'][1], strict=True)
+                cs = clip_src(s['src'][1], chorus=e_ch, t=a)
                 if cs is None:   # every passing clip used CAP times: borrow the nearest graphic instead
                     gj = min((j for j in range(len(body)) if body[j]['src'][0] == 'gfx'), key=lambda j: abs(j - i), default=None)
                     if gj is not None:
                         p_ = dict(body[gj]['src'][2]); p_['_toff'] = 0.0; p_['_dur'] = b - a
                         cs = ('gfx', body[gj]['src'][1], p_)
-                    else: cs = clip_src(s['src'][1])
+                    else: cs = ('clip', s['src'][1], 0.0, {'zoom': 1.0})
                 n_['src'] = cs
             elif s['src'][0] == 'gfx':
-                cs = clip_src(alt, strict=True) if (q % 2 == 1 and alt) else None
+                cs = clip_src(alt, chorus=e_ch, t=a) if (q % 2 == 1 and alt) else None
                 if cs: n_['src'] = cs; n_['sub_of'] = 'gfx'
                 else:
                     p_ = dict(s['src'][2]); p_['_toff'] = a - t0; p_['_dur'] = t1 - t0
@@ -769,6 +805,8 @@ def pace(shots, L, day, audio, dur):
             if q: n_['sub'] = q
             out.append(n_)
     out.append(end_shot)
+    try: G.save_json([{'clip': c, 't': t, 'section': w} for c, t, w in use_log], os.path.join(os.path.dirname(_gd), 'clip_uses.json'))
+    except Exception: pass
     return out, bpm
 
 
