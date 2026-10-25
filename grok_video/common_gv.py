@@ -154,3 +154,16 @@ AUDIO_OVERRIDE = None
 
 def audio_path(day):
     return AUDIO_OVERRIDE or os.path.join(day, 'audio.mp3')
+
+
+def lead_noun(day):
+    """25 Oct: 'man' when the lead vocal is male (headline.json lead_gender, else style.txt 'male lead'/'male vocal'), else 'woman'."""
+    try:
+        g = ((load_json(os.path.join(day, 'headline.json'), {}) or {}).get('lead_gender') or '').lower()
+        if g in ('male', 'man'): return 'man'
+        if g in ('female', 'woman'): return 'woman'
+        st = read(os.path.join(day, 'style.txt')).lower()
+        if re.search(r'(?<!fe)male (lead|vocal|singer)', st): return 'man'
+    except Exception:
+        pass
+    return 'woman'

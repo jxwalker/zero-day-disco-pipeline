@@ -387,12 +387,13 @@ def generate(P, work, a, deadline, status):
     for v in [v for ln in P['lines'] for v in ln['v']] + P['intro'] + P['breaks'] + P['outro']:
         if v.get('kind') == 'scene': used[v.get('id')] = used.get(v.get('id'), 0) + 1
     DIR = direction(os.path.dirname(os.path.abspath(work)) if not getattr(a, 'day', None) else a.day)
+    LN = G.lead_noun(os.path.dirname(os.path.abspath(work)) if not getattr(a, 'day', None) else a.day)   # 25 Oct male lead
     ref = f"{gdir}/lead_ref.png"
     if DIR['lead'] and not os.path.exists(ref):     # 21 Oct: one consistent lead from a reference still
         rb = R.Batcher(gdir, {'gen': 2}, batch_size=1, max_parallel=1, deadline=deadline - 12 * 60, tag='leadref')
         rb.run([{'id': 'lead_ref', 'kind': 'gen', 'aspect': '9:16', 'out': ref, 'prompt':
                  "Full-body character reference portrait, plain dark studio background, even soft light, facing camera: "
-                 + DIR['lead'] + " Clearly an adult woman. An original person, not any real person or celebrity. No text, no logos."}])
+                 + DIR['lead'] + f" Clearly an adult {LN}, no glasses. An original person, not any real person or celebrity. No text, no logos."}])
     lead_ok = DIR['lead'] and os.path.exists(ref)
     if not any('[PIP]' in s['prompt'] for s in scenes) and len(scenes) > 4:   # 24 Oct: Pip cameo is mandatory
         k = next((i for i, s in enumerate(scenes) if '[CHORUS]' in s['prompt']), len(scenes) // 2)
@@ -412,7 +413,7 @@ def generate(P, work, a, deadline, status):
         lk = LOOK_CHORUS if '[CHORUS]' in pr else LOOK; pr = pr.replace('[CHORUS]', '').strip()   # 24 Oct house style
         if is_lead and lead_ok:
             jobs.append({'id': s['id'], 'kind': 'edit', 'images': [ref], 'out': f"{gdir}/{s['id']}.png", 'prompt':
-                         "Keep the exact same woman from the reference image: same face, hair, body and outfit. New scene, vertical 9:16: "
+                         f"Keep the exact same {LN} from the reference image: same face, hair, body and outfit. New scene, vertical 9:16: "
                          + pr + lk})
         else:
             jobs.append({'id': s['id'], 'kind': 'gen', 'prompt': ((DIR['lead'] + ' ') if is_lead else '') + pr + lk, 'aspect': '9:16', 'out': f"{gdir}/{s['id']}.png"})

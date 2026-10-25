@@ -55,6 +55,7 @@ def ensure_direction(day, lines=None):
         return False
     import slop_opus as SO
     hj = G.load_json(os.path.join(day, 'headline.json'), {}) or {}
+    LN = G.lead_noun(day); PR = 'he' if LN == 'man' else 'she'   # 25 Oct: male pop-punk lead support
     cj = G.load_json(os.path.join(day, 'work_headline', 'concept.json'), {}) or {}
     lines = lines or _lines(day)
     od = os.path.join(day, 'work_storyboard'); os.makedirs(od, exist_ok=True)
@@ -64,12 +65,13 @@ def ensure_direction(day, lines=None):
         "storyboard. Template: the 21 Oct 'Turn Me On' video (a data centre personified as a girl dressed up and stood "
         "up waiting for grid power; she finally throws the breaker herself) - one lead, one arc, every line acted out.\n\n"
         + open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'prompts', 'claudia_book.txt')).read().split('\n\n')[0] + "\n\n" + GRAMMAR + "\n\nWRITE:\n- lead: the character bible, ONE dense 55-80 word paragraph pasted into every image "
-        "prompt: an original quirky manic-pixie indie engineer, clearly an adult woman of about 24 (not any real person), "
-        "face, hair (one distinctive colour detail), glasses or other signature, ONE exact wardrobe with colours and "
+        + ("prompt: an original quirky manic-pixie indie engineer, clearly an adult woman of about 24 (not any real person), " if LN == 'woman' else
+           "prompt: an original snotty, energetic indie pop-punk young man of about 24 (not any real person), ") +
+        "face, hair (one distinctive colour detail), NO glasses or eyewear of any kind, one other signature, ONE exact wardrobe with colours and "
         "materials that fits the song's pun, footwear, one accessory; 'PG-13, fully clothed'; HOUSE-STYLE attitude: deadpan, "
         "dry, side-eye, sudden wild laugh on drops, never a generic smile at camera; quirky distinctive styling.\n"
         "- palette: 'acid-deadpan' (the Zero Day Disco house style; chorus drops switch to Glitch Tape automatically).\n- arc: ONE-LINE ARC that turns the song's "
-        "pun into a story with a payoff.\n- beats: SETUP / RISING / CHEEKY CHORUSES / BREAKDOWN / PAYOFF with what she does.\n"
+        "pun into a story with a payoff.\n- beats: SETUP / RISING / CHEEKY CHORUSES / BREAKDOWN / PAYOFF with what " + PR + " does.\n"
         "- setting, locations (max 3, real and technically accurate), props (the story's real objects + 2-3 cheeky cues "
         "for the pun), wardrobe, colour (section palettes and accent).\n- shots: one per sung line index below "
         "(repeated chorus lines escalate: new angle or bigger version of the same gag); 'shot' = the first frame in 25-45 "
@@ -87,8 +89,8 @@ def ensure_direction(day, lines=None):
            + '\n'.join(f"- {b['beat']} ({b['sections']}): {b['action']}" for b in d['beats'])
            + f"\nSETTING: {d['setting']}\nPRODUCTION DESIGN: locations: {'; '.join(d['locations'])}. Props: {'; '.join(d['props'])}. "
            f"Wardrobe: {d['wardrobe']}. Colour: {d['colour']}\nSHOT LIST (storyboard; follow it line by line, start every "
-           f"scene prompt with the shot's camera grammar):\n{shots}\nRULES: the same woman in every shot that shows her "
-           "(same face, hair, glasses, wardrobe). Real technical kit. No laptops, tablets or phones; no robots. "
+           f"scene prompt with the shot's camera grammar):\n{shots}\nRULES: the same {LN} in every shot that shows " + ('him' if LN == 'man' else 'her') + " "
+           "(same face, hair, wardrobe; no glasses). Real technical kit. No laptops, tablets or phones; no robots. "
            "Everyone is 21-28. Graphics stay exact and code-rendered as usual.\n" + GRAMMAR + "\n")
     open(pth, 'w').write(txt)
     G.log(f"storyboard: wrote {pth} ({len(d['shots'])} shots, palette {d['palette']}, {meta['secs']}s)")
@@ -172,12 +174,13 @@ def line_check(P, scenes, jobs, gdir, lines, status, look, deadline):
         return
     pf = os.path.join(gdir, 'line_check.txt')
     ref = os.path.exists(f"{gdir}/lead_ref.png")
+    LN = G.lead_noun(os.path.dirname(os.path.dirname(os.path.abspath(gdir))))   # 25 Oct
     open(pf, 'w').write(
         "You are the script supervisor of a music video. For each still below, use the Read tool to open the file (in "
         "this directory) and judge it literally against the sung line(s) it plays under and the shot it was meant to "
         "be. matches_line = a viewer with the sound off would connect this picture to those words (the action/prop the "
         "words name is clearly visible), and it fits the story. same_lead = " + ("open lead_ref.png first; true if the "
-        "woman shown is clearly the same person and outfit (or no woman is meant to be shown)" if ref else "true") +
+        f"{LN} shown is clearly the same person and outfit (or no {LN} is meant to be shown)" if ref else "true") +
         ". Reject laptops/phones/tablets, robots, readable gibberish text, malformed hands or faces too. For failures give "
         "the issue and a fixed_prompt (35-80 words, same grammar: shot size, lens, light, action that depicts the line); "
         "'' for passes. id = file name without .png.\n\n" +
@@ -199,7 +202,7 @@ def line_check(P, scenes, jobs, gdir, lines, status, look, deadline):
         if k not in jb: continue
         j = jb[k]; fx = rs[k]['fixed_prompt'].replace('[LEAD]', '').strip()
         if j['kind'] == 'edit':
-            pr = "Keep the exact same woman from the reference image: same face, hair, body and outfit. New scene, vertical 9:16: " + fx + look
+            pr = f"Keep the exact same {LN} from the reference image: same face, hair, body and outfit. New scene, vertical 9:16: " + fx + look
         else:
             pr = fx + look
         os.replace(j['out'], j['out'] + '.linefail.png')
@@ -266,9 +269,9 @@ def hero_plan(P, day, gdir):
         cost = HERO_COST[model] * HERO_SECS + HERO_FRAME_COST
         if spent + cost > HERO_BUDGET: continue
         spent += cost
-        motion = re.sub(r'\[LEAD\]', 'the woman', s.get('motion', ''))
+        LN = G.lead_noun(day); motion = re.sub(r'\[LEAD\]', 'the ' + LN, s.get('motion', ''))
         jobs.append(dict(p, model=model, est_credits=round(cost), image=f"{gdir}/{p['id']}.png", out=f"{gdir}/{p['id']}.mp4",
-                         prompt=("Keep the exact same woman, outfit, set and lighting as the image; live-action music video, "
+                         prompt=(f"Keep the exact same {LN}, outfit, set and lighting as the image; live-action music video, "
                                  "35mm film look, natural human motion, no morphing, no new people, no text, no laptops or phones. "
                                  + motion)[:2400], ratio='9:16', resolution='720p', duration=HERO_SECS, status='todo',
                          frame_model='nano-banana-2.1', frame_prompt=(HOUSE_FRAME + s['prompt'])[:2400],
