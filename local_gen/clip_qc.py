@@ -29,7 +29,7 @@ def frames(clip, n=6):
 def qc(clip, prompt, still=None, tier='hero', wardrobe=''):
     """25 Oct (the owner: wrench shirt + floppy wrench): delegates to strict_qc - frames every 0.25 s as contact sheets,
     prop-rigidity / wardrobe / hand-prop rules, second independent reviewer (Grok) on hero and prop shots, both must
-    pass, fail closed. Set QC_LEGACY=1 for the old 6-frame single reviewer."""
+    pass on FAIL-level checks (serious glitches), WARN-level drift is logged only (strict_qc.log), fail closed. Set QC_LEGACY=1 for the old 6-frame single reviewer."""
     if os.environ.get('QC_LEGACY') != '1':
         import strict_qc as SQ
         wardrobe = wardrobe or os.environ.get('GV_WARDROBE', '')

@@ -497,10 +497,11 @@ def generate(P, work, a, deadline, status):
         with ThreadPoolExecutor(int(os.environ.get('QC_PAR', 4))) as ex:
             qres = list(ex.map(lambda j: (j, SQ.qc_clip(j['out'], j['prompt'], wd, j.get('image'), 'hero')), todo))
         for j, r in qres:
-            status.setdefault('strict_qc', {})[j['id']] = {'ok': r['ok'], 'reasons': r['reasons'][:8]}
+            status.setdefault('strict_qc', {})[j['id']] = {'ok': r['ok'], 'reasons': r['reasons'][:8], 'warnings': r.get('warnings', [])[:8]}
             if not r['ok']:
                 os.replace(j['out'], j['out'] + '.qcfail.mp4'); status.setdefault('clip_rejected', []).append(j['out'])
                 G.log(f"karaoke: strict QC rejected {j['id']}: {'; '.join(r['reasons'])[:300]}")
+            elif r.get('warnings'): G.log(f"karaoke: strict QC WARN (not blocking) {j['id']}: {'; '.join(r['warnings'])[:300]}")
         fj = []
         for j in cj:
             if os.path.exists(j['out']):
@@ -1208,10 +1209,13 @@ def main():
                 'sub': 'Grok Bot · ' + time.strftime('%-d %b %Y', time.strptime(os.path.basename(day)[:10], '%Y-%m-%d')) if re.match(r'\d{4}-\d\d-\d\d', os.path.basename(day)) else '',
                 'bg': os.path.join(gdir, stills[-1]) if stills else None}
         endp['tags'] = end_tags(day)   # 21 Oct: end card lists the post's tagged accounts
+        if os.environ.get('GV_ENDCARD_PHOTO') != '1':  # 25 Oct: un-QC'd lead still behind the end card failed strict QC (plaid shirt) -> plain theme bg
+            endp['bg'] = None
         if P.get('scenes') and stills:                # prefer the outro scene as the end-card background
             for v in P.get('outro', [])[::-1]:
                 if v.get('kind') == 'scene' and os.path.exists(os.path.join(gdir, f"{v['id']}.png")):
                     endp['bg'] = os.path.join(gdir, f"{v['id']}.png")
+                    if os.environ.get('GV_ENDCARD_PHOTO') != '1': endp['bg'] = None; break
                     if os.path.exists(os.path.join(gdir, f"{v['id']}.mp4")): endp['bg_clip'] = os.path.join(gdir, f"{v['id']}.mp4")
                     break
         G.save_json({'shots': [{'t0': round(s['t0'], 2), 't1': round(s['t1'], 2), 'src': [s['src'][0], s['src'][1]], 'line': s.get('line'), 'redrawn': s.get('redrawn')} for s in shots],

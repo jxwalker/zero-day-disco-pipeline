@@ -30,40 +30,45 @@ POCKET_RE = re.compile(r"\bpocket(s|ed|ing)?\b|\btuck(s|ed|ing)?\b|\bholster|\bs
 GRAPHIC_WARDROBE_RE = re.compile(r"(\w+[- ]?(shaped|print|printed|pattern|patterned|motif|patch(es)?|logo|graphic|embroider\w*|appliqu\w*|badge|decal))|"
                                  r"(stitched|embroidered|printed|painted) \w+ (patch(es)?|motif|print|graphic)", re.I)
 
+# Severity (25 Oct, the owner): FAIL = serious glitch, blocks. WARN = small drift, logged only.
 CHECKS = {
-  "prop_rigidity": "Any rigid object (spanner, wrench, tool, watch body, phone, cup, card, board, instrument) bends, flexes, "
-                   "goes rubbery/floppy, melts, stretches, changes size, shape, colour or count between frames, splits, "
-                   "merges, appears from nowhere, vanishes, or passes through a hand, body, cloth or surface. Rigid tools "
-                   "MUST stay rigid and the same size in every frame. FAIL on any frame-to-frame change.",
-  "wardrobe_spec": "Clothing differs from the WARDROBE SPEC (garment, colour, fit) or changes between frames; ANY print, "
-                   "patch, embroidery, logo, badge, pattern or graphic on clothing that is not literally in the spec - "
-                   "especially tool, wrench, spanner or prop-shaped graphics, which ALWAYS fail even if the spec mentions them; "
-                   "garments merging, extra pockets/straps/belts appearing.",
-  "hand_prop_interaction": "Hands gripping, pocketing, clipping, hanging, handing over or putting away an object: the "
-                   "object must keep its shape and be physically held (fingers around it, not fused), go into a real "
-                   "opening, and not deform, sink into fabric, morph into a strap/cloth, or swap hands. Any pocketing/"
-                   "clipping/holstering action that is not perfectly clean fails.",
-  "hands_objects": "Malformed, melted, extra or missing fingers; extra limbs or extra hands; duplicated accessories (two watches).",
-  "framing": "Camera overshoot, crop on chin/forehead, landing on an awkward body part, subject leaving frame, or shot size "
-             "clearly different from the prompt (e.g. prompt says hip close-up, clip is a full figure).",
-  "face_drift": "Face, hair, age or identity changes between frames or vs the start still; extra or vanishing people.",
-  "tongue_or_pulled_face": "Tongue out, gurning, pouting, duck face, bratty or pulled expression.",
+  # ---------------- FAIL level
+  "prop_rigidity": "A rigid object (spanner, wrench, tool, watch BODY/strap, phone, cup, card, board, instrument) visibly bends, "
+                   "flexes, goes rubbery/floppy, melts, stretches, clearly changes size or shape, splits, merges into a strap/cloth/hand, "
+                   "sinks into fabric, or passes through a hand, body or surface. (Changing content on a watch/phone SCREEN is NOT this.)",
+  "clothing_graphics": "ANY print, patch, embroidery, logo, badge, pattern or graphic on clothing - especially tool, wrench, spanner or "
+                   "prop-shaped graphics, which ALWAYS fail. Garments must be plain solid colours.",
+  "hands_malformed": "Extra hands or limbs, melted, smeared or fused hands/fingers, clearly wrong finger count, hand fused with an object; "
+                   "duplicated accessories (two watches).",
+  "pulled_face": "Tongue out, gurning, pouting, duck face, bratty or pulled expression, or a melted/distorted face.",
+  "text_flipped": "Visible text upside down or mirrored anywhere; large in-focus text badly garbled.",
   "eyewear": "Any glasses or eyewear on the lead, or eyewear artefacts.",
-  "text_flipped": "Visible text upside down or mirrored anywhere; large or in-focus text garbled.",
-  "physics_continuity": "Background objects or furniture morphing, popping, sliding; liquids, cloth or hair behaving impossibly; "
-                        "a scene cut or jump inside the clip.",
-  "prompt_fidelity": "The action and camera move in the prompt is clearly what happens; no invented props or actions.",
+  "identity_or_wardrobe_swap": "BIG change: the lead becomes a different person, an extra person appears/vanishes, or a garment is swapped "
+                   "for a different garment/colour mid-clip or clearly differs from the WARDROBE SPEC.",
+  # ---------------- WARN level
+  "screen_content": "Watch/phone screen content changes or flickers.",
+  "minor_face_drift": "Small face/hair drift that keeps the same identity.",
+  "framing": "Minor framing issues, camera overshoot, shot size differing from prompt.",
+  "minor_wardrobe": "Small wardrobe detail drift (socks, shoes not visible, cuff, seam) without prints or swaps.",
+  "background_drift": "Small background/furniture changes, minor cloth/hair physics.",
+  "prompt_fidelity": "Action or camera move differs from the prompt; invented minor action.",
 }
+FAIL_CHECKS = ("prop_rigidity", "clothing_graphics", "hands_malformed", "pulled_face", "text_flipped", "eyewear", "identity_or_wardrobe_swap")
+def severity(k): return 'FAIL' if k in FAIL_CHECKS else 'WARN'
 SCHEMA = {"type": "object", "required": ["checks", "ok", "worst_frames"], "properties": {
     "checks": {"type": "object", "required": list(CHECKS), "properties": {k: {"type": "object", "required": ["pass", "note", "times"],
         "properties": {"pass": {"type": "boolean"}, "note": {"type": "string"}, "times": {"type": "array", "items": {"type": "string"}}}} for k in CHECKS}},
     "ok": {"type": "boolean"}, "worst_frames": {"type": "array", "items": {"type": "string"}}}}
 CUT_SCHEMA = {"type": "object", "required": ["flags", "ok"], "properties": {
     "ok": {"type": "boolean"}, "flags": {"type": "array", "items": {"type": "object", "required": ["time", "check", "issue"],
-        "properties": {"time": {"type": "string"}, "check": {"type": "string"}, "issue": {"type": "string"}}}}}}
+        "properties": {"time": {"type": "string"}, "check": {"type": "string", "enum": list(CHECKS)}, "issue": {"type": "string"}}}}}}
 
 
 # ------------------------------------------------------------------ frames + contact sheets
+QC_LOG = os.environ.get('QC_LOG', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'strict_qc.log'))
+def _log(msg):
+    with open(QC_LOG, 'a') as fh: fh.write(time.strftime('%Y-%m-%d %H:%M:%S ') + msg + '\n')
+
 def probe_dur(p):
     r = subprocess.run(['ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', p], capture_output=True, text=True)
     try: return float(r.stdout.strip())
@@ -100,9 +105,10 @@ def _prompt(files, shot_prompt, wardrobe, tier, role):
              "upside-down or mirrored text still fails.\n" if tier == 'broll' else "")
     return (lens + " These contact sheets are consecutive frames of ONE AI-generated music-video clip, sampled every "
             f"{STEP} s, in reading order, each stamped with its timestamp. Read EVERY sheet (and start_still if listed). "
-            "Fail a check on ANY doubt; when unsure, fail. For each failed check give the timestamps.\n\nCHECKS:\n"
-            + "\n".join(f"- {k}: {v}" for k, v in CHECKS.items()) + "\n" + broll
-            + f"\nWARDROBE SPEC (plain solid garments; anything else on clothing fails): {wardrobe or 'not given - flag any clothing graphic at all'}"
+            "Set pass=false for a check whenever you see that issue, with timestamps. FAIL-level checks are serious glitches: "
+            "if you clearly see one, fail it. WARN-level checks are logged only.\n\nCHECKS:\n"
+            + "\n".join(f"- [{severity(k)}] {k}: {v}" for k, v in CHECKS.items()) + "\n" + broll
+            + f"\nWARDROBE SPEC (plain solid garments; any print/graphic fails): {wardrobe or 'not given - flag any clothing graphic at all'}"
             + f"\nSHOT PROMPT: {shot_prompt}\nok = every check passes. worst_frames = timestamps of the worst frames.\n\nFILES (absolute paths):\n"
             + "\n".join(files))
 
@@ -128,9 +134,14 @@ def _norm(res):
     if not res or 'checks' not in res: return {'ok': False, 'reasons': ['reviewer gave no usable reply'], 'checks': {}}
     ch = res.get('checks', {})
     missing = [k for k in CHECKS if k not in ch]
-    fails = {k: v for k, v in ch.items() if not v.get('pass')}
-    res['ok'] = bool(res.get('ok')) and not fails and not missing
-    res['reasons'] = [f"{k} @{','.join(v.get('times', []))}: {v.get('note', '')}" for k, v in fails.items()] + [f'{k}: not answered' for k in missing]
+    bad = {k: v for k, v in ch.items() if k in CHECKS and not v.get('pass')}
+    fails = {k: v for k, v in bad.items() if severity(k) == 'FAIL'}
+    warns = {k: v for k, v in bad.items() if severity(k) == 'WARN'}
+    miss_fail = [k for k in missing if severity(k) == 'FAIL']
+    res['ok'] = not fails and not miss_fail          # WARN-level issues never block; reviewer ok flag ignored
+    fmt = lambda k, v: f"{k} @{','.join(v.get('times', []))}: {v.get('note', '')}"
+    res['reasons'] = [fmt(k, v) for k, v in fails.items()] + [f'{k}: not answered' for k in miss_fail]
+    res['warnings'] = [fmt(k, v) for k, v in warns.items()]
     return res
 
 def needs_two(prompt, tier):
@@ -152,6 +163,8 @@ def qc_clip(clip, prompt, wardrobe='', still=None, tier='hero', workdir=None):
             except Exception as e: out[k] = {'ok': False, 'reasons': [f'reviewer {k} unavailable: {str(e)[:150]}']}
     out['ok'] = all(out[k]['ok'] for k in jobs)        # BOTH must pass
     out['reasons'] = [f"[{k}] {r}" for k in jobs for r in out[k].get('reasons', [])]
+    out['warnings'] = [f"[{k}] {r}" for k in jobs for r in out[k].get('warnings', [])]
+    _log(f"clip {clip} ok={out['ok']} FAIL={out['reasons']} WARN={out['warnings']}")
     out['reviewers'] = list(jobs); out['qc_s'] = round(time.time() - t0)
     json.dump(out, open(os.path.join(d, 'strict_qc.json'), 'w'), indent=1)
     return out
@@ -164,18 +177,20 @@ def qc_cut(video, wardrobe='', out=None, chunk_s=30.0):
         sh = sheets(video, d, fps=CUT_FPS, t0=t, t1=min(dur, t + chunk_s), prefix=f'cut{i:02d}')
         text = ("Whole-video artefact review of the FINAL CUT of an AI music video, frame by frame at "
                 f"{CUT_FPS} fps (timestamps burnt in). Karaoke lyrics, code-rendered graphic cards and the end card are "
-                "intentional. Flag EVERY frame with an AI artefact, using these checks:\n" + "\n".join(f"- {k}: {v}" for k, v in CHECKS.items() if k != 'prompt_fidelity')
-                + f"\nWARDROBE SPEC: {wardrobe or 'plain solid garments, no prints'}\nok=false if any flag. FILES:\n" + "\n".join(sh))
+                "intentional. Flag every AI artefact with the check name it falls under:\n" + "\n".join(f"- [{severity(k)}] {k}: {v}" for k, v in CHECKS.items() if k != 'prompt_fidelity')
+                + f"\nWARDROBE SPEC: {wardrobe or 'plain solid garments, no prints'}\nok=false if any FAIL-level flag. FILES:\n" + "\n".join(sh))
         for name, fn in (('A', review_claude), ('B', review_grok)):
             try:
                 r = fn(sh, text, d, schema=CUT_SCHEMA)
                 if not r: raise RuntimeError('empty')
-                for f in r.get('flags', []): flags.append(dict(f, reviewer=name))
-                ok = ok and bool(r.get('ok')) and not r.get('flags')
+                for f in r.get('flags', []):
+                    f = dict(f, reviewer=name, severity=severity(f.get('check', '')) if f.get('check') in CHECKS else 'FAIL'); flags.append(f)
+                    if f['severity'] == 'FAIL': ok = False
             except Exception as e:
-                ok = False; flags.append({'time': f'{t:.0f}s', 'check': 'reviewer', 'issue': f'{name} unavailable: {str(e)[:120]}', 'reviewer': name})
+                ok = False; flags.append({'time': f'{t:.0f}s', 'check': 'reviewer', 'issue': f'{name} unavailable: {str(e)[:120]}', 'reviewer': name, 'severity': 'FAIL'})
         t += chunk_s; i += 1
-    res = {'ok': ok, 'flags': flags, 'video': video, 'fps': CUT_FPS, 't': time.strftime('%Y-%m-%d %H:%M:%S')}
+    _log(f"cut {video} ok={ok} FAIL={[f for f in flags if f['severity']=='FAIL']} WARN={[f for f in flags if f['severity']=='WARN']}")
+    res = {'ok': ok, 'fails': [f for f in flags if f['severity'] == 'FAIL'], 'warnings': [f for f in flags if f['severity'] == 'WARN'], 'flags': flags, 'video': video, 'fps': CUT_FPS, 't': time.strftime('%Y-%m-%d %H:%M:%S')}
     json.dump(res, open(out or os.path.join(d, 'qc_cut.json'), 'w'), indent=1)
     return res
 
@@ -202,8 +217,9 @@ def write_ready(day, video, wardrobe=''):
     """The ONLY sanctioned way to write READY_TO_POST: runs qc_cut first and refuses on any flag."""
     r = qc_cut(video, wardrobe)
     if not r['ok']:
-        open(os.path.join(day, 'QC_FAILED'), 'w').write(json.dumps(r['flags'], indent=1)); return False
-    open(os.path.join(day, 'READY_TO_POST'), 'w').write(f"qc_cut ok {r['t']} {video}\n"); return True
+        open(os.path.join(day, 'QC_FAILED'), 'w').write(json.dumps(r['fails'], indent=1)); return False
+    if r['warnings']: open(os.path.join(day, 'QC_WARNINGS.json'), 'w').write(json.dumps(r['warnings'], indent=1))
+    open(os.path.join(day, 'READY_TO_POST'), 'w').write(f"qc_cut ok {r['t']} {video} warnings={len(r['warnings'])}\n"); return True
 
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(); ap.add_argument('cmd', choices=['clip', 'cut', 'lint-prompt', 'ready'])
