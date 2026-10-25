@@ -729,11 +729,14 @@ def pace(shots, L, day, audio, dur):
             try: _dur[c] = float(subprocess.run(['ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', c], capture_output=True, text=True).stdout.strip())
             except Exception: _dur[c] = 0.0
         return _dur[c]
+    _ex = set(filter(None, os.environ.get('GV_CLIP_EXCLUDE', '').split(',')))   # 25 Oct: QC-failed clips
+    pool = [c for c in pool if os.path.basename(c) not in _ex]
+    FORCE_GFX = [tuple(map(float, w.split('-'))) for w in os.environ.get('GV_FORCE_GFX', '').split(',') if w]
     outside = {}; chorus_used = []; use_log = []; ch = {'n': 0, 'prev': False}; ch_last = {}
     def allowed(c, chorus):
         # 25 Oct rule (the owner): no repeats outside choruses. A clip >=5 s may give 2 distinct segments outside;
         # inside choruses a clip may come back as a deliberate callback (total cap CAP).
-        if clips_seen.get(c, 0) >= CAP: return False
+        if os.path.basename(c) in _ex or clips_seen.get(c, 0) >= CAP: return False
         if chorus: return ch_last.get(c) != ch['n']   # once per chorus; may return on a later chorus
         return outside.get(c, 0) < (2 if cdur(c) >= 5.0 else 1)
     def clip_src(path, strict=True, chorus=False, t=None):
@@ -787,8 +790,9 @@ def pace(shots, L, day, audio, dur):
         alt = near_clip(i) if s['src'][0] == 'gfx' else None
         for q, (a, b) in enumerate(fin):
             n_ = dict(s, t0=a, t1=b, energy=e)
+            _fg = any(a < y and b > x for x, y in FORCE_GFX)   # 25 Oct: QC-flagged windows -> graphic
             if s['src'][0] == 'clip':
-                cs = clip_src(s['src'][1], chorus=e_ch, t=a)
+                cs = None if _fg else clip_src(s['src'][1], chorus=e_ch, t=a)
                 if cs is None:   # every passing clip used CAP times: borrow the nearest graphic instead
                     gj = min((j for j in range(len(body)) if body[j]['src'][0] == 'gfx'), key=lambda j: abs(j - i), default=None)
                     if gj is not None:
@@ -797,7 +801,7 @@ def pace(shots, L, day, audio, dur):
                     else: cs = ('clip', s['src'][1], 0.0, {'zoom': 1.0})
                 n_['src'] = cs
             elif s['src'][0] == 'gfx':
-                cs = clip_src(alt, chorus=e_ch, t=a) if (q % 2 == 1 and alt) else None
+                cs = clip_src(alt, chorus=e_ch, t=a) if (q % 2 == 1 and alt and not _fg) else None
                 if cs: n_['src'] = cs; n_['sub_of'] = 'gfx'
                 else:
                     p_ = dict(s['src'][2]); p_['_toff'] = a - t0; p_['_dur'] = t1 - t0
