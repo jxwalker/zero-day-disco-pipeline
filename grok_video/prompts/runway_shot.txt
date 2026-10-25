@@ -37,3 +37,8 @@ Fields (every one required, every one concrete):
       composition+lighting+palette+texture (stills prompt: describe everything visible).
  motion_prompt: the image-to-video prompt, <= 900 chars, motion only, in Runway order: camera move with speed and
       travel; then the timed subject beats; then scene motion; ending with "Faces, wardrobe and props stay unchanged."
+
+25 OCT QC RULES (the owner: "wrenches on her shirt", "floppy wrench in her pocket"):
+- Wardrobe = plain, solid-coloured garments only. NO prints, patches, embroidery, logos, badges or graphics, never tool- or prop-shaped motifs.
+- NO prop-in-pocket, clip-onto-belt/tool-loop, holster, hang-up or bite-the-prop actions. If the line needs one, show the prop already in place (locked camera) or use a graphic card.
+- Rigid props (spanners, tools, watches) stay still or move only with a simple held gesture; end the motion prompt with "Rigid props keep their exact shape and size."

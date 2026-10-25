@@ -322,7 +322,7 @@ def screen_check(gdir, jobs, status, tag):
         "phone that the person is using has its screen facing away from the camera while the shot is about what is on it "
         "(we only see the back of the lid/monitor, which looks like a screen); a screen glows on the wrong side; a device "
         "is physically impossible; the frame is two stacked copies of the same picture; a robot or android; garbled "
-        "readable text that is prominent; badly malformed hands or faces; anyone sticking their tongue out, pulling a silly/bratty face, gurning, pouting or making a duck face (24 Oct, the owner); any on-screen text (watch, sign, bubble) that is upside down, mirrored or garbled (24 Oct, the owner: 'U up is upside down').; any glasses or eyewear on the lead, or eyewear rendering artefacts (warped, melted, doubled, floating or half-missing frames or lenses, frames fused into skin or hair) (24 Oct, the owner: 'her glasses render wrong'). A laptop seen from behind is ONLY acceptable if "
+        "readable text that is prominent; ANY print, patch, logo or tool/prop-shaped graphic on clothing; a rigid prop that bends, melts or changes size; badly malformed hands or faces; anyone sticking their tongue out, pulling a silly/bratty face, gurning, pouting or making a duck face (24 Oct, the owner); any on-screen text (watch, sign, bubble) that is upside down, mirrored or garbled (24 Oct, the owner: 'U up is upside down').; any glasses or eyewear on the lead, or eyewear rendering artefacts (warped, melted, doubled, floating or half-missing frames or lenses, frames fused into skin or hair) (24 Oct, the owner: 'her glasses render wrong'). A laptop seen from behind is ONLY acceptable if "
         "its lid back is plain (no picture) and we are clearly looking at the person's face, not the screen; when unsure, "
         "reject. 21 Oct: ANY laptop at all is a reject. Wall displays, rack monitors and holographic HUDs are fine.\nGive a short issue for each problem image, '' otherwise. id = the file name without .png (for _f.png frames use the name without _f.png).\n\nFILES:\n"
         + '\n'.join(names))
@@ -399,6 +399,20 @@ def generate(P, work, a, deadline, status):
         k = next((i for i, s in enumerate(scenes) if '[CHORUS]' in s['prompt']), len(scenes) // 2)
         scenes[k] = dict(scenes[k], prompt='[PIP] ' + scenes[k]['prompt'] + ' Our small mascot toy is in the background, reacting with a quick hop.')
         G.log(f"karaoke: no [PIP] cameo planned; added one to {scenes[k]['id']}")
+    # 25 Oct (the owner: "wrenches on her shirt", "floppy wrench in her pocket"): plain solid wardrobe, no prop-pocketing
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'local_gen'))
+    import strict_qc as SQ
+    if DIR['lead']: DIR['lead'] = SQ.strip_graphics(DIR['lead']) + SQ.PLAIN_RULE
+    _w = re.search(r'Wardrobe:\s*(.+?)(?:\.\s*Colour:|\n|$)', DIR['text'])
+    os.environ['GV_WARDROBE'] = SQ.plain_wardrobe(_w.group(1) if _w else DIR['lead'])   # spec the QC checks against
+    keep = []
+    for s in scenes:
+        s['prompt'] = SQ.strip_graphics(s['prompt']); s['motion'] = SQ.strip_graphics(s.get('motion') or '')
+        if SQ.POCKET_RE.search(s['prompt'] + ' ' + s['motion']):     # prop-in-pocket / clip-on / holster -> graphic card
+            status.setdefault('qc_swapped_to_card', []).append(s['id']); G.log(f"karaoke: {s['id']} has a prop-pocket action; swapped for a graphic card")
+            continue
+        keep.append(s)
+    scenes[:] = keep
     jobs = []
     for s in scenes:
         pr = no_laptops(s['prompt'].strip())
@@ -473,13 +487,26 @@ def generate(P, work, a, deadline, status):
     if cj and time.time() < deadline - 6 * 60:
         b2 = R.Batcher(gdir, {'i2v': len(cj) + 2}, batch_size=3, max_parallel=3, timeout=900, deadline=deadline, tag='clips')
         b2.run(cj)
-        # 21 Oct: clips were never checked and i2v can invent lid-screen laptops: check a late frame of every clip
+        # 25 Oct: strict dense-frame QC (0.25 s contact sheets, prop rigidity, wardrobe, hand-prop, 2 reviewers on
+        # hero/prop shots, fail closed) on EVERY Grok clip; then the old late-frame screen check as well
+        from concurrent.futures import ThreadPoolExecutor
+        wd = os.environ.get('GV_WARDROBE', '')
+        sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'local_gen'))
+        import strict_qc as SQ
+        todo = [j for j in cj if os.path.exists(j['out'])]
+        with ThreadPoolExecutor(int(os.environ.get('QC_PAR', 4))) as ex:
+            qres = list(ex.map(lambda j: (j, SQ.qc_clip(j['out'], j['prompt'], wd, j.get('image'), 'hero')), todo))
+        for j, r in qres:
+            status.setdefault('strict_qc', {})[j['id']] = {'ok': r['ok'], 'reasons': r['reasons'][:8]}
+            if not r['ok']:
+                os.replace(j['out'], j['out'] + '.qcfail.mp4'); status.setdefault('clip_rejected', []).append(j['out'])
+                G.log(f"karaoke: strict QC rejected {j['id']}: {'; '.join(r['reasons'])[:300]}")
         fj = []
         for j in cj:
             if os.path.exists(j['out']):
                 fp = j['out'][:-4] + '_f.png'
                 subprocess.run(['ffmpeg', '-v', 'error', '-y', '-sseof', '-1.2', '-i', j['out'], '-frames:v', '1', fp])
-                if os.path.exists(fp): fj.append({'id': j['id'], 'out': fp, 'clip': j['out']})
+                if os.path.exists(fp) and os.path.exists(j['out']): fj.append({'id': j['id'], 'out': fp, 'clip': j['out']})
         badc = screen_check(gdir, fj, status, 'clips') if fj else set()
         for j in fj:
             if os.path.basename(j['out']).replace('_f.png', '') in badc:

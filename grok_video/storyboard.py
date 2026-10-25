@@ -67,7 +67,8 @@ def ensure_direction(day, lines=None):
         + open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'prompts', 'claudia_book.txt')).read().split('\n\n')[0] + "\n\n" + GRAMMAR + "\n\nWRITE:\n- lead: the character bible, ONE dense 55-80 word paragraph pasted into every image "
         + ("prompt: an original quirky manic-pixie indie engineer, clearly an adult woman of about 24 (not any real person), " if LN == 'woman' else
            "prompt: an original snotty, energetic indie pop-punk young man of about 24 (not any real person), ") +
-        "face, hair (one distinctive colour detail), NO glasses or eyewear of any kind, one other signature, ONE exact wardrobe with colours and "
+        "face, hair (one distinctive colour detail), NO glasses or eyewear of any kind, one other signature, ONE exact wardrobe of PLAIN SOLID-COLOURED garments "
+        "(25 Oct, the owner: no prints, patches, embroidery, logos or graphics on clothes, never tool/prop-shaped motifs) with colours and "
         "materials that fits the song's pun, footwear, one accessory; 'PG-13, fully clothed'; HOUSE-STYLE attitude: deadpan, "
         "dry, side-eye, sudden wild laugh on drops, never a generic smile at camera; quirky distinctive styling.\n"
         "- palette: 'acid-deadpan' (the Zero Day Disco house style; chorus drops switch to Glitch Tape automatically).\n- arc: ONE-LINE ARC that turns the song's "
@@ -76,11 +77,20 @@ def ensure_direction(day, lines=None):
         "for the pun), wardrobe, colour (section palettes and accent).\n- shots: one per sung line index below "
         "(repeated chorus lines escalate: new angle or bigger version of the same gag); 'shot' = the first frame in 25-45 "
         "words (who, where, exact action that depicts the line's words, framing, negative space); size_lens, light, "
-        "move, motion = timestamped 6 s blocking with that one move.\n\nCONCEPT: "
+        "move, motion = timestamped 6 s blocking with that one move. ONE simple action per shot; NEVER pocketing, clipping onto a belt/tool loop, "
+        "holstering, hanging up or biting a prop (AI video bends and melts props in hands); show the prop already in place or use a graphic card instead.\n\nCONCEPT: "
         + json.dumps(cj.get('chosen') or {}, ensure_ascii=False) + "\n\nTITLE: " + (hj.get('title') or G.read(os.path.join(day, 'title.txt')))
         + "\n\nSTORIES:\n" + G.read(os.path.join(day, 'stories.md'))[:6000] + "\n\nSUNG LINES (index: text):\n"
         + '\n'.join(f"{i}: {l}" for i, l in enumerate(lines)) + "\n\nReply with the JSON only.")
     d, meta = SO.run_claude(pf, od, DIR_SCHEMA, 600, tools='', effort='high')
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'local_gen'))
+    import strict_qc as SQ                      # 25 Oct: enforce plain wardrobe + no prop-pocket actions after the fact
+    d['wardrobe'] = SQ.plain_wardrobe(d['wardrobe']); d['lead'] = SQ.strip_graphics(d['lead']) + SQ.PLAIN_RULE
+    d['props'] = [SQ.strip_graphics(x) for x in d['props'] if not re.search(r'(patch|print|logo|motif|embroider)', x, re.I)]
+    for s in d['shots']:
+        s['shot'], s['motion'] = SQ.strip_graphics(s['shot']), SQ.strip_graphics(s['motion'])
+        if SQ.POCKET_RE.search(s['shot'] + ' ' + s['motion']):
+            s['shot'] += ' [QC: prop-pocket action - use a graphic card for this line]'; s['motion'] = 'Locked camera; she holds still and reacts; props stay where they are.'
     G.save_json(d, os.path.join(od, 'direction.json'))
     shots = '\n'.join(f"- line {s['i']} \"{s['line']}\": {s['shot']} [{s['size_lens']}; {s['light']}; {s['move']}] "
                       f"motion: {s['motion']}" for s in d['shots'])

@@ -57,3 +57,8 @@ ComfyUI on the Spark is started and always stopped by the pipeline. Failures + r
    ok=false -> do not apply; log the reasons in hero_jobs.json (one paid retry max, only if budget allows).
 
 - 24 Oct loosen: b-roll QC (`--tier broll`) allows fuzzy text on small/out-of-focus screens; hero and Runway QC stay strict.
+
+## 25 Oct 2026: strict QC (the owner: wrench shirt + floppy wrench)
+`clip_qc.py qc` now runs `local_gen/strict_qc.py`: frames every 0.25 s on timestamped contact sheets, reject rules for
+prop rigidity, wardrobe vs spec (any clothing graphic fails), hand-prop interactions, physics; reviewer A = Opus,
+reviewer B = Grok 4.7 (independent), BOTH must pass on hero/prop shots; fail closed. Pass `--wardrobe` or set GV_WARDROBE.

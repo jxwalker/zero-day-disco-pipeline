@@ -170,3 +170,13 @@ sheen), not just the first one. Note the choice and why in log.md. Docs only: no
 
 ## Per-bot post checks (20 Oct 2026)
 the owner chose: each bot gets its own post checks. `x_post.py --bot suno` (the default) keeps the Grok Bot / @grok / #slopcore / Suno-link rules unchanged. `x_post.py --bot interesting-x` runs only generic checks (non-empty, no secrets, valid links, length). `--lint-only` runs the checks and posts nothing. `post_lint.py --bot interesting-x post.txt sources.txt` does the same from the CLI.
+
+## 25 Oct 2026 strict QC (the owner: "Why does she have wrenches on her shirt... floppy wrench in her pocket")
+- Every clip route (LTX/Wan via clip_qc.broll, Runway via `clip_qc.py qc`, Grok via karaoke.generate) goes through
+  `local_gen/strict_qc.py qc_clip`: 0.25 s contact sheets, rules for prop rigidity, wardrobe-vs-spec (any print/patch/
+  logo/prop-shaped graphic fails), hand-prop interactions, physics, faces, eyewear, text. Two independent reviewers
+  (Opus + Grok 4.7) on hero/prop shots, both must pass; reviewer errors fail closed. QC_LEGACY=1 restores the old check.
+- Prompts: storyboard + karaoke strip wardrobe graphics (plain solid garments) and swap any prop-pocket/clip-on/holster/
+  bite action for a graphic card (status.qc_swapped_to_card).
+- READY_TO_POST: only via `python local_gen/strict_qc.py ready <day> --video <day>/video_karaoke.mp4 --wardrobe "..."`.
+  It reviews the whole final cut at 2 fps with both reviewers and writes QC_FAILED (flags + timecodes) instead on any flag.

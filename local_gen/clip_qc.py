@@ -26,7 +26,17 @@ def frames(clip, n=6):
         if os.path.exists(p): out.append(p)
     return d, out
 
-def qc(clip, prompt, still=None, tier='hero'):
+def qc(clip, prompt, still=None, tier='hero', wardrobe=''):
+    """25 Oct (the owner: wrench shirt + floppy wrench): delegates to strict_qc - frames every 0.25 s as contact sheets,
+    prop-rigidity / wardrobe / hand-prop rules, second independent reviewer (Grok) on hero and prop shots, both must
+    pass, fail closed. Set QC_LEGACY=1 for the old 6-frame single reviewer."""
+    if os.environ.get('QC_LEGACY') != '1':
+        import strict_qc as SQ
+        wardrobe = wardrobe or os.environ.get('GV_WARDROBE', '')
+        return SQ.qc_clip(clip, prompt, wardrobe, still, tier)
+    return _qc_legacy(clip, prompt, still, tier)
+
+def _qc_legacy(clip, prompt, still=None, tier='hero'):
     import slop_opus as SO
     d, fs = frames(clip)
     if still: subprocess.run(['cp', still, os.path.join(d, 'start_still.png')]); 
