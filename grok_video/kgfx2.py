@@ -67,10 +67,7 @@ def base(W, H, t=0):
         for y in range(0, H, int(26 * u)):
             for x in range(0, W, int(26 * u)):
                 r = 3 * u * (0.4 + 0.6 * y / H); d.ellipse([x - r, y - r, x + r, y + r], fill=sh)
-    elif tx == 'scanlines':
-        o = int(t * 24) % 4
-        for y in range(o, H, 4): d.line([(0, y), (W, y)], fill=sh)
-    elif tx in ('paper', 'grain'):
+    elif tx in ('paper', 'grain', 'scanlines'):   # 25 Oct (the owner): no scan lines; old 'scanlines' designs fall back to grain
         random.seed(int(t * 12))
         for _ in range(int(W * H / 900)):
             x, y = random.randrange(W), random.randrange(H); d.point((x, y), fill=sh)

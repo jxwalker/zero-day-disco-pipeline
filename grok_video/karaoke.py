@@ -59,7 +59,7 @@ LOOK = (" Zero Day Disco house style 'Acid Deadpan' (24 Oct 2026): live-action m
         "attitude (side-eye, raised brow, bored stare, sudden laugh), never generic smiling at camera; no tongue out, no pulled or "
         "silly faces, no gurning, no pouting or duck faces. No robots, no text, no logos, no readable writing, no famous people." + SCREEN_RULE)
 LOOK_CHORUS = (" Zero Day Disco chorus-drop look 'Glitch Tape': 1990s VHS camcorder at night, harsh on-camera flash, magenta and cyan "
-        "chromatic aberration, scan lines, motion smear, low fisheye or dutch angle, whip-pan energy, neon magenta/cyan haze; "
+        "chromatic aberration, motion smear (no scan lines, no CRT lines, no horizontal bars), low fisheye or dutch angle, whip-pan energy, neon magenta/cyan haze; "
         "the same cast, wild and cheeky (laughing, crowd-surfing, winking), vertical 9:16. Cast young adults 21-28, invented faces; "
         "no tongue out, no pulled faces. No robots, no text, no logos, no readable writing, no famous people." + SCREEN_RULE)
 if os.environ.get('GV_HOUSESTYLE', '1') == '0':

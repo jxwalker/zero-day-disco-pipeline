@@ -40,7 +40,7 @@ GRADE = {'warm-film': "eq=contrast=1.06:saturation=1.08:gamma_r=1.04:gamma_b=0.9
          'punchy': "eq=contrast=1.15:saturation=1.25",
          'bleach': "eq=contrast=1.18:saturation=0.6",
          'cross-process': "eq=contrast=1.08:saturation=1.15:gamma_g=1.06:gamma_b=0.9,noise=alls=6:allf=t"}
-TEXTURE = ['none', 'grain', 'halftone', 'paper', 'grid', 'scanlines']
+TEXTURE = ['none', 'grain', 'halftone', 'paper', 'grid']   # 25 Oct (the owner): 'scanlines' removed
 AXES = dict(palette=list(PALETTES), type=list(TYPE), lyric_style=LYRIC, lyric_pos=LYRIC_POS, transition=TRANS,
             grade=list(GRADE), texture=TEXTURE)
 

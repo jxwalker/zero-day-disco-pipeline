@@ -4,7 +4,7 @@ OVERRIDES any older wording about a different design every day, palettes, expres
   safety orange; symmetrical centred wide shots (24mm), slow push-ins or locked-off frames with one precise move;
   hard clean top light; Wes-Anderson-meets-Kubrick staging. Recurring motifs: orange-and-black warning tape, an orange
   rotary phone (the cast's "hotline" to the AI), beige conference tables, empty fluorescent corridors.
-- CHORUS DROPS = "GLITCH TAPE": 1990s VHS camcorder at night with harsh flash, magenta/cyan RGB split, scan lines,
+- CHORUS DROPS = "GLITCH TAPE": 1990s VHS camcorder at night with harsh flash, magenta/cyan RGB split (no scan lines / CRT lines),
   low fisheye / dutch angles, whip pans; datamosh/RGB-split transitions (the renderer adds them automatically).
   Prefix every scene prompt used ONLY in a chorus with the tag [CHORUS] so it gets the Glitch Tape look.
 - CAST: young adults 21-28, invented faces, quirky distinctive styling (bowl cuts, suits, odd colour hair), with
