@@ -708,9 +708,22 @@ def pace(shots, L, day, audio, dur):
     bpm, beats = beat_grid(audio, dur)
     end_shot = shots[-1]; body = shots[:-1]; out = []
     clips_seen = {}
-    def clip_src(path):
+    _gd = os.path.dirname(next((x['src'][1] for x in body if x['src'][0] == 'clip'), '') or '.')
+    pool = sorted(f"{_gd}/{f}" for f in os.listdir(_gd) if f.endswith('.mp4') and f.count('.') == 1) if os.path.isdir(_gd) else []
+    CAP = int(os.environ.get('GV_CLIP_MAX_USES', '4'))
+    def clip_src(path, strict=False):   # 25 Oct: rotate passing clips, each used at most CAP times
+        if clips_seen.get(path, 0) >= CAP and pool:
+            free = [c for c in pool if clips_seen.get(c, 0) < CAP]
+            if free: path = min(free, key=lambda c: clips_seen.get(c, 0))
+            elif strict: return None
+            else: path = min(pool, key=lambda c: clips_seen.get(c, 0))
         k = clips_seen.get(path, 0); clips_seen[path] = k + 1
-        return ('clip', path, [0.0, 2.4, 1.2, 3.6, 0.6, 3.0, 1.8, 4.2][k % 8], {'zoom': [1.0, 1.16][k % 2]})
+        off = [0.0, 2.4, 1.2, 3.6, 0.6, 3.0, 1.8, 4.2][k % 8]
+        try:   # 25 Oct: short hero clips (2-3 s) - keep the in-point inside the clip
+            cd = float(subprocess.run(['ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', path], capture_output=True, text=True).stdout.strip())
+            off = off % max(0.01, cd - 1.6) if cd - 1.6 > 0.05 else 0.0
+        except Exception: pass
+        return ('clip', path, round(off, 2), {'zoom': [1.0, 1.16][k % 2]})
     def near_clip(i):
         li = body[i]['line']
         for j in list(range(i, -1, -1)) + list(range(i + 1, len(body))):   # same line first, then nearest earlier/later
@@ -739,9 +752,17 @@ def pace(shots, L, day, audio, dur):
         for q, (a, b) in enumerate(fin):
             n_ = dict(s, t0=a, t1=b, energy=e)
             if s['src'][0] == 'clip':
-                n_['src'] = clip_src(s['src'][1])
+                cs = clip_src(s['src'][1], strict=True)
+                if cs is None:   # every passing clip used CAP times: borrow the nearest graphic instead
+                    gj = min((j for j in range(len(body)) if body[j]['src'][0] == 'gfx'), key=lambda j: abs(j - i), default=None)
+                    if gj is not None:
+                        p_ = dict(body[gj]['src'][2]); p_['_toff'] = 0.0; p_['_dur'] = b - a
+                        cs = ('gfx', body[gj]['src'][1], p_)
+                    else: cs = clip_src(s['src'][1])
+                n_['src'] = cs
             elif s['src'][0] == 'gfx':
-                if q % 2 == 1 and alt: n_['src'] = clip_src(alt); n_['sub_of'] = 'gfx'
+                cs = clip_src(alt, strict=True) if (q % 2 == 1 and alt) else None
+                if cs: n_['src'] = cs; n_['sub_of'] = 'gfx'
                 else:
                     p_ = dict(s['src'][2]); p_['_toff'] = a - t0; p_['_dur'] = t1 - t0
                     n_['src'] = ('gfx', s['src'][1], p_)
