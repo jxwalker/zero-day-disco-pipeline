@@ -112,13 +112,23 @@ def _prompt(files, shot_prompt, wardrobe, tier, role):
             + f"\nSHOT PROMPT: {shot_prompt}\nok = every check passes. worst_frames = timestamps of the worst frames.\n\nFILES (absolute paths):\n"
             + "\n".join(files))
 
+def review_grok(files, text, cwd, schema=SCHEMA, timeout=600):
+    # 26 Oct: retry B 3x with backoff; still raises (-> FAIL) if all tries fail
+    err = None
+    for i in range(3):
+        try: return _review_grok_once(files, text, cwd, schema=schema, timeout=timeout)
+        except Exception as e:
+            err = e; print(f'grok review try {i+1} failed: {str(e)[:120]}', file=sys.stderr, flush=True); time.sleep(15 * (i + 1))
+    raise err
+
+
 def review_claude(files, text, cwd, schema=SCHEMA, timeout=600):
     import slop_opus as SO
     pf = os.path.join(cwd, f'qcA_{os.getpid()}_{time.time_ns()}.txt'); open(pf, 'w').write(text)
     res, _ = SO.run_claude(pf, cwd, schema, timeout, tools='Read', effort='high')
     return res
 
-def review_grok(files, text, cwd, schema=SCHEMA, timeout=600):
+def _review_grok_once(files, text, cwd, schema=SCHEMA, timeout=600):
     pf = os.path.join(cwd, f'qcB_{os.getpid()}_{time.time_ns()}.txt')
     open(pf, 'w').write(text + "\n\nUse read_file on every file. Reply with ONE JSON object only, matching this schema:\n" + json.dumps(schema))
     r = subprocess.run([GROK, '--prompt-file', pf, '--output-format', 'json', '-m', os.environ.get('QC_GROK_MODEL', 'grok-4.7'),
