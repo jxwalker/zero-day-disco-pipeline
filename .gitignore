@@ -1,0 +1,28 @@
+# media and day folders
+*.mp4
+*.mov
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.wav
+*.mp3
+*.m4a
+20??-??-??*/
+grok_video/20??-??-??*/
+grok_video/work_live/
+grok_video/assets/
+# runtime
+__pycache__/
+*.pyc
+venv*/
+.venv/
+*.log
+*.tsv
+*.bak*
+bak-*/
+# secrets / local config
+.env
+config.env
+secrets.json
+cast_refs.json
