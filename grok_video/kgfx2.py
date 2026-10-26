@@ -71,12 +71,13 @@ def base(W, H, t=0):
         random.seed(int(t * 12))
         for _ in range(int(W * H / 900)):
             x, y = random.randrange(W), random.randrange(H); d.point((x, y), fill=sh)
-    # 23 Oct 2026 (the owner: no static shots): a soft light sweep always moves down the background
-    sy = int((t * 0.9 % 1.0) * (H + 200 * u)) - int(100 * u); hb = max(2, int(90 * u))
-    for k in range(hb):
-        a_ = 1 - abs(k - hb / 2) / (hb / 2)
+    # 26 Oct (the owner): the horizontal light-sweep band read as a VHS tracking bar; replaced with a soft drifting glow (no lines)
+    import math as _m
+    cx = int(W * (0.5 + 0.3 * _m.sin(t * 0.35))); cy = int(H * (0.45 + 0.25 * _m.cos(t * 0.27))); R = int(min(W, H) * 0.55)
+    for k in range(12, 0, -1):
+        a_ = (13 - k) / 12 * 0.5; r = R * k / 12
         c = tuple(max(0, min(255, int(b + (s2 - b) * 1.6 * a_))) for b, s2 in zip(T['bg'], sh))
-        d.line([(0, sy + k), (W, sy + k)], fill=c)
+        d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=c)
     return im, d
 
 

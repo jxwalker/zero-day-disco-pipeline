@@ -58,8 +58,8 @@ LOOK = (" Zero Day Disco house style 'Acid Deadpan' (24 Oct 2026): live-action m
         "Cast are young adults aged 21-28 with invented faces, quirky distinctive styling, deadpan / unimpressed / dry expressive "
         "attitude (side-eye, raised brow, bored stare, sudden laugh), never generic smiling at camera; no tongue out, no pulled or "
         "silly faces, no gurning, no pouting or duck faces. No robots, no text, no logos, no readable writing, no famous people." + SCREEN_RULE)
-LOOK_CHORUS = (" Zero Day Disco chorus-drop look 'Glitch Tape': 1990s VHS camcorder at night, harsh on-camera flash, magenta and cyan "
-        "chromatic aberration, motion smear (no scan lines, no CRT lines, no horizontal bars), low fisheye or dutch angle, whip-pan energy, neon magenta/cyan haze; "
+LOOK_CHORUS = (" Zero Day Disco chorus-drop look 'Glitch Pop': clean modern digital cinema camera at night, crisp sharp image, harsh on-camera flash, magenta and cyan "
+        "neon rim light, motion smear; no VHS, no tape, no camcorder look, no scan lines, no CRT, no horizontal lines or bars, no video noise; low fisheye or dutch angle, whip-pan energy, neon magenta/cyan haze; "
         "the same cast, wild and cheeky (laughing, crowd-surfing, winking), vertical 9:16. Cast young adults 21-28, invented faces; "
         "no tongue out, no pulled faces. No robots, no text, no logos, no readable writing, no famous people." + SCREEN_RULE)
 if os.environ.get('GV_HOUSESTYLE', '1') == '0':
@@ -880,8 +880,8 @@ def trans_vf(design, i, nfr):
             'punch': "scale=iw*1.08:ih*1.08,crop=iw/1.08:ih/1.08" if False else "zoompan=z='if(lt(on,5),1.10-0.02*on,1)':d=1:s=WxH:fps=30",
             'slide': "fade=in:st=0:d=0.08",
             'glitch': "rgbashift=rh=-8:bh=8:enable='lt(t,0.12)'",
-            # 24 Oct house style: Glitch Tape on chorus drops = RGB split hit + VHS line noise + whip smear on entry
-            'vhs': "rgbashift=rh=-10:bh=10:enable='lt(t,0.18)',noise=alls=18:allf=t:enable='lt(t,0.18)',tblend=all_mode=average:enable='lt(t,0.1)',rgbashift=rh=-2:bh=2"}.get(t, '')
+            # 26 Oct (the owner): no VHS/tape lines. Chorus-drop accent = hard cut + brief magenta flash + brief RGB split, no noise/tblend
+            'vhs': "fade=in:st=0:d=0.06:color=0xFF28C8,rgbashift=rh=-10:bh=10:enable='lt(t,0.12)'"}.get(t, '')
 
 
 def seg_design(des, s, L, day):
