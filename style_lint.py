@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""style.txt lint (16 Oct 2026, the owner: 'Cap in Hand' was "auto tuned garbage").
+"""style.txt lint.
 usage: style_lint.py <style.txt> [--fix]   -> prints "style lint: clean" (exit 0) or the problems (exit 1).
 Rules: must ask for natural raw human lead vocals with no autotune/vocoder/pitch correction; must not contain 'jingle'.
-21 Oct: must also say female lead vocal, high-energy wording, pop, and be <=200 chars.
+must also say female lead vocal, high-energy wording, pop, and be <=200 chars.
 --fix strips jingle phrases and appends the vocal clause, then re-checks."""
 import re, sys
 VOCAL = "natural raw human lead vocals, no autotune, no vocoder, no pitch correction"
@@ -15,8 +15,8 @@ def problems(s):
     if not re.search(r"\bno vocoder\b", s, re.I): p.append("missing 'no vocoder'")
     if not re.search(r"\b(natural|raw|human)\b[^,]*vocal", s, re.I): p.append("missing natural/raw human vocal wording")
     if re.search(r"jingle", s, re.I): p.append("contains 'jingle' (banned style)")
-    # 21 Oct 2026 viral-hit format: bright high-energy pop, female lead by default
-    # 25 Oct 2026: every ~3rd song is 'Take It Apart'-style pop-punk with a snotty male lead (the owner, 24 Oct), the one exception
+    # viral-hit format: bright high-energy pop, female lead by default
+    # every ~3rd song is pop-punk with a snotty male lead, the one exception
     poppunk_male = re.search(r"pop-?punk", s, re.I) and re.search(r"\bmale\b[^,]*\b(lead|vocal|singer)", s, re.I)
     if not poppunk_male and not re.search(r"\bfemale\b[^,]*\b(lead|vocal|singer)", s, re.I): p.append("missing 'female lead vocal'")
     if not re.search(r"high-?energy|energetic|euphoric|upbeat", s, re.I): p.append("missing high-energy wording (high-energy / euphoric / upbeat)")

@@ -1,5 +1,5 @@
-RUNWAY PREMIUM SHOT SHEET (24 Oct 2026; the owner: "runway needs very very good prompting", "be much more of a movie
-producer... give exact descriptions"). Based on Runway's own guides (help.runwayml.com Gen-4 Video Prompting Guide,
+RUNWAY PREMIUM SHOT SHEET: very precise prompting, written like a movie
+producer with exact descriptions. Based on Runway's own guides (help.runwayml.com Gen-4 Video Prompting Guide,
 Image to Video Prompting Guide, Gen-4 Image Prompting Guide; runway.com photo-to-video tips):
  - the START FRAME carries composition, subject, wardrobe, light and style; describe them exhaustively there;
  - the VIDEO prompt describes ONLY motion: camera move first, then subject action, then scene/atmosphere motion;
@@ -38,7 +38,7 @@ Fields (every one required, every one concrete):
  motion_prompt: the image-to-video prompt, <= 900 chars, motion only, in Runway order: camera move with speed and
       travel; then the timed subject beats; then scene motion; ending with "Faces, wardrobe and props stay unchanged."
 
-25 OCT QC RULES (the owner: "wrenches on her shirt", "floppy wrench in her pocket"):
+QC RULES:
 - Wardrobe = plain, solid-coloured garments only. NO prints, patches, embroidery, logos, badges or graphics, never tool- or prop-shaped motifs.
 - NO prop-in-pocket, clip-onto-belt/tool-loop, holster, hang-up or bite-the-prop actions. If the line needs one, show the prop already in place (locked camera) or use a graphic card.
 - Rigid props (spanners, tools, watches) stay still or move only with a simple held gesture; end the motion prompt with "Rigid props keep their exact shape and size."

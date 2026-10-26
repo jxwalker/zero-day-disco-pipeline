@@ -1,4 +1,4 @@
-"""Build the ASS overlay (karaoke captions, story tags, title card, end card, footer) — 27 Sep design.
+"""Build the ASS overlay (karaoke captions, story tags, title card, end card, footer).
 usage: make_ass.py DAY_DIR WORK_DIR TAGS_JSON DURATION"""
 import sys, os, json, functools
 sys.path.insert(0, os.path.dirname(__file__))

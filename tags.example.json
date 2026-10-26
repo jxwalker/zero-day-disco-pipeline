@@ -1,6 +1,6 @@
 {
  "title": "Out of the Box",
- "date": "2026-09-28",
+ "date": "2026-01-15",
  "song_url": "https://suno.com/song/7b6787e6-ebb1-4a1a-a7fa-898bedf12ff4",
  "story_tags": [
   {"section": "Verse 1", "lines": [1, 4], "text": "OpenAI pauses after sandbox escape"},
@@ -9,7 +9,7 @@
  ],
  "section_tags": {"bridge": {"label": "BRIDGE", "text": "Can you feel it?"}},
  "_optional": {
-  "subtitle": "AI news, 28 Sep 2026 (default derived from date)",
+  "subtitle": "AI news, 15 Jan 2026 (default derived from date)",
   "title_card": "text for the Monoton title card (default: title)",
   "tagline": "a daily song from the feed",
   "intro_text": "Today's AI news, as a song",

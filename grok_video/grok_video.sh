@@ -1,7 +1,7 @@
 #!/bin/bash
 # Daily Grok music video for a suno-daily day folder. See README.md.
 # usage: grok_video.sh <day_dir> [--style cine-real|mascot] [options]
-# Default (since 9 Oct 2026): --style cine-real -> <day_dir>/video_cine_real.mp4 (+ _chat.mp4), scratch work_cine_real;
+# Default: --style cine-real -> <day_dir>/video_cine_real.mp4 (+ _chat.mp4), scratch work_cine_real;
 # if cine-real fails it falls back to --style mascot -> <day_dir>/video_grok.mp4. ALWAYS post the file named by out=
 # in the last line (GROK_VIDEO_STATUS=...). Exit 0 = ok, 6 = song looks instrumental, 7 = grok not signed in,
 # 3 = generation failed (no video), 4 = lyric timing failed, 5 = output failed verification, 2 = bad input.
@@ -9,9 +9,9 @@ set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
 PY=${PY:-/home/box/venvs/align/bin/python}
 export PYTHONWARNINGS=ignore
-export GV_PIP=${GV_PIP:-0}            # 14 Oct (the owner): no Pip, no robots
-export GV_LONG_SHOTS=${GV_LONG_SHOTS:-1}  # 14 Oct: fewer, longer shots
-# 20 Oct 2026 (the owner): karaoke mode (ONUG "No Window" format) is the default. It falls back to grok_video.py (the
+export GV_PIP=${GV_PIP:-0}            # no Pip, no robots
+export GV_LONG_SHOTS=${GV_LONG_SHOTS:-1}  # fewer, longer shots
+# karaoke mode (karaoke v3 format) is the default. It falls back to grok_video.py (the
 # Claudia/slopcore chain) by itself on failure. Switch back: GV_KARAOKE=0, or pass --style (any explicit --style
 # goes straight to grok_video.py).
 if [ "${GV_KARAOKE:-1}" != "0" ] && [[ " $* " != *" --style "* ]]; then

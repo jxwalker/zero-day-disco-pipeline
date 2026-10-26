@@ -1,6 +1,6 @@
 # grok_video: the daily Grok music video
 
-## karaoke mode: THE DEFAULT since Tue 20 Oct 2026 (the owner approved the ONUG "No Window" video as the standard)
+## karaoke mode: THE DEFAULT
 
 `grok_video.sh <day>` now runs `karaoke.py` (no flags needed). The old chain below (Claudia/slopcore -> cine-real ->
 mascot) is kept as the automatic fallback and can be switched back on:
@@ -24,7 +24,7 @@ are detected and rerolled once), <=8 six-second clips; no new Grok work after 26
 line start, long shots split at 3.6 s, `GV_KARAOKE_MAX_SHOT`) -> render 1080x1920 + 1920x1080 (8 procs) -> ASS burn +
 audio -> chat copy (~40 MB target) -> verify (grok_video.verify) + `work_karaoke/contact_sheet.jpg` + spelling check.
 
-Alignment (the ONUG method, `work_karaoke/kalign/`): demucs htdemucs vocals (~35 s idle box, ~4.5 min when the box is
+Alignment (`work_karaoke/kalign/`): demucs htdemucs vocals (~35 s idle box, ~4.5 min when the box is
 busy) -> stable-ts `medium.en` forced alignment of the lyrics.txt lines (~30 s). Sanity: each line gets a score
 (monotonic words, no >4 s words, not squeezed, words on audible vocal-stem frames); if the line count is wrong or >30 %
 of lines are suspect, the old pipeline (`lyric_timings()` in grok_video.py: whisper + stable-ts + repair, ~11 min) runs
@@ -38,19 +38,19 @@ contact_sheet.jpg, grok/). Status line: `GROK_VIDEO_STATUS=ok code=0 style=karao
 Options: `--stills N` `--clips N` (or GV_KARAOKE_STILLS/CLIPS), `--time-limit MIN` (40), `--replan`, `--skip-gen`
 (re-render from cached media, never spends), `--no-16x9`, `--no-fallback`. Re-render at zero Grok cost:
 `grok_video.sh <day> --skip-gen --no-fallback`.
-Grok usage: about 14 stills + 8 clips per day (measured on the 20 Oct test, see below). Runtime: see below.
+Grok usage: about 14 stills + 8 clips per day. Runtime: see below.
 
 
-### karaoke v2 (20 Oct 2026 afternoon): per-video design, screen check
-the owner: "similar style but it can't look copied" and "the screens are on the back of the laptops".
+### karaoke v2: per-video design, screen check
+Each video has a similar house style but never looks copied; laptop screens always face the camera.
 - **Art direction per video** (`design.py`): Opus picks palette (9), type family (8), lyric_style (pop, block,
   underline, bounce, reveal, neon, marker, wipe), lyric position (lower-center, lower-left, bottom-band), transition
   (cut, flash, dip, punch, slide, glitch), grade (6) and texture from the song's genre/mood and the stories.
   `design.resolve()` forces a different palette/type/lyric_style from the last 3 days and transition from yesterday,
-  and never the exact No Window lyric look. Each day's choice + template counts go to
+ . Each day's choice + template counts go to
   `/home/box/suno-daily/karaoke_design_history.json` (fed back into the next plan).
 - **Graphics** (`kgfx2.py`, themed by the design): story-domain templates headline, bignum, bars, post, feed, inbox,
-  chat, code, terminal, rows, stamp, quote, browser, gauge, compare, countdown, screen. The ONUG ones (NOC dashboard,
+  chat, code, terminal, rows, stamp, quote, browser, gauge, compare, countdown, screen. The IT-ops ones (NOC dashboard,
   blue/green switch, pipeline, CAB calendar, change ticket, DNS) are gone (unknown types become headlines). No template
   more than twice per video (`MAX_PER_TEMPLATE`); extras become the least-used live-action scene.
 - **Lyrics** (`klyrics.py`): per-word ASS events laid out with PIL metrics; `design.ASS_SCALE` holds the measured
@@ -60,7 +60,7 @@ the owner: "similar style but it can't look copied" and "the screens are on the 
   content on a lid, stacked duplicates, robots, garbled text, bad hands); rejects are rerolled once with an
   over-the-shoulder framing, re-checked, and still-bad ones are dropped (their uses become a code-rendered `screen`
   insert, at most 2, or another scene). Only checked stills are animated. Results: `work_*/grok/screen_check_*.json`.
-- v1 files (`kgfx.py`, `kgfx_base.py`) are kept but no longer used. Backups: `*.bak-20261020-karaoke2`.
+- v1 files (`kgfx.py`, `kgfx_base.py`) are kept but no longer used.
 
 ---
 
@@ -68,7 +68,7 @@ the owner: "similar style but it can't look copied" and "the screens are on the 
 Builds the daily song's video with Grok Imagine, through the signed-in Grok Build CLI on the SuperGrok Heavy
 subscription (**no API key**).
 
-- **Default since Sat 10 Oct 2026: `slopcore` with the Opus planner (`opus-2` = v5 prompts, 10 Oct).** Claude Opus (headless Claude
+- **Default: `slopcore` with the Opus planner (`opus-2` = v5 prompts,).** Claude Opus (headless Claude
   Code on the signed-in Max plan) writes the cast, script, storyboard and cinematography; people-driven, deadpan,
   lyric-literal video where every shot acts out the line being sung (see "slopcore v4: the Opus planner" below).
   Planner fallback: Opus -> Grok script planner (v3) -> template plan, then the style fallbacks below:
@@ -78,8 +78,8 @@ subscription (**no API key**).
     next line); the VHS clock runs 06:37 AM -> 11:59 PM over the song; 2-3 Pip cameos; see "slopcore (v2)" below
 - **Fallback chain, so a video is always made:** slopcore -> `cine-real` (v1, only if at least 26 min remain before the
   58 min hard stop) -> `mascot`. Each step reuses the lyric timings. Everything is killed at 58 min (exit 3).
-- **`--style cine-real`:** the v1 photoreal video (default on 9 Oct): about 107 stills, 25 hero clips, word-by-word type.
-- **`--style mascot`:** the earlier video, 14 image-to-video clips of Pip cut to the beat with captions (8 Oct).
+- **`--style cine-real`:** the v1 photoreal video (default): about 107 stills, 25 hero clips, word-by-word type.
+- **`--style mascot`:** the earlier video, 14 image-to-video clips of Pip cut to the beat with captions.
 
 ## Daily routine usage
 
@@ -104,8 +104,7 @@ nohup /home/box/suno-daily/tools/grok_video/grok_video.sh /home/box/suno-daily/<
   - `GROK_VIDEO_STATUS=ok code=0 fallback=1 slopcore_error='...' style=mascot fallback=1 cine_real_error='...' look=.. out=<mp4> ...`
     (cine-real ran and also failed), or `... code=0 style=mascot fallback=1 slopcore_error='...' out=<mp4> ...` (too late for cine-real)
   - `GROK_VIDEO_STATUS=failed code=<N> ... reason='...'`
-- **Time (slopcore default, Opus planner v5 prompts):** about 21 min (stand-in dry run 9 Oct with Opus 316 s + doctor
-  45 s: 1263 s; real v5 calls measured 302-353 s + 40-54 s), so from a 06:49 start the video is ready about **07:10**.
+- **Time (slopcore default, Opus planner v5 prompts):** about 21 min (Opus ~300-350 s + doctor ~40-55 s), so from a 06:49 start the video is ready about **07:10**.
   If Opus fails fast (auth, limits), the Grok script planner runs instead (about 26 min, ready about 07:15); if Opus
   hangs to its 450 s cap first, see "slopcore v4/v5" below for the worst case. Slopcore's time limit is 34 min (generation stops at
   25 min); a slopcore failure then falls back to cine-real (if >= 26 min remain) and/or mascot, all inside the 58 min hard stop. Fallback timings: see "slopcore (v2)" below. **Older cine-real figures:** about 19 min. The hard limit is 32 min for cine-real; a fallback mascot run adds about 15 min; everything is
@@ -129,12 +128,12 @@ nohup /home/box/suno-daily/tools/grok_video/grok_video.sh /home/box/suno-daily/<
 
 **Vocal check (exit 6).** After demucs, the vocal stem is compared with the backing stem.
 - A clearly sung track passes straight away: the stem is above -8 dB vs the backing with voice in at least 50 % of the
-  song. Measured: 7 Oct vocal take -2.3 dB / 92 %, 5 Oct big-room -4.0 dB / 80 %.
+  song. Typical: vocal take -2.3 dB / 92 %, big-room mix -4.0 dB / 80 %.
 - Otherwise the script waits for whisper before spending any allowance.
 - It stops with code 6, generating nothing, only if BOTH the stem is low (at or below -10 dB, or voice in under 40 %;
-  the 7 Oct instrumental measured -14.3 dB / 30 %) AND whisper hears fewer than 25 % of the lyric words.
+  a typical instrumental: -14.3 dB / 30 %) AND whisper hears fewer than 25 % of the lyric words.
 - If there is no stem measurement (timings reused from the karaoke pipeline), only coverage under 5 % stops it.
-- An ambiguous result only adds a warning. Whisper alone is noisy: a re-run on 5 Oct heard 12 %, where the routine had
+- An ambiguous result only adds a warning. Whisper alone is noisy: a re-run heard 12 %, where the routine had
   heard 69 %.
 - `--allow-instrumental` overrides the stop.
 
@@ -206,7 +205,7 @@ appears only as a 1.5 s vinyl-toy cameo before the credits.
        lyrics.txt) is burned in with libass.
      - The first word is huge on the strongest image at 0.0 s.
      - 2.5 s credits: "MADE WITH SUNO", the story @handles, "SOURCES ON X · @jxwalker".
-- **Cost** (measured 8 Oct, whole-percent meter):
+- **Cost** (whole-percent meter):
   - An `image_gen` still is about 0.01 % of the weekly pool (5 stills: 17 % -> 17 %).
   - A 4 s `reference_to_video` hero is under 0.25 %.
   - The test run with 91 stills, the cameo, 11 heroes and the planner took the meter from 17 % to 19 %.
@@ -260,7 +259,7 @@ test folder:
 - `CINE_REAL_FAIL=plan|gen|render` forces those failures.
 - `--fallback-args "--skip-gen --clips-from <day>/work_grok/clips --work <dir> --out <file>"` keeps the fallback
   mascot run cheap and out of the day folder.
-- `GROK_BIN=<fake>` swaps the CLI for a stand-in: `/workspace/grok-test/cine_real_fail/batcher/fake_grok.py`.
+- `GROK_BIN=<fake>` swaps the CLI for a stand-in script.
   - It can throttle, fail, skip or answer "usage limit" after N calls (`FAKE_QUOTA_AFTER`).
   - It can emulate API latency (`FAKE_DELAY_IMG`, `FAKE_DELAY_VID`, `FAKE_DELAY_SESSION`, `FAKE_DELAY_PLAN`).
   - It uses no network and spends nothing. Its `test_batcher.py` runs the per-item retry tests.
@@ -284,9 +283,7 @@ test folder:
 A 16:9 master (1920x1080, re-framed from the same stills with landscape type) is possible but not built: Grok's media is
 generated 9:16, so it would need 16:9 stills too (about +1 % per day).
 
-## Judge, story cards and the 12 Oct changes (approved by the owner, 12 Oct 2026)
-From the Opus judge of "Take It Apart" (scored 6/10; report `/workspace/grok-test/judge/2026-10-12_proposals.md`).
-Backup of the code before these changes: `/home/box/suno-daily/tools/grok_video.bak_20261012_judge`.
+## Judge and story cards
 
 - **P1 keep planned shots** (`slop_real.make_edit_script`): a planned shot that lands under 0.45 s after the previous
   one, or too near the end of its line, is nudged instead of dropped. The director prompt gains rules 9 (the payoff is the first clip of
@@ -318,22 +315,16 @@ Backup of the code before these changes: `/home/box/suno-daily/tools/grok_video.
 - **Post-run judge** (`judge.post_run`, from `grok_video.finish` after a verified slopcore/cine-real video): a
   detached, niced Opus run writes `<day>/judge_<style>.md` (scores, top 5 gaps, up to 5 proposals with meter cost) and
   `<day>/judge_<style>.log`. It never blocks the run or the post, and **nothing is applied**: the owner approves. `GV_POST_JUDGE=0` turns it off.
-- **Safety fix:** a `--skip-gen` run no longer starts the cine-real or mascot fallbacks (on 12 Oct a dry run that failed
-  fell back and spent about 3 %).
-- **Tests 12 Oct:** dry run (`--skip-gen`) OK in 430 s; 4 story cards, all passing the stories.md check. Real test
-  (`/workspace/grok-test/judge/real/`, cap 1.5 %): the judge flagged 8/87 stills (mostly the old A leak), rerolled 8 and
-  2 still failed and were left out; it flagged 14/48 clips, rerolled 4 and left out 10. The loop took 193 s and the meter went 14 -> 15 %
-  (about 0.5 %). Fail-open was checked with `GV_JUDGE_FAIL=opus` and `GV_STORY_CARDS_FAIL=1`. The post-run judge writes its report in about 4 min.
-- **Expected cost per run:** about 6.6-7.0 % (it was about 6 %): rerolls are up to 15 stills (about 0.2 %) and 4 clips (about 0.4 %),
-  plus 2-4 outro clips; it is all inside the unchanged 7.5 % cap and time limits. Rollback:
-  `rm -rf /home/box/suno-daily/tools/grok_video && cp -a /home/box/suno-daily/tools/grok_video.bak_20261012_judge /home/box/suno-daily/tools/grok_video`.
+- **Safety:** a `--skip-gen` run never starts the cine-real or mascot fallbacks.
+- **Expected cost per run:** about 6.6-7.0 %: rerolls are up to 15 stills (about 0.2 %) and 4 clips (about 0.4 %),
+  plus 2-4 outro clips; it is all inside the unchanged 7.5 % cap and time limits.
 
-## Tone profiles (9 Oct 2026): the tone follows the song
+## Tone profiles: the tone follows the song
 
 `tone.py` picks a profile at the start of slopcore (`<work>/tone.json`, `tone=` in the status line):
 - **edgy**: the v5 deadpan-menace prompts (`prompts/opus_*_v5.txt`) and the genre's slopcore look. **Daily folders**
   (`<YYYY-MM-DD>`, no `"special"` in tags.json) whose stories carry news sources are always edgy, with no extra call,
-  so the daily path is byte-for-byte the same planner prompt as before (checked 9 Oct).
+  so the daily path is byte-for-byte the same planner prompt as before (checked).
 - **joyful**: bright, warm, funny, wholesome-cute (`prompts/opus_director_joyful.txt`, `opus_doctor_joyful.txt`): its
   own rules, banned list (menace, cults, judges, hospitals, anything medical/anatomical/creepy, night/rain by default,
   robot formations...) and a sunshine -> golden -> fairy-light light arc; look `sunny-pastel` (sunny glossy 35mm, pastel
@@ -348,10 +339,9 @@ Backup of the code before these changes: `/home/box/suno-daily/tools/grok_video.
   "SOURCES ON X · @jxwalker" footer; with no source rows at all the footer is dropped too. Undated folders get no date on
   the VHS/datestamp overlay.
 
-## slopcore v4/v5: the Opus planner (default inside slopcore since Sat 10 Oct 2026)
+## slopcore v4/v5: the Opus planner (default inside slopcore)
 
-**v5 prompts (planner `opus-2`, default from 10 Oct):** after an Opus self-review of v4 (critique + rewrite, 9 Oct,
-`/workspace/grok-test/opus_selfreview.md`) the director and doctor prompts live in `prompts/opus_director_v5.txt` and
+**v5 prompts (planner `opus-2`, default):** the director and doctor prompts live in `prompts/opus_director_v5.txt` and
 `prompts/opus_doctor_v5.txt` (`{{PLACEHOLDER}}` templates filled by `opus_prompt()` / `doctor_prompt()`). Tone: deadpan
 menace (headlines as ceremony/parade/tribunal/takeover, scale, night, formations; banned twee props and sitcom mugging);
 a hook that is the most extreme image; A performs to the lens; one copyable signature gesture across hook, choruses and
@@ -360,7 +350,6 @@ anti-repetition caps; the doctor scores twee/prop-holding shots 3 and keeps cast
 sheet (donaldjewkes) is read. **`OPUS_PROMPTS=v4`** restores the old built-in prompts (planner `opus-1`).
 Same pass also changed: the vhs-camcorder look no longer forces golden hour (energy now "euphoric and ominous"), bigger
 subtitle, shorter slams, running VHS clock (`real_render.build_ass_sparse`, `slop_plan.SLOP_LOOKS`).
-Backups of the pre-v5 code, prompts and README: `/workspace/grok-test/backups_20261009/`.
 
 `slop_opus.py` (planner `opus-2`, or `opus-1` with the v4 prompts, `--real-planner opus`, the default) has Claude Opus write the whole video plan.
 - **How it runs:** `claude -p ... --model opus --output-format json --json-schema <schema> --no-session-persistence`
@@ -376,14 +365,14 @@ Backups of the pre-v5 code, prompts and README: `/workspace/grok-test/backups_20
   final line and outro pay off the hook. Converted to the same plan the v3 generator and line-locked edit use.
 - **Call 2, the script doctor** (Opus, no tools): scores every shot on "does it act out the sung words?" and rewrites
   anything under 4.
-- **Caps / robustness:** main call 450 s (v5 measured 302-353 s), doctor 150 s, whole planner 600 s; an invalid reply gets one repair call;
+- **Caps / robustness:** main call 450 s, doctor 150 s, whole planner 600 s; an invalid reply gets one repair call;
   any Claude failure (not logged in, rate limit, timeout, bad JSON) falls back to the Grok script planner below, then
   the template plan. The status line's `planner=` says which ran; status.json/real_plan.json keep `opus_meta`
   (seconds, turns, `total_cost_usd`) and `opus_error`.
-- **Measured 9 Oct (real):** Opus 258 s + doctor 27 s = 285 s; notional $0.78 + $0.19 (on the Max plan this is
+- **Typical run:** Opus 258 s + doctor 27 s = 285 s; notional $0.78 + $0.19 (on the Max plan this is
   subscription usage, about 1 call a day: far inside the limits); 40 beats, 83 shots, 2 rewritten; generation 5 % of
   the Grok weekly pool (37 -> 42 %). Outputs `video_cine_real_v4*.mp4` and `work_cine_real_v4/script.md`.
-- **Test without Opus:** `CLAUDE_BIN=<stub>` (see `/workspace/grok-test/opusdef/fake_claude.py`); `CINE_REAL_FAIL=opus`
+- **Test without Opus:** `CLAUDE_BIN=<stub>` (a stand-in script); `CINE_REAL_FAIL=opus`
   forces the fallback to the Grok script planner.
 
 ## slopcore v3: the Grok script planner (now the first fallback of the Opus planner)
@@ -406,10 +395,10 @@ brings v2 back.
   continuing, punched in, then its still), then the line's other shots. A Pip toy shot sits on its own line (splitting
   its longest shot). Only a line whose pictures all failed borrows the nearest line's (logged in status.json
   `script_edit.borrowed_segments`).
-- Measured 9 Oct (real): script 477 s + critic 181 s = 658 s, 80 shots, critic >= 4: 91 % before rewrites; generation
+- Typical run: script 477 s + critic 181 s = 658 s, 80 shots, critic >= 4: 91 % before rewrites; generation
   6 % of the weekly pool (3 cast, 82 stills, 48 clips); every cut on its own line. Outputs `video_cine_real_v3*.mp4`.
 
-## slopcore (v2) style: the default since Sat 10 Oct 2026 (now with the v4 Opus planner above)
+## slopcore (v2) style: the default (now with the v4 Opus planner above)
 
 No flags needed (`--style slopcore` is the default). `--style cine-real` runs v1; `--no-cine-fallback` skips the cine-real
 step of the fallback chain. The cine-real fallback gets `--hard-stop-min` = minutes left, `--real-time-limit` = min(32,
@@ -422,7 +411,7 @@ Writes `video_cine_real_v2.mp4` + `video_cine_real_v2_chat.mp4` and `work_cine_r
 - One gritty look per song (`SLOP_LOOKS`): pop -> `vhs-camcorder` (PLAY/timecode/date overlay), edm -> `cold-accent`,
   rock -> `16mm-doc`, punk -> `digicam-2003` (datestamp). Genre changes energy, not gloss.
 - Media (`slop_real.py`): 3 cast portraits first, then cast scenes as `image_edit` from the portraits; ~95 stills,
-  45 x 3 s (default; was 55 in the 9 Oct test) `reference_to_video` clips (`--real-heroes`, `--real-clip-sec`, `--real-images` override).
+  45 x 3 s (default) `reference_to_video` clips (`--real-heroes`, `--real-clip-sec`, `--real-images` override).
   Edit is motion-first (~1.1 s shots); stills only as filler with handheld shake/push.
 - Pip: 2 planned cameos + end cameo, always `image_edit` from the locked `PIP_REF` plus a "toy stays still" clip;
   any planner image mentioning the toy is converted to this path.
@@ -432,7 +421,7 @@ Writes `video_cine_real_v2.mp4` + `video_cine_real_v2_chat.mp4` and `work_cine_r
   QA blocklist: `work_cine_real_v2/qa_exclude.json` (e.g. `["s23_1.jpg"]`) drops bad stills/clips; re-render at zero cost with
   `--skip-gen --real-reuse-plan` (reuses an older-version plan and existing media).
 - Planner slop-2: protagonist always mid-action and off-centre (<=1 in 6 lens stares), deadpan escalation, 30-55-word prompts.
-- Cost/time (9 Oct test, As Fast As Ideas): 3 cast + 82 stills + 54/55 clips = ~7% of the weekly pool;
+- Cost/time: 3 cast + 82 stills + 54/55 clips = ~7% of the weekly pool;
   generation ~12 min, render ~5.3 min, run 1128 s + planner 365 s (overlaps demucs in the routine) -> done ~07:14.
   Default now 45 clips (about 6 %/day). Same safeguards: generation stops at time limit - 9 min, fallback, hard stop, status line
   (extra fields `motion= clips= pip_shots=`).
@@ -535,11 +524,11 @@ changes, letterbox bars (96 px) only on verse/bridge shots (captions sit inside)
 ## Tests without generating anything (mascot style; for cine-real see "Testing without spending" above)
 ```bash
 # planner only (one cheap text call), auto look
-grok_video.sh /home/box/suno-daily/2026-10-05 --style mascot --plan-only --work /workspace/grok-test/edm_test/plan \
-  --out /workspace/grok-test/edm_test/plan/unused.mp4
+grok_video.sh <day> --style mascot --plan-only --work /tmp/edm_test/plan \
+  --out /tmp/edm_test/plan/unused.mp4
 # edit/assemble on existing clips
-grok_video.sh /home/box/suno-daily/2026-10-05 --style mascot --skip-gen --look edm --clips-from /workspace/grok-test/edm_test/clips \
-  --work /workspace/grok-test/edm_test/work --out /workspace/grok-test/edm_test/video_edm_test.mp4
+grok_video.sh <day> --style mascot --skip-gen --look edm --clips-from /tmp/edm_test/clips \
+  --work /tmp/edm_test/work --out /tmp/edm_test/video_edm_test.mp4
 ```
 
 ## Known limits
@@ -549,7 +538,7 @@ grok_video.sh /home/box/suno-daily/2026-10-05 --style mascot --skip-gen --look e
 * Big-room drops are taken to be the choruses (the sung hooks). A purely instrumental drop with no lyrics gets no
   build-up treatment.
 
-### Special folders: cast_refs, Messenger copy, gore ban, --audio (9 Oct 2026)
+### Special folders: cast_refs, Messenger copy, gore ban, --audio
 - `cast_refs.json` (non-daily folders only): letters -> {name, role, description, images}; cast portraits are made by
   image-edit from the real photos (consented, private). Daily folders ignore it and keep the no-real-people rule.
 - Every non-daily video also gets `*_messenger.mp4` (H.264 720x1280, AAC 128k, faststart, < 24 MB, bitrate fitted).
@@ -559,14 +548,14 @@ grok_video.sh /home/box/suno-daily/2026-10-05 --style mascot --skip-gen --look e
 - Non-daily: planned DROP scenes are placed in a line's instrumental tail (>= 1.2 s) when the timeline has no
   separate instrumental segment (`drops: placed ...` in the log).
 
-### Tone `playful` (9 Oct 2026, 22:19)
+### Tone `playful`
 - Between edgy and joyful; the automatic pick for personal/happy songs (Opus chooses only edgy|playful; `joyful` only via
   `tone.txt`). Prompts `prompts/opus_{director,doctor}_playful.txt`; look `sunlit-portra` (35mm, warm Portra, real-world
   colour, one red accent). Mixed expressions (laughing <= ~30%), varied light, no pastel/candy/glitter overload, same gore ban.
 - Messenger copy cap is now 18 MB (MESSENGER_MAX_BYTES) for special folders.
 
-## Narrative mode (13 Oct 2026, test; not yet the daily default)
-the owner: "random words thrown up on the screen ... a musical narrative with visual storytelling". Song and film are
+## Narrative mode
+A musical narrative with visual storytelling, never random words on screen. Song and film are
 written together by Opus: `python narrative.py write <day> [--out DIR]` picks ONE main story from stories.md, writes a
 treatment (protagonist/want/obstacle/turn/payoff, 3-4 locations, escalating chorus motif, final image, sourced facts),
 then lyrics.txt / style.txt / title.txt (lyrics_lint clean, identical chorus, title in chorus; one repair call) and
@@ -577,7 +566,7 @@ repeat), diegetic text from beats' "onscreen" (spell-checked against the day's o
 Looks, Pip, judge/reroll, fallbacks and the 7.5 % cap are unchanged. `NARRATIVE_OFF=1` ignores treatment.json.
 Karaoke: tools/build_video.sh now exits 0 (KARAOKE_SKIPPED) for plain YYYY-MM-DD folders unless `--karaoke`.
 
-## Headline mode (13 Oct 2026, the owner-approved plan; test)
+## Headline mode
 `python headline.py write <day> [--out DIR]` -> lyrics.txt/style.txt/title.txt + headline.json/.md, tags.json
 `sources` = sung stories' handles only. Structure: hook (headline gag + title) / Verse 1 main story literal / identical
 chorus with wordplay / Verse 2 2-3 secondary stories / bridge with Suno meta-tag surprise / final chorus one-word
@@ -585,15 +574,14 @@ callback / outro punchline. Opus ranks stories, writes 3 hook options, self-scor
 catchiness >= 8; up to 2 rewrites), ticker lines verified against stories.md. `<day>/headline.json` takes precedence over
 treatment.json (narrative mode kept, unused): prompts/opus_*_headline.txt, no story cards/slams; type = title (0-3 s),
 one headline card on the main story's first line, chorus hook line as sung, bottom news ticker per story span (switches
-on the line where the story changes). `HEADLINE_OFF=1` ignores it. Also 13 Oct: cast lists pruned to letters named in
+on the line where the story changes). `HEADLINE_OFF=1` ignores it. Also: cast lists pruned to letters named in
 the prompt (slop_opus.fix_cast); hold-cap splits borrow neighbouring lines' shots; judge prompt is mode-aware and adds
-a sound-off test in headline mode. Dry run: 2026-10-13-headline/dryrun/.
+a sound-off test in headline mode.
 
-## Claudia mode (19 Oct 2026, the owner-approved; default in headline mode)
+## Claudia mode
 Modelled on @anabology's Claudia pipeline (claudia.gallery/wiki/pipeline). Code: `claudia.py`, wired in
 `slop_real.prepare_claudia` / `generate_media` / `edit_and_render_claudia`, plus a likeness line in `judge.realism_gate`.
-Off switch: `GV_CLAUDIA=0` (back to the 14-18 Oct headline pipeline). Rollback: every touched file has a
-`.bak-20261019-claudia` copy.
+Off switch: `GV_CLAUDIA=0` (back to the plain headline pipeline).
 1. **Pacing:** `claudia.scenes()` = one scene per verse couplet (4-8 s), one per chorus/bridge line (1-2 quick shots),
    hook 1-2, outro tail 1; 25-40 shots total; every shot is a moving clip (3-6 s, set per shot).
 2. **One lead:** the prompt book fixes cast A's reference sheet (name, age, face, hair, build, wardrobe, palette) + at
@@ -613,7 +601,7 @@ Off switch: `GV_CLAUDIA=0` (back to the 14-18 Oct headline pipeline). Rollback: 
 Budget: unchanged 7.5 % cap (live meter); the estimate uses the mean planned clip length.
 Test without spending: `grok_video.sh <day> --style slopcore --plan-only --skip-gen --work <abs path>`.
 
-## Cine vocab (19 Oct 2026, from the owner's "reference -> language -> prompt -> polish" list)
+## Cine vocab
 - `prompts/cine_vocab.md`: 60 named shot types / lenses / lights / camera moves with Grok-ready phrases, plus 17 film
   reference archetypes (ARCH-*). Injected into `claudia_book.txt` via `{{VOCAB}}`.
 - Book schema adds per shot `ref` (ARCH id or real film frame), `shot_type`, `move` (exactly one vocab move id).
@@ -621,13 +609,11 @@ Test without spending: `grok_video.sh <day> --style slopcore --plan-only --skip-
   beautiful..."), normalises/infers the move, caps CRASH/WHIP at 2 and DOLLYZOOM at 1, flags missing ref/light/lens.
   `_plain()` drops vocab ids before text reaches Grok; the ARCH palette rides as "Colour:" only when a section has
   no palette. The review prompt rejects generic shots and shots with no named move or light.
-- `GV_CINE=0` -> uses the `*.bak-20261019-cinevocab` book/review prompts and skips the lint (pre-vocab behaviour).
+- `GV_CINE=0` -> uses `prompts/*.prevocab` book/review prompts if present and skips the lint (pre-vocab behaviour).
 - `GV_POLISH=1` (default OFF) -> grade adds faint halation (highlights blurred, warmed, screened 18%) + fine temporal
   grain in the same ffmpeg pass as the LUT; ~+45 s on a 2:29 video. Off until judged on a real Claudia render.
-- Fixed: `plan(reuse=True)` never reused the book (json lists vs tuples in `_key`); now compares as lists.
-- Full rollback: `cd tools/grok_video && for f in claudia.py README.md prompts/claudia_book.txt prompts/claudia_review.txt; do cp -p $f.bak-20261019-cinevocab $f; done`
 
-## Story grounding + story text (19 Oct 2026 evening, the owner: "more of the underlying story in the visuals and the text")
+## Story grounding + story text
 - `prompts/claudia_book.txt` rules 12-13: >=80% of shots depict a specific element of the story their lyric sings
   (`story`, `story_element` per shot, recorded in prompt_book.md); each secondary story gets its own identifiable scene;
   generic office/mood shots banned. Scene rows passed to Opus carry the story number of each lyric line.
@@ -636,9 +622,9 @@ Test without spending: `grok_video.sh <day> --style slopcore --plan-only --skip-
   hook fact word by word against stories.md (falls back to the stories.md headings, else drops). Never invents.
 - `claudia.build_ass(..., story=)`: opening card = plain headline + "via @handle"; "ALSO TODAY" caption box when each
   secondary story is first sung; "THE STORY" key fact at the first chorus; placed opposite the lyric zone, <=8 words.
-- Off switch: `GV_STORY_TEXT=0` (text layer only). Rollback of everything: the `.bak-20261019-story` copies.
+- Off switch: `GV_STORY_TEXT=0` (text layer only).
 
-## Default since 23 Oct 2026: no stills + energy-matched pacing
+## Default: no stills + energy-matched pacing
 - Every scene gets a motion and becomes a Grok clip (--clips default 14). A scene with no clip falls back to an animated line_card graphic, never a still image.
 - pace() splits shots on the detected beat grid: 2 beats in chorus/chant/hook/intro/outro, 3 in verse/pre, 4 in breakdown/bridge, and never holds longer than GV_KARAOKE_MAX_HOLD (2.5 s). Long clips are re-cut at offsets with alternating zoom.
 - At most 2 stamps (STAMP_MAX). No story banner. Status records stills_used, max_hold and bpm.

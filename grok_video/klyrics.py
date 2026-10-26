@@ -1,4 +1,4 @@
-"""Karaoke lyric layer v2 (20 Oct 2026): per-word ASS events laid out with the theme's font (PIL metrics), so the
+"""Karaoke lyric layer v2: per-word ASS events laid out with the theme's font (PIL metrics), so the
 highlight style can vary per video: pop, block, underline, bounce, reveal, neon, marker, wipe; positions lower-center,
 lower-left, bottom-band. Colours come from the palette (design.theme)."""
 from PIL import ImageFont
@@ -30,9 +30,9 @@ def build(path, L, W, H, dur, story, sync_ok, design, th, line_ok):
         ybase = int(H * (0.755 if v else 0.82)); maxw = W * 0.85; align = 'c'
     x_left = int(W * 0.075); cm = int(W * 0.075)   # safe area: >= 6% sides incl. borders/boxes
     bord = 6 if st not in ('neon',) else 3
-    # 21 Oct (narrative rebuild): not-yet-sung words were unreadable over dark photos; give them a solid dark outline + shadow
+    # (narrative rebuild): not-yet-sung words were unreadable over dark photos; give them a solid dark outline + shadow
     dark_ol = tuple(int(c * 0.25) for c in (th['bg'] if not light else (0, 0, 0)))
-    if st == 'pop':   # 21 Oct: the 'pop' overshoot scales words past the side margins; leave room for it
+    if st == 'pop':   # the 'pop' overshoot scales words past the side margins; leave room for it
         maxw *= 0.88; x_left += int(W * 0.03)
     hdr = f"""[Script Info]
 ScriptType: v4.00+
@@ -60,7 +60,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         y0, y1 = int(H * (0.62 if v else 0.74)), int(H * (0.85 if v else 0.95))
         ev.append(f"Dialogue: 0,{_ts(0)},{_ts(dur)},Band,,0,0,0,,{{\\pos(0,{y0})\\p1}}m 0 0 l {W} 0 {W} {y1 - y0} 0 {y1 - y0}{{\\p0}}")
     T = [ln for ln in L if ln.get('words') or ln.get('start') is not None]
-    # 24 Oct house style: chorus drops get the Glitch Tape VHS on-screen-display treatment (VT323, cyan + magenta split)
+    # house style: chorus drops get the Glitch Tape VHS on-screen-display treatment (VT323, cyan + magenta split)
     osd = bool(design.get('house'))
     if osd:
         import design as DZ

@@ -1,4 +1,4 @@
-# Cine vocab for Grok Imagine (19 Oct 2026)
+# Cine vocab for Grok Imagine
 Distilled (own words) from Melies cinematic-techniques, Eyecannndy, AI Camera Movements and GrokFilm; references from
 Film Grab / Shot Cafe. Rule of use: per shot pick ONE shot type + ONE lens + ONE light + ONE move. Write the phrase, then
 the start frame and the end frame. Grok Imagine follows one plain physical move well and two moves badly.

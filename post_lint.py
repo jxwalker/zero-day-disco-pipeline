@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Daily X post lint (18 Oct 2026, the owner: credit Grok Bot, tag @grok so Grok replies, #slopcore; wants Elon's attention).
+"""Daily X post lint.
 usage: post_lint.py [--bot suno|interesting-x] <post.txt> [sources.txt]   (default --bot suno)
 --bot interesting-x: generic checks only (non-empty, no secrets, valid links, length).
 Suno profile (default):   -> "post lint: clean" (exit 0) or the problems (exit 1).
@@ -43,7 +43,7 @@ SECRET = re.compile(r"(sk-[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9]{20,}|xox[abpr
                     r"-----BEGIN [A-Z ]*PRIVATE KEY-----|\b(api[_-]?key|secret|password|token)\s*[:=]\s*\S{6,})", re.I)
 
 def check_generic(t, label="post"):
-    """20 Oct 2026, the owner: each bot gets its own post checks. Generic sanity checks only."""
+    """Each bot gets its own post checks. Generic sanity checks only."""
     p = []
     if not t.strip(): p.append(f"{label} is empty")
     if SECRET.search(t): p.append(f"{label} looks like it contains a secret/credential")
@@ -65,7 +65,7 @@ def check_post(t, bot="suno"):
     for k, rx in (("@grok", r"(?<![\w@])@grok\b"), ("Grok Bot", r"\bGrok Bot\b"), ("#slopcore", r"#slopcore\b")):
         if re.search(rx, t, re.I) and not re.search(rx, h, re.I):
             p.append(f"'{k}' is below the 280-char 'Show more' fold; move the Grok Bot line up")
-    # 24 Oct 2026 (the owner): credit the inspiration on every daily post
+    # credit the inspiration on every daily post
     if "@anabology" not in t: p.append("missing credit line: 'Inspired by Claudia by @anabology (claudia.gallery)'")
     w = weighted(t)
     if w > LIMIT: p.append(f"post too long: {w} weighted chars > {LIMIT}")

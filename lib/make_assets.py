@@ -1,4 +1,4 @@
-"""Static overlay assets for the render (27 Sep design): cover glow, spectrum and waveform gradients.
+"""Static overlay assets for the render: cover glow, spectrum and waveform gradients.
 usage: make_assets.py WORK_DIR"""
 import sys, os
 from PIL import Image, ImageDraw, ImageFilter

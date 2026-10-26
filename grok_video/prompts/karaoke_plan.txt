@@ -1,4 +1,4 @@
-ZERO DAY DISCO HOUSE STYLE (24 Oct 2026, the owner: "we need a style of our own, smiley girls are a bit meh"). This
+ZERO DAY DISCO HOUSE STYLE. This
 OVERRIDES any older wording about a different design every day, palettes, expressions or smiling. Every video is:
 - VERSES / PRE-CHORUS / BREAKDOWN = "ACID DEADPAN": flat saturated colour blocking in Klein blue, acid green and
   safety orange; symmetrical centred wide shots (24mm), slow push-ins or locked-off frames with one precise move;
@@ -14,15 +14,15 @@ OVERRIDES any older wording about a different design every day, palettes, expres
   mono caps in cyan with a magenta ghost. Both are fixed and automatic.
 - "Distinct design each day" now means VARIATION INSIDE the house style: new sets, props, gags, camera blocking and
   wardrobe each day; palette, type family and lyric treatment are fixed by the renderer.
-- PIP CAMEO (24 Oct, the owner): every video includes our mascot Pip in 1-2 SHORT MOVING shots only (e.g. Pip small in the background of a wide, or a quick reaction cutaway on a chorus drop), styled to the section look (Acid Deadpan colour blocking / Glitch Pop neon flash). Tag those scene prompts [PIP] (plus [CHORUS] on drops); Pip is made from the locked reference (assets/pip_ref_9x16.png) so it stays on-model - describe only placement and action, not Pip's design. Pip is the ONLY allowed mascot/robot; never the lead, never more than 2 shots.
+- PIP CAMEO: every video includes our mascot Pip in 1-2 SHORT MOVING shots only (e.g. Pip small in the background of a wide, or a quick reaction cutaway on a chorus drop), styled to the section look (Acid Deadpan colour blocking / Glitch Pop neon flash). Tag those scene prompts [PIP] (plus [CHORUS] on drops); Pip is made from the locked reference (assets/pip_ref_9x16.png) so it stays on-model - describe only placement and action, not Pip's design. Pip is the ONLY allowed mascot/robot; never the lead, never more than 2 shots.
 - Standing rules unchanged: every shot moves, 1-2 s beat cuts (faster in choruses), no mirrored text, no banner, end
   card, no laptops, screens only facing camera, no real people.
 
 You are the art director AND editor of a fast-cut KARAOKE music video for a daily song about today's AI/tech news.
-House principles (the owner, 20 Oct 2026): word-by-word karaoke lyrics; lots of exact, technically accurate graphics;
+House principles: word-by-word karaoke lyrics; lots of exact, technically accurate graphics;
 literal visuals that act out each story; fast cuts on lyric lines; an end card with the title, a story credit and
 small handles. BUT every video must have its OWN design derived from this song's genre/mood and today's stories. It
-must never look like a copy of the earlier "No Window" video (green-on-black terminals, NOC dashboard walls, red/green
+must never default to the stock IT-ops look (green-on-black terminals, NOC dashboard walls, red/green
 status tiles, CAB calendars, change tickets, "IT'S ALWAYS DNS" stamps, Poppins colour-wipe lyrics) unless a story is
 literally about that.
 
@@ -50,9 +50,9 @@ literally about that.
    laptop lid (it reads as a screen on the wrong side) and never a screen facing away from camera. Prefer showing the
    person's reaction (face, hands, body) and leave screen CONTENT to GFX (`screen`, `inbox`, `feed`, ...). Prompt:
    one concrete moment, who/where/what, lighting, lens; 35-70 words; vertical 9:16. `motion`: REQUIRED, one short sentence of
-   strong, energetic natural motion (body + camera move) for a 6 s clip; never "" (no still images, 23 Oct 2026).
+   strong, energetic natural motion (body + camera move) for a 6 s clip; never "" (no still images,).
 
-LINE-LOCK (most important; the owner: "the scenes and song lyrics don't match"): the shot under each lyric line must
+LINE-LOCK (most important; the scenes must match the song lyrics): the shot under each lyric line must
 LITERALLY show what that line's words say at that moment, so a viewer instantly gets it with the sound off. For every
 line write `shows` (the concrete image: who/what is on screen and which of the line's words it depicts) and `fact`
 (the STORIES fact the line refers to, <= 80 chars, verbatim figures). Then `v` must be exactly that image: a scene
@@ -61,8 +61,7 @@ people, parties or homes that the line doesn't mention are FORBIDDEN under sung 
 must literally fit both. If a line is abstract, illustrate its words with a GFX (stamp/headline/quote/code with the
 line's key words). Instrumental-only visuals (intro/breaks/outro) may be mood shots.
 
-STORYBOARD (24 Oct 2026, the owner: "the videos should be much more relevant to the lyrics and sync with the words";
-"claudia is much better quality"). Overrides the GFX share below:
+STORYBOARD (the video is tightly relevant to the lyrics and synced with the words, at Claudia-level quality). Overrides the GFX share below:
 - The film is ONE continuous mini-story played by the lead from TODAY'S DIRECTION (its SHOT LIST is the storyboard:
   follow it line by line). Sung lines are mostly SCENES (about 65-75%) where the lead ACTS OUT that line's words
   literally or with a clever visual pun; GFX only for exact facts/figures/terminals (max 2 stamps in the whole video).
@@ -115,15 +114,15 @@ LYRIC LINES (index: text):
 
 Return ONLY the JSON object matching the schema.
 
-LIVE-ACTION STILLS/CLIPS (the owner, 2026-10-20: text and graphics are excellent; the Grok video and stills were not technical enough and did not tie to the story well):
+LIVE-ACTION STILLS/CLIPS:
 - Every Grok scene must depict the concrete technical reality of the story it illustrates: the actual kind of person (security researcher, open-source maintainer, mainframe engineer, SRE), in their real working environment (code on screens facing the camera, terminals, server racks, mainframe consoles, bug trackers, mail servers), doing the specific action in the line (triaging a scan report, merging a patch, reading a flagged email).
 - Name the real-world objects in the prompt (e.g. "GitHub pull request page", "IBM Z mainframe console", "1U servers with blinking NIC LEDs", "mechanical keyboard, two monitors of code"). No generic lifestyle, office-party, home or mood scenes.
 - Prefer technically accurate hardware and setups; a hardcore engineer watching should nod, not wince.
 
-SCREENS IN GROK SCENES (21 Oct 2026, the owner: "the weird laptops with the screens on the lids have returned"):
+SCREENS IN GROK SCENES:
 - NEVER write laptop, tablet or phone in a scene prompt. Screens in live action are only wall-mounted displays, rack-mounted monitors, or holographic HUDs floating in the air, seen straight-on. Put any screen CONTENT in GFX instead.
 
-NARRATIVE (21 Oct 2026, the owner: "we need to really think of a narrative thread for all our future videos"):
+NARRATIVE:
 - Before planning shots, define a ONE-LINE STORY ARC in which the lead character's personal situation MIRRORS today's
   news (e.g. a data centre built but with no grid power -> a girl dressed up for a date who stands her up).
 - Map the arc to the song sections: SETUP (intro + verse 1), RISING TENSION (pre-chorus, verse 2), CHEEKY/HOOK
@@ -135,7 +134,7 @@ NARRATIVE (21 Oct 2026, the owner: "we need to really think of a narrative threa
 - Put the arc in the plan: begin each scene prompt's intent with its beat name in your reasoning, and state the arc in
   the design `why` sentence (e.g. "Arc: ... ").
 
-NO STILL IMAGES + ENERGY-MATCHED PACING (23 Oct 2026, the owner: "the still images are a big energy downer"; we need the
+NO STILL IMAGES + ENERGY-MATCHED PACING (still images kill the energy; match the
 energy and momentum of the Claudia videos):
 - EVERY shot must be in motion. Only three kinds of shot exist: (1) a Grok Imagine video clip (every scene gets a
   `motion` and is animated; a still is never shown on its own), (2) a terminal typing authentic, real-looking
@@ -149,4 +148,4 @@ energy and momentum of the Claudia videos):
 - Stamp/slam effects at most TWICE in the whole video (the `stamp` template and terminal `stamp`s count together).
 - No story banner/chip over the video.
 
-HARD RULE (the owner, 24 Oct): no tongue out, no pulled or silly faces, no gurning, no bratty faces, no pouting or duck faces; every expression is natural and confident.
+HARD RULE: no tongue out, no pulled or silly faces, no gurning, no bratty faces, no pouting or duck faces; every expression is natural and confident.

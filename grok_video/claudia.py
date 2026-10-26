@@ -1,4 +1,4 @@
-"""Claudia-style headline mode (19 Oct 2026, the owner-approved; see README "Claudia mode").
+"""Claudia-style headline mode.
 
 Replaces, in headline mode only, the per-line micro-shot plan + chyron type with:
  1. pacing: ~25-40 shots per 2:30 song; one coherent scene per lyric couplet (4-8 s), quicker (~2-3 s) shots only in
@@ -12,16 +12,16 @@ Replaces, in headline mode only, the per-line micro-shot plan + chyron type with
     scene's negative-space zone, Inter Tight + Instrument Serif accents, words revealed on their sung onsets; a slim
     synced "via @handle" source tag instead of the scrolling ticker; headline card and end card kept.
  5. art direction: 'clean-film' look (soft motivated light, no flash, no VHS/datestamp) + a film LUT grade pass.
-Switch off with GV_CLAUDIA=0 (falls back to the 14-18 Oct headline pipeline)."""
+Switch off with GV_CLAUDIA=0 (falls back to the plain headline pipeline)."""
 import json, math, os, re, subprocess, time
 import common_gv as G
 import real_plan as RP
 import slop_plan as SP
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-VERSION = 'claudia-2-story'   # 19 Oct evening: story grounding + story text layer (GV_STORY_TEXT=0 off)
+VERSION = 'claudia-2-story'   # story grounding + story text layer (GV_STORY_TEXT=0 off)
 MIN_SHOTS, MAX_SHOTS = 25, 40
-LEAD_MIN_SHARE = 0.5   # 20 Oct storyfix: story actors carry their own scenes
+LEAD_MIN_SHARE = 0.5   # storyfix: story actors carry their own scenes
 
 CLEAN_FILM = {
     'label': 'clean cinematic 35mm film, soft motivated light',
@@ -156,7 +156,7 @@ REVIEW_SCHEMA = {"type": "object", "properties": {"verdict": S, "issues": {"type
                  "required": ["verdict", "issues", "fixes"]}
 BOT = re.compile(r'\b(robot|robotic|android|cyborg|mascot|toy|pip|hologram)s?\b', re.I)
 
-# 19 Oct (the owner: "reference -> language -> prompt -> polish"): cine vocab grammar. GV_CINE=0 -> pre-vocab prompts.
+# cine vocab grammar. GV_CINE=0 -> pre-vocab prompts.
 CINE = os.environ.get('GV_CINE', '1') != '0'
 VOCAB_PATH = os.path.join(HERE, 'prompts', 'cine_vocab.md')
 MOVES = ['STATIC', 'PUSH', 'PULL', 'TRUCKL', 'TRUCKR', 'SLIDER', 'PANL', 'PANR', 'TILTUP', 'TILTDN', 'ARC', 'ORBIT',
@@ -268,7 +268,7 @@ def cine_lint(book):
 
 def _prompt_path(name):
     p = os.path.join(HERE, 'prompts', name)
-    old = p + '.bak-20261019-cinevocab'
+    old = p + '.prevocab'  # optional pre-vocab prompt copy
     return old if not CINE and os.path.exists(old) else p
 
 
@@ -325,7 +325,7 @@ def lead_share(book):
     return sum(1 for x in sh if 'A' in x['cast']) / max(1, len(sh))
 
 
-STORY_TEXT = os.environ.get('GV_STORY_TEXT', '1') != '0'     # 19 Oct: factual story captions over the lyrics layer
+STORY_TEXT = os.environ.get('GV_STORY_TEXT', '1') != '0'     # factual story captions over the lyrics layer
 CAP_WORDS = 8
 VAGUE = re.compile(r'^\s*(-|none|n/?a|theme|mood|atmosphere|tech|technology|ai|work|office|vibe|general)\s*$', re.I)
 
@@ -350,7 +350,7 @@ def story_grounding(book, slots, h):
             if st and st not in want:
                 notes.append(f"{sc['seg']}#{k}: story {st} not in today's song"); st = 0
             txt = f"{sh.get('image_prompt', '')} {el}"
-            if METAPHOR.search(txt):                      # 20 Oct storyfix: symbols/home life are not story facts
+            if METAPHOR.search(txt):                      # storyfix: symbols/home life are not story facts
                 notes.append(f"{sc['seg']}#{k}: metaphor/home prop instead of the story event ({METAPHOR.search(txt).group(0)})")
                 el = ''
             if st and el and not VAGUE.match(el):
@@ -467,7 +467,7 @@ def plan(day, work, plines, dur, deadline=None, reuse=False):
     if not book or [list(x) for x in book.get('_key') or []] != [list(x) for x in key]:   # json lists vs tuples
         pf = os.path.join(od, 'book_prompt.txt'); open(pf, 'w').write(_book_prompt(day, slots, h))
         t0 = time.time()
-        for attempt in (1, 2):                           # 20 Oct: Opus once returned only the hook scene; retry once
+        for attempt in (1, 2):                           # Opus once returned only the hook scene; retry once
             book, meta = SO.run_claude(pf, od, BOOK_SCHEMA, 900, tools='', effort='high')
             G.log(f"claudia: prompt book written by one Opus context in {meta['secs']}s (${meta.get('cost_usd')}) attempt {attempt}")
             got = {s.get('seg') for s in (book or {}).get('scenes') or []}
@@ -977,7 +977,7 @@ def write_lut(path, n=33):
     return path
 
 
-POLISH = os.environ.get('GV_POLISH', '0') != '0'     # 19 Oct: halation + fine grain on top of the LUT (opt-in)
+POLISH = os.environ.get('GV_POLISH', '0') != '0'     # halation + fine grain on top of the LUT (opt-in)
 
 
 def polish_vf(lut):

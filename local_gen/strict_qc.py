@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""strict_qc.py (25 Oct 2026, the owner: "Why does she have wrenches on her shirt. Why does she put a floppy wrench in her
-pocket. We need better quality control.")  Shared, fail-closed artefact QC for EVERY clip route (LTX, Wan, Runway, Grok)
+"""strict_qc.py: shared, fail-closed artefact QC for EVERY clip route (LTX, Wan, Runway, Grok)
 and for the final cut before READY_TO_POST.
 
 Root cause it fixes: clips were judged on 1-2 frames (Grok route: one frame 1.2 s from the end; v3 regen: 1.5 s and
@@ -30,7 +29,7 @@ POCKET_RE = re.compile(r"\bpocket(s|ed|ing)?\b|\btuck(s|ed|ing)?\b|\bholster|\bs
 GRAPHIC_WARDROBE_RE = re.compile(r"(\w+[- ]?(shaped|print|printed|pattern|patterned|motif|patch(es)?|logo|graphic|embroider\w*|appliqu\w*|badge|decal))|"
                                  r"(stitched|embroidered|printed|painted) \w+ (patch(es)?|motif|print|graphic)", re.I)
 
-# Severity (25 Oct, the owner): FAIL = serious glitch, blocks. WARN = small drift, logged only.
+# Severity: FAIL = serious glitch, blocks. WARN = small drift, logged only.
 CHECKS = {
   # ---------------- FAIL level
   "prop_rigidity": "A rigid object (spanner, wrench, tool, watch BODY/strap, phone, cup, card, board, instrument) visibly bends, "
@@ -113,7 +112,7 @@ def _prompt(files, shot_prompt, wardrobe, tier, role):
             + "\n".join(files))
 
 def review_grok(files, text, cwd, schema=SCHEMA, timeout=600):
-    # 26 Oct: retry B 3x with backoff; still raises (-> FAIL) if all tries fail
+    # retry B 3x with backoff; still raises (-> FAIL) if all tries fail
     err = None
     for i in range(3):
         try: return _review_grok_once(files, text, cwd, schema=schema, timeout=timeout)

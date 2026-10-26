@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Second daily post (18 Oct 2026, the owner approved ONE extra post per day): after the daily post, reply to the MAIN
+"""Second daily post: after the daily post, reply to the MAIN
 story's source post with the same video, a short human line and a link to our post.
 
 usage:

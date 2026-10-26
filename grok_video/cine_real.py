@@ -10,8 +10,8 @@ import real_gen
 import real_render as RR
 from real_gen_usage import usage_pct
 
-STILL_COST = 0.012           # % of the weekly pool per image_gen still (measured 8 Oct: about 0.01 %)
-CLIP_COST = 0.14             # % per 4 s 720p reference_to_video clip (9 Oct: 25 clips + 107 stills = 20->24 %, i.e. 0.07-0.15 each; scaled by length)
+STILL_COST = 0.012           # % of the weekly pool per image_gen still (measured: about 0.01 %)
+CLIP_COST = 0.14             # % per 4 s 720p reference_to_video clip
 HERO_SECONDS = 4             # default hero length (--real-clip-sec 3-5); the still is pinned as first_frame
 RENDER_RESERVE_S = 9 * 60    # generation stops this long before the hard time limit (render ~5 min + chat copy + margin)
 PLAN_RESERVE_S = 17 * 60     # the planner may only use time that leaves this much before the limit

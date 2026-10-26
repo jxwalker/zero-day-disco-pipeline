@@ -1,4 +1,4 @@
-"""Tone step (9 Oct 2026): pick the video's tone profile from the song (lyrics, style.txt, stories.md, optional tone.txt).
+"""Tone step: pick the video's tone profile from the song (lyrics, style.txt, stories.md, optional tone.txt).
 
 Profiles: 'edgy' (deadpan menace, the v5 prompts; default for the daily AI-news songs), 'playful' (slopcore cool with
 warmth; the automatic pick for personal or happy songs) and 'joyful' (bright, pastel, wholesome-cute; tone.txt only).

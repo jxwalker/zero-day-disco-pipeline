@@ -1,5 +1,5 @@
 import json
-"""Themed karaoke graphics (v2, 20 Oct 2026). Every renderer: f(W, H, t, dur, p) -> RGB image, styled by the per-video
+"""Themed karaoke graphics (v2,). Every renderer: f(W, H, t, dur, p) -> RGB image, styled by the per-video
 theme (design.theme): palette, fonts, texture. Story-domain templates; exact text from the plan only.
 Graphics keep the lower ~36% of the frame calm for the lyrics."""
 import math, random, re
@@ -7,7 +7,7 @@ from PIL import Image, ImageDraw, ImageFont
 T = {}
 _fc = {}
 import os as _os
-FITLOG = _os.environ.get('KGFX_FITLOG')     # 21 Oct: jsonl of fit failures + final-frame texts (truncation check)
+FITLOG = _os.environ.get('KGFX_FITLOG')     # jsonl of fit failures + final-frame texts (truncation check)
 CUR = {'name': '', 't': 0.0, 'dur': 1.0}
 
 
@@ -20,7 +20,7 @@ def _log(rec):
 
 
 class FitDraw(ImageDraw.ImageDraw):
-    """21 Oct 2026 (the owner: no on-screen text is ever cut off). Every text draw is measured; a left/centre-anchored
+    """Every text draw is measured; a left/centre-anchored
     line that would run past the canvas edge (2% margin) is shrunk until it fits; if it still can't fit, it is logged
     as a failure. On a shot's final frame every drawn string is logged for the truncated-word check."""
     def text(self, xy, text, fill=None, font=None, anchor=None, *a, **k):
@@ -52,7 +52,7 @@ def C(n, d='ink'):
     n = str(n or '').lower()
     m = {'red': 'bad', 'green': 'good', 'amber': 'a3', 'yellow': 'a3', 'blue': 'a2', 'cyan': 'a3', 'pink': 'a1', 'white': 'ink'}
     return T.get(m.get(n, n), T.get(d)) if n else T[d]
-def top0(W, H): return H * (0.17 if H > W else 0.20)   # below the story chip (21 Oct: 2-line chips overlapped titles)
+def top0(W, H): return H * (0.17 if H > W else 0.20)   # below the story chip
 def zone(W, H): return H * (0.60 if H > W else 0.64)
 def ease(x): x = max(0, min(1, x)); return 1 - (1 - x) ** 3
 
@@ -67,11 +67,11 @@ def base(W, H, t=0):
         for y in range(0, H, int(26 * u)):
             for x in range(0, W, int(26 * u)):
                 r = 3 * u * (0.4 + 0.6 * y / H); d.ellipse([x - r, y - r, x + r, y + r], fill=sh)
-    elif tx in ('paper', 'grain', 'scanlines'):   # 25 Oct (the owner): no scan lines; old 'scanlines' designs fall back to grain
+    elif tx in ('paper', 'grain', 'scanlines'):   # no scan lines; old 'scanlines' designs fall back to grain
         random.seed(int(t * 12))
         for _ in range(int(W * H / 900)):
             x, y = random.randrange(W), random.randrange(H); d.point((x, y), fill=sh)
-    # 26 Oct (the owner): the horizontal light-sweep band read as a VHS tracking bar; replaced with a soft drifting glow (no lines)
+    # the horizontal light-sweep band read as a VHS tracking bar; replaced with a soft drifting glow (no lines)
     import math as _m
     cx = int(W * (0.5 + 0.3 * _m.sin(t * 0.35))); cy = int(H * (0.45 + 0.25 * _m.cos(t * 0.27))); R = int(min(W, H) * 0.55)
     for k in range(12, 0, -1):
@@ -95,7 +95,7 @@ def clip_w(d, s, f, maxw):
     """Shorten a string (with an ellipsis) until its MEASURED width fits."""
     s = str(s)
     if d.textlength(s, font=f) <= maxw: return s
-    ws = s.split()                                  # 21 Oct: cut on a word boundary, never mid-word
+    ws = s.split()                                  # cut on a word boundary, never mid-word
     while len(ws) > 1 and d.textlength(' '.join(ws) + ' …', font=f) > maxw: ws.pop()
     s = ' '.join(ws)
     while s and d.textlength(s + '…', font=f) > maxw: s = s[:-1]
@@ -147,7 +147,7 @@ def bignum(W, H, t, dur, p):
         n = int(m.group(2).replace(',', '')); cur = int(round(n * ease(t / 0.5)))
         shown = m.group(1) + (f"{cur:,}" if ',' in m.group(2) else str(cur)) + m.group(3)
     r = min(W, H) * (0.34 if H > W else 0.26) * (0.9 + 0.1 * ease(t / 0.3))
-    cy = max(cy, top0(W, H) + min(W, H) * (0.34 if H > W else 0.26) + 90 * u)   # 21 Oct: 'top' label below the story chip
+    cy = max(cy, top0(W, H) + min(W, H) * (0.34 if H > W else 0.26) + 90 * u)   # 'top' label below the story chip
     d.ellipse([W / 2 - r, cy - r, W / 2 + r, cy + r], fill=C(p.get('color'), 'a1'))
     f, _ = fit(d, v, 'display', int(240 * u), r * 1.7, 1, 50)
     d.text((W / 2, cy), shown, font=f, fill=T['panel'] if not T['light'] else T['ink'] if sum(C(p.get('color'), 'a1')) > 500 else (255, 255, 255), anchor='mm')
@@ -193,7 +193,7 @@ def feed(W, H, t, dur, p):
     """Scrolling social timeline: items [{handle, text, metric}] (metric e.g. 'active seconds: all-time high')."""
     im, d = base(W, H, t); u = U(W, H); x0 = W * 0.08; mw = W * 0.84
     items = p.get('items', [])[:4] or [{'handle': 'x', 'text': ''}]
-    ytop = top0(W, H) + (70 * u if p.get('title') else 20 * u)     # 21 Oct: never overlap the story chip
+    ytop = top0(W, H) + (70 * u if p.get('title') else 20 * u)     # never overlap the story chip
     off = ease(t / max(0.6, dur)) * 200 * u; y = ytop - off
     if p.get('title'):
         d.text((x0, top0(W, H) + 10 * u), p['title'], font=F('display', 46 * u), fill=T['a1'])
@@ -274,7 +274,7 @@ def code(W, H, t, dur, p):
 
 
 def terminal(W, H, t, dur, p):
-    """24 Oct (the owner): dense, real-looking session that types live and finishes by ~65% of the shot."""
+    """dense, real-looking session that types live and finishes by ~65% of the shot."""
     im, d = base(W, H, t); u = U(W, H); x0 = W * 0.05; mw = W * 0.90; y0 = top0(W, H) - 40 * u; bh = zone(W, H) - y0 - 20 * u
     card(d, [x0, y0, x0 + mw, y0 + bh], fill=(22, 24, 22), u=u)
     d.rectangle([x0, y0, x0 + mw, y0 + 54 * u], fill=(48, 50, 46))
@@ -320,7 +320,7 @@ def rows(W, H, t, dur, p):
         if t < 0.1 * r: break
         row = list(R_[r]) + ['', '', '', '']; y = y0 + r * lh
         if r % 2 == 0: d.rectangle([W * 0.05, y - 8 * u, W * 0.95, y + lh - 14 * u], fill=T['panel'])
-        # 21 Oct: cells never overlap: each column shrinks to its own width
+        # cells never overlap: each column shrinks to its own width
         def cf(txt, maxw):
             sz = f.size; ff = f
             while sz > 14 and d.textlength(str(txt), font=ff) > maxw: sz = int(sz * 0.92); ff = ff.font_variant(size=sz)
@@ -359,7 +359,7 @@ def quote(W, H, t, dur, p):
     y = top0(W, H) + 150 * u
     for i, l in enumerate(ls):
         if t > 0.12 * i: d.text((x0, y + i * f.size * 1.15), l, font=f, fill=T['ink'])
-    if p.get('by') and t > 0.5:    # 21 Oct: credit wraps/shrinks to fit (was one line running off the frame)
+    if p.get('by') and t > 0.5:    # credit wraps/shrinks to fit (was one line running off the frame)
         fb, lb = fit(d, '— ' + p['by'], 'mono', int(38 * u), W * 0.8, 3, minsize=int(24 * u))
         yb = y + len(ls) * f.size * 1.15 + 30 * u
         for i, l in enumerate(lb): d.text((x0, yb + i * fb.size * 1.3), l, font=fb, fill=T['a2'])
@@ -388,7 +388,7 @@ def browser(W, H, t, dur, p):
 
 def gauge(W, H, t, dur, p):
     """Dial: label, value text, frac 0..1 (position of the needle), sub."""
-    im, d = base(W, H, t); u = U(W, H); r = min(W, H) * 0.36; cx, cy = W / 2, max(H * (0.36 if H > W else 0.44), top0(W, H) + r + 110 * U(W, H))  # 21 Oct: label below the story chip
+    im, d = base(W, H, t); u = U(W, H); r = min(W, H) * 0.36; cx, cy = W / 2, max(H * (0.36 if H > W else 0.44), top0(W, H) + r + 110 * U(W, H))  # label below the story chip
     d.arc([cx - r, cy - r, cx + r, cy + r], 180, 360, fill=T['muted'], width=int(40 * u))
     fr = max(0, min(1, float(p.get('frac', 0.9) or 0.9))) * ease(t / 0.8)
     d.arc([cx - r, cy - r, cx + r, cy + r], 180, 180 + 180 * fr, fill=C(p.get('color'), 'a1'), width=int(40 * u))
@@ -467,7 +467,7 @@ def endcard(W, H, t, dur, p):
     if t > 0.4 and p.get('credit'):
         fc, cl = fit(d, p['credit'], 'body', int(48 * u), W * 0.82, 3)
         for i, l in enumerate(cl): d.text((W / 2, yb + 70 * u + i * fc.size * 1.3), l, font=fc, fill=T['ink'], anchor='mm')
-    # 21 Oct: handle line was faint; larger, full-ink text on a solid pill
+    # handle line was faint; larger, full-ink text on a solid pill
     tags = p.get('tags') or []
     if tags: featuring_block(d, W, H, u, tags)
     fh = F('mono', 40 * u if H > W else 34 * u); hs = 'X: @jxwalker  ·  scorpion-labs.com'
@@ -480,7 +480,7 @@ def endcard(W, H, t, dur, p):
 
 
 def featuring_block(d, W, H, u, tags):
-    """21 Oct (the owner: only one tag in the final frame): 'FEATURING / SOURCES' block of the post's tagged handles,
+    """'FEATURING / SOURCES' block of the post's tagged handles,
     centred between the credit and the handle pill, wrapped to fit inside the safe margins."""
     v = H > W
     tags = ['@' + t.lstrip('@') for t in tags]
@@ -510,7 +510,7 @@ R = dict(headline=headline, bignum=bignum, bars=bars, post=post, feed=feed, inbo
 TEMPLATES = sorted(k for k in R if k not in ('term', 'endcard'))
 
 
-# ---- safe area (20 Oct, the owner: text cut off at the margins). 6% left/right, 5% top, bottom 15% (vertical, X UI) or 5%.
+# ---- safe area. 6% left/right, 5% top, bottom 15% (vertical, X UI) or 5%.
 def safe_rect(W, H):
     return (int(W * 0.06), int(H * 0.05), int(W * 0.94), int(H * (0.85 if H > W else 0.95)))
 

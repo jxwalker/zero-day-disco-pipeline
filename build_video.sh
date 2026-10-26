@@ -17,12 +17,12 @@ while [ $# -gt 0 ]; do case "$1" in
   -h|--help) sed -n 2,7p "$0"; exit 0;;
   *) DAY=$1;; esac; shift; done
 [ -n "$DAY" ] || { sed -n 2,3p "$0"; exit 2; }
-# 13 Oct 2026: the owner dropped the karaoke video on 5 Oct. Daily folders (exactly YYYY-MM-DD) skip it unless --karaoke
+# The legacy karaoke video is off by default. Daily folders (exactly YYYY-MM-DD) skip it unless --karaoke
 # (or KARAOKE=1); grok_video does its own lyric alignment. Special / dated-variant folders are unaffected.
 echo "$(date '+%F %T') pwd=$PWD KARAOKE=${KARAOKE:-} args: $0 $_ORIG_ARGS" >> /home/box/suno-daily/tools/build_video_invocations.log 2>/dev/null || true
 _DAYABS=$(cd "$DAY" 2>/dev/null && pwd -P || echo "$DAY")
 if [ "${KARAOKE:-0}" != 1 ] && [[ "$(basename "$_DAYABS")" =~ ^20[0-9]{2}-[0-9]{2}-[0-9]{2}$ ]]; then
-  echo "KARAOKE_SKIPPED: the daily karaoke video was dropped on 2026-10-05; post grok_video's out= file. (--karaoke to build anyway)"
+  echo "KARAOKE_SKIPPED: the legacy karaoke video is off by default; post grok_video's out= file. (--karaoke to build anyway)"
   exit 0
 fi
 DAY=$(cd "$DAY" && pwd); WORK=$DAY/$WORKN; AUDIO=$DAY/audio.mp3; VIDEO=$DAY/$OUT

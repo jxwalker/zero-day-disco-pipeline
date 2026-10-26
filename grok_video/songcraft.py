@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
-"""Songcraft (24 Oct 2026, the owner: "stories are disconnected ... we need a common thread and the chorus needs a good
-pun/crossover with real life, e.g. Turn Me On ... a much stronger opus review of the lyrics").
-Research: /home/box/suno-daily/research/2026-10-24_songcraft.md
+"""Songcraft: every song follows one common thread, the chorus is a pun/crossover with real life, and an Opus
+judge reviews the lyrics strictly.
 
 1. concepts(): Opus pitches 5 one-thread concepts, each built on an everyday phrase that is true in real life AND in
    the tech story. A second, independent Opus call scores them and picks one -> work_headline/concept.json.
@@ -38,8 +37,8 @@ CRAFT = """CRAFT RULES (from the research brief; these are what make a hit, not 
 - ONE THREAD: the whole song is ONE scenario told by ONE persona. If more than one story is used, the extra stories are
   new events INSIDE the same scenario (verse 2 = "then what happened?"), never a new topic.
 - THE PUN: the title is an everyday phrase people already say in real life (a flirt, a breakup line, an excuse, an
-  office phrase, a parent's line) that is ALSO literally true of the tech story. Model: "Turn Me On" (21 Oct) - a data
-  centre dressed up and stood up, waiting for grid power: "turn me on" = switch on the power AND a flirty line.
+  office phrase, a parent's line) that is ALSO literally true of the tech story. Example: a data
+  centre dressed up and stood up, waiting for grid power: a flirty "switch me on" line = power on AND a flirt.
   Weak = a tech pun only geeks get, or a phrase that is true of only one side.
 - THE CHORUS TURN: the chorus words stay identical but mean something new after each verse; the final chorus swaps
   ONE word so the pun flips (the quotable callback).
@@ -64,10 +63,10 @@ def concepts(stories_md, od):
     open(pf, 'w').write(
         "You are a top-line pop songwriter in a writers' room pitching today's song for the owner's daily AI-news song on X "
         "(bright pop, female lead, 2:30, viral-hit format).\n\n" + CRAFT +
-        "\n\nPitch 5 DIFFERENT concepts. ONE MAIN STORY per song (24 Oct, the owner): pick the single strongest story; other stories "
+        "\n\nPitch 5 DIFFERENT concepts. ONE MAIN STORY per song: pick the single strongest story; other stories "
         "may appear only as one passing line if they live in the same scenario. The chorus hook must be a MAINSTREAM "
         "CROSSOVER: an inside joke for tech people that ALSO makes sense and is fun for someone who never heard the story "
-        "(benchmarks: 'Take It Apart', 'Turn Me On'). For each give the title phrase, what it means in real life, what it means in the tech story, the "
+        "(the standard: a flirty power-on line for a data centre waiting on grid power). For each give the title phrase, what it means in real life, what it means in the tech story, the "
         "one-line thread, the persona singing, the story numbers used, the arc beats (v1, v2, breakdown, final flip = the "
         "one-word swap and what it flips to), the first-3-seconds visual, the quotable line, a comment prompt, and the lead "
         "character's visual (an original woman aged 21-28, a manic-pixie indie engineer; no real people).\n\n"
@@ -79,7 +78,7 @@ def concepts(stories_md, od):
         "You are a ruthless A&R judge who has signed novelty-pop hits. Score each pitched concept 1-10 on pun_strength "
         "(a double meaning a non-tech person gets instantly and smiles at), real_life_truth (people really say this "
         "phrase), thread_fit (ONE main story holds the whole song; multi-story pitches max 5), normie (would someone who never heard the story get and enjoy the hook? must be >= 8 to pick), news_clarity (a stranger can name the story) and "
-        "tiktok (scroll-stop + quotable + loop). Benchmark: 'Turn Me On' for a data centre waiting on grid power = 9-10 "
+        "tiktok (scroll-stop + quotable + loop). Reference point: a flirty power-on line for a data centre waiting on grid power = 9-10 "
         "pun. Be harsh; 8 means it would really work. Pick the best (index i from 0), say why, and give one 'sharpen' "
         "note that would make it better.\n\n" + CRAFT + "\n\nTODAY'S STORIES:\n" + stories_md + "\n\nCONCEPTS:\n" +
         json.dumps([dict(c, i=i) for i, c in enumerate(cs)], indent=1, ensure_ascii=False))
@@ -101,7 +100,7 @@ def concept_block(c, sharpen=''):
             + (f"- A&R sharpen note: {sharpen}\n" if sharpen else '') + "\n" + CRAFT)
 
 
-JAMES_RULES = ("HOUSE RULES (the owner; these override the rubric hints, never ask for the opposite):\n"
+JAMES_RULES = ("HOUSE RULES:\n"
     "- A singable natural line beats an exact number, handle or stat. Never ask to add a number/handle that cramps a line; "
     "a real number counts for specificity only if it sings naturally.\n"
     "- The video must be filmable with NO device screens, phones, laptops or tablets on screen. Never ask to add them; "
@@ -119,9 +118,9 @@ def judge(lyrics, title, concept_txt, stories_md, od, n):
         "You are the strictest lyric editor in pop (think a hit-factory topliner plus a TikTok A&R). Judge this song "
         "on its own merits; you did not write it. Score 1-10 each, where 8 = genuinely release-worthy and 10 = hit:\n"
         "- single_story_focus: the song is built on ONE main story, one scenario, one persona; verse 2 escalates the same situation (two or more separate stories = max 5)\n"
-        "- normie_test: would someone who has never heard the story get AND enjoy the hook? It must be an inside joke for tech people that also works as a mainstream pop line (benchmarks 'Take It Apart', 'Turn Me On' = 9); needs >= 8\n"
+        "- normie_test: would someone who has never heard the story get AND enjoy the hook? It must be an inside joke for tech people that also works as a mainstream pop line (a flirty power-on line for a data centre waiting on grid power = 9); needs >= 8\n"
         "- pun_strength: the title works as an everyday real-life phrase AND literally in the tech story; the chorus "
-        "turns; the final flip lands (benchmark 'Turn Me On' for a data centre waiting on power = 9)\n"
+        "turns; the final flip lands (a flirty power-on line for a data centre waiting on power = 9)\n"
         "- hook_clarity: title chant is first, plain, chantable; a stranger names the story after one listen\n"
         "- story_arc: setup -> escalation -> breakdown confession -> flip; trigger lines hand into the chorus\n"
         "- specificity: concrete images, actions and a real number; show not tell; no filler or clichés\n"

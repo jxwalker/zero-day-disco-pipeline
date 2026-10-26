@@ -67,7 +67,7 @@ def parse_lyrics(text):
             if k == 'end':
                 break
             if k in ('other', 'instrumental') and line_no == 0 and kind not in ('other', 'instrumental'):
-                continue        # 13 Oct: a Suno meta tag right under a section header ([Bridge] [Spoken Word],
+                continue        # a Suno meta tag right under a section header ([Bridge] [Spoken Word],
                                 # [Final Chorus] [Key Change]) is a performance note, not a new section
             sec, kind = name, k
             occ[name] = occ.get(name, 0) + 1

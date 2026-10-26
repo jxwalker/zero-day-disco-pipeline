@@ -1,4 +1,4 @@
-"""Story cards (P7, the owner 12 Oct): each verse section gets 1-2 short news cards tied to the story being sung there:
+"""Story cards : each verse section gets 1-2 short news cards tied to the story being sung there:
 a real @handle or company + the key number/fact + a 3-6 word headline ("B300 RENTALS +38%", "@morluto REA: 100K
 STARS"), timed to the lyric line about that story. Opus writes them from stories.md ONLY; every word, number and handle
 on a card is checked against stories.md (spelling included) and a card that fails the check is dropped. Chorus slams stay

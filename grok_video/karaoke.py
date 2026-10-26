@@ -1,4 +1,4 @@
-"""karaoke mode: the daily video in the ONUG "No Window" format (default since 20 Oct 2026). See README.md "karaoke".
+"""karaoke mode: the daily video in the karaoke v3 format (default). See README.md "karaoke".
 usage: karaoke.py DAY_DIR [--out FILE] [--work DIR] [--skip-gen] [--replan] [--no-fallback] [--stills N] [--clips N]
                   [--time-limit MIN] [--max-pct P] [--no-16x9]  (+ any grok_video.py args, passed to the fallback)
 Writes <day>/video_karaoke.mp4 (1080x1920, posted), video_karaoke_chat.mp4 (<25 MB), video_karaoke_16x9.mp4.
@@ -29,7 +29,7 @@ SCHEMA = {"type": "object", "required": ["scenes", "lines", "intro", "breaks", "
               "credit": {"type": "string"},
               "design": {"type": "object", "required": ["palette", "type", "lyric_style", "lyric_pos", "transition", "grade", "texture", "why"],
                          "properties": {k: {"type": "string"} for k in ("palette", "type", "lyric_style", "lyric_pos", "transition", "grade", "texture", "why")}}}}
-SCREEN_RULE = (" NO LAPTOPS anywhere in the frame (21 Oct, the owner: lid-screen laptops). Screens only as wall-mounted displays, "
+SCREEN_RULE = (" NO LAPTOPS anywhere in the frame. Screens only as wall-mounted displays, "
                "rack-mounted monitors or holographic HUDs floating in the air, seen straight-on; no handheld tablet or phone "
                "screen turned toward the camera; never an image or glow on the back of any device.")
 NO_LAPTOP = [(re.compile(r'\b((a|an|the|his|her|their|open|gaming|silver) )*laptops?\b', re.I), 'a wall-mounted display'),
@@ -38,20 +38,20 @@ NO_LAPTOP = [(re.compile(r'\b((a|an|the|his|her|their|open|gaming|silver) )*lapt
 
 
 def no_laptops(prompt):
-    """21 Oct: swap laptops/tablets/phones for wall displays and holographic HUDs (Grok keeps putting screens on lids)."""
+    """swap laptops/tablets/phones for wall displays and holographic HUDs (Grok keeps putting screens on lids)."""
     for rx, rep in NO_LAPTOP: prompt = rx.sub(rep, prompt)
     return prompt
 
 
 def direction(day):
-    """21 Oct: optional <day>/direction.txt (or GV_DIRECTION=path). Free text for the planner, plus optional
+    """optional <day>/direction.txt (or GV_DIRECTION=path). Free text for the planner, plus optional
     'LEAD: ...' (one consistent lead character, made from a reference still) and 'PALETTE: <name>' lines."""
     pth = os.environ.get('GV_DIRECTION') or os.path.join(day, 'direction.txt')
     txt = G.read(pth).strip() if os.path.exists(pth) else ''
     lead = re.search(r'^LEAD:\s*(.+?)(?=^\w+:|\Z)', txt, re.M | re.S)
     pal = re.search(r'^PALETTE:\s*([\w-]+)', txt, re.M)
     return {'text': txt, 'lead': ' '.join(lead.group(1).split()) if lead else '', 'palette': pal.group(1) if pal else ''}
-LOOK = (" Zero Day Disco house style 'Acid Deadpan' (24 Oct 2026): live-action music-video frame on 35mm film, fine grain, "
+LOOK = (" Zero Day Disco house style 'Acid Deadpan': live-action music-video frame on 35mm film, fine grain, "
         "flat saturated colour blocking in Klein blue, acid green and safety orange (one bold accent, never rainbow), "
         "symmetrical centred composition, 24mm wide lens, hard clean top light, Wes-Anderson-meets-Kubrick framing, "
         "recurring props: orange-and-black warning tape, an orange rotary phone; clean negative space in the lower third, vertical 9:16. "
@@ -81,7 +81,7 @@ def lyric_lines(day):
     return out
 
 
-# ---------------------------------------------------------------- alignment (ONUG method)
+# ---------------------------------------------------------------- alignment (demucs + stable-ts)
 DEMUCS = os.environ.get('DEMUCS', '/home/box/venvs/align/bin/demucs')
 ALIGN_PY = os.environ.get('PY', '/home/box/venvs/align/bin/python')
 _ALIGN_SRC = r"""
@@ -133,7 +133,7 @@ def line_score(ln, act, hop):
 
 
 def align_karaoke(day, work, status):
-    """demucs vocals -> stable-ts forced alignment of lyrics.txt (the ONUG method, ~1-5 min on the box CPU) ->
+    """demucs vocals -> stable-ts forced alignment of lyrics.txt (~1-5 min on the box CPU) ->
     per-line sanity score. Returns (L, report)."""
     aw = os.path.join(work, 'kalign'); os.makedirs(aw, exist_ok=True)
     audio = G.audio_path(day); t0 = time.time()
@@ -275,7 +275,7 @@ def fact_lint(P, day):
 
 # ---------------------------------------------------------------- media
 def dup_halves(png):
-    """Grok sometimes returns a 9:16 picture that is two copies of the same frame stacked (seen 20 Oct)."""
+    """Grok sometimes returns a 9:16 picture that is two copies of the same frame stacked (seen)."""
     try:
         import numpy as np
         from PIL import Image
@@ -322,9 +322,9 @@ def screen_check(gdir, jobs, status, tag):
         "phone that the person is using has its screen facing away from the camera while the shot is about what is on it "
         "(we only see the back of the lid/monitor, which looks like a screen); a screen glows on the wrong side; a device "
         "is physically impossible; the frame is two stacked copies of the same picture; a robot or android; garbled "
-        "readable text that is prominent; ANY print, patch, logo or tool/prop-shaped graphic on clothing; a rigid prop that bends, melts or changes size; badly malformed hands or faces; anyone sticking their tongue out, pulling a silly/bratty face, gurning, pouting or making a duck face (24 Oct, the owner); any on-screen text (watch, sign, bubble) that is upside down, mirrored or garbled (24 Oct, the owner: 'U up is upside down').; any glasses or eyewear on the lead, or eyewear rendering artefacts (warped, melted, doubled, floating or half-missing frames or lenses, frames fused into skin or hair) (24 Oct, the owner: 'her glasses render wrong'). A laptop seen from behind is ONLY acceptable if "
+        "readable text that is prominent; ANY print, patch, logo or tool/prop-shaped graphic on clothing; a rigid prop that bends, melts or changes size; badly malformed hands or faces; anyone sticking their tongue out, pulling a silly/bratty face, gurning, pouting or making a duck face; any on-screen text (watch, sign, bubble) that is upside down, mirrored or garbled.; any glasses or eyewear on the lead, or eyewear rendering artefacts (warped, melted, doubled, floating or half-missing frames or lenses, frames fused into skin or hair). A laptop seen from behind is ONLY acceptable if "
         "its lid back is plain (no picture) and we are clearly looking at the person's face, not the screen; when unsure, "
-        "reject. 21 Oct: ANY laptop at all is a reject. Wall displays, rack monitors and holographic HUDs are fine.\nGive a short issue for each problem image, '' otherwise. id = the file name without .png (for _f.png frames use the name without _f.png).\n\nFILES:\n"
+        "reject.: ANY laptop at all is a reject. Wall displays, rack monitors and holographic HUDs are fine.\nGive a short issue for each problem image, '' otherwise. id = the file name without .png (for _f.png frames use the name without _f.png).\n\nFILES:\n"
         + '\n'.join(names))
     try:
         res, meta = SO.run_claude(pf, gdir, SCREEN_SCHEMA, 420, tools='Read', effort='medium')
@@ -335,7 +335,7 @@ def screen_check(gdir, jobs, status, tag):
     G.save_json(rs, os.path.join(gdir, f'screen_check_{tag}.json'))
     for r in rs.values():
         r['ok'] = not ((r.get('user_faces_camera_behind_device') and r.get('display_visible_to_camera')) or r.get('other_problem')
-                       or r.get('laptop_present') or r.get('screen_on_outer_lid') or r.get('screen_not_facing_camera'))  # 21 Oct: stricter
+                       or r.get('laptop_present') or r.get('screen_on_outer_lid') or r.get('screen_not_facing_camera'))  # stricter
     bad = {k for k, r in rs.items() if not r.get('ok')}
     G.log(f"karaoke: screen check {tag}: {len(rs)} checked, rejected {sorted(bad)}")
     status.setdefault('screen_checks', {})[tag] = {k: r.get('issue') for k, r in rs.items() if not r.get('ok')}
@@ -345,7 +345,7 @@ def screen_check(gdir, jobs, status, tag):
 SPARK_SSH = ['ssh', '-o', 'ConnectTimeout=10', '-o', 'BatchMode=yes', '-i', os.path.expanduser(os.environ.get('SPARK_SSH_KEY', '~/.ssh/id_ed25519')), os.environ.get('SPARK_SSH', 'user@spark-host')]
 
 def local_clips(cj, mv, status, gdir, deadline):
-    """24 Oct 2026 (the owner approved LTX for b-roll): tiers per clip.
+    """tiers per clip.
     premium = Runway hero_jobs (left to the Grok batch here; the agent replaces them via the Runway runbook);
     hero = the GV_WAN_HEROES (2) most-used other scenes -> Wan 2.2 on the Spark;
     b-roll = everything else -> LTX draft + strict QC -> one LTX re-roll -> Wan 2.2 -> Grok/Runway.
@@ -387,19 +387,19 @@ def generate(P, work, a, deadline, status):
     for v in [v for ln in P['lines'] for v in ln['v']] + P['intro'] + P['breaks'] + P['outro']:
         if v.get('kind') == 'scene': used[v.get('id')] = used.get(v.get('id'), 0) + 1
     DIR = direction(os.path.dirname(os.path.abspath(work)) if not getattr(a, 'day', None) else a.day)
-    LN = G.lead_noun(os.path.dirname(os.path.abspath(work)) if not getattr(a, 'day', None) else a.day)   # 25 Oct male lead
+    LN = G.lead_noun(os.path.dirname(os.path.abspath(work)) if not getattr(a, 'day', None) else a.day)   # male lead
     ref = f"{gdir}/lead_ref.png"
-    if DIR['lead'] and not os.path.exists(ref):     # 21 Oct: one consistent lead from a reference still
+    if DIR['lead'] and not os.path.exists(ref):     # one consistent lead from a reference still
         rb = R.Batcher(gdir, {'gen': 2}, batch_size=1, max_parallel=1, deadline=deadline - 12 * 60, tag='leadref')
         rb.run([{'id': 'lead_ref', 'kind': 'gen', 'aspect': '9:16', 'out': ref, 'prompt':
                  "Full-body character reference portrait, plain dark studio background, even soft light, facing camera: "
                  + DIR['lead'] + f" Clearly an adult {LN}, no glasses. An original person, not any real person or celebrity. No text, no logos."}])
     lead_ok = DIR['lead'] and os.path.exists(ref)
-    if not any('[PIP]' in s['prompt'] for s in scenes) and len(scenes) > 4:   # 24 Oct: Pip cameo is mandatory
+    if not any('[PIP]' in s['prompt'] for s in scenes) and len(scenes) > 4:   # Pip cameo is mandatory
         k = next((i for i, s in enumerate(scenes) if '[CHORUS]' in s['prompt']), len(scenes) // 2)
         scenes[k] = dict(scenes[k], prompt='[PIP] ' + scenes[k]['prompt'] + ' Our small mascot toy is in the background, reacting with a quick hop.')
         G.log(f"karaoke: no [PIP] cameo planned; added one to {scenes[k]['id']}")
-    # 25 Oct (the owner: "wrenches on her shirt", "floppy wrench in her pocket"): plain solid wardrobe, no prop-pocketing
+    # plain solid wardrobe, no prop-pocketing
     sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'local_gen'))
     import strict_qc as SQ
     if DIR['lead']: DIR['lead'] = SQ.strip_graphics(DIR['lead']) + SQ.PLAIN_RULE
@@ -416,7 +416,7 @@ def generate(P, work, a, deadline, status):
     jobs = []
     for s in scenes:
         pr = no_laptops(s['prompt'].strip())
-        if '[PIP]' in pr:     # 24 Oct Pip cameo: edit from the locked Pip reference, house look, mascot allowed
+        if '[PIP]' in pr:     # Pip cameo: edit from the locked Pip reference, house look, mascot allowed
             lk = (LOOK_CHORUS if '[CHORUS]' in pr else LOOK).replace('No robots, ', '')
             pr = re.sub(r'\[(PIP|CHORUS|LEAD)\]', '', pr).strip()
             jobs.append({'id': s['id'], 'kind': 'edit', 'images': [G.PIP_REF], 'out': f"{gdir}/{s['id']}.png", 'prompt':
@@ -424,7 +424,7 @@ def generate(P, work, a, deadline, status):
                          "in a real photographed scene, vertical 9:16, the toy small in frame: " + pr + lk})
             continue
         is_lead = bool(re.search(r'\[LEAD\]', pr)); pr = pr.replace('[LEAD]', '').strip()
-        lk = LOOK_CHORUS if '[CHORUS]' in pr else LOOK; pr = pr.replace('[CHORUS]', '').strip()   # 24 Oct house style
+        lk = LOOK_CHORUS if '[CHORUS]' in pr else LOOK; pr = pr.replace('[CHORUS]', '').strip()   # house style
         if is_lead and lead_ok:
             jobs.append({'id': s['id'], 'kind': 'edit', 'images': [ref], 'out': f"{gdir}/{s['id']}.png", 'prompt':
                          f"Keep the exact same {LN} from the reference image: same face, hair, body and outfit. New scene, vertical 9:16: "
@@ -461,21 +461,21 @@ def generate(P, work, a, deadline, status):
         for j in jobs:
             if j['id'] in bad and os.path.exists(j['out']):
                 os.replace(j['out'], j['out'] + '.screen.png'); status.setdefault('screen_rejected', []).append(j['id'])
-    try:                                           # 24 Oct songcraft: vision check each still vs its sung line
+    try:                                           # vision check each still vs its sung line
         import storyboard as SB
         SB.line_check(P, scenes, jobs, gdir, lyric_lines(getattr(a, 'day', None) or os.path.dirname(os.path.abspath(work))), status, LOOK, deadline)
     except Exception as e:
         status.setdefault('warnings', []).append(f'line check failed ({str(e)[:120]})')
     status['stills_made'] = sum(1 for j in jobs if os.path.exists(j['out']))
-    if os.environ.get('GV_HERO', '1') != '0':     # 24 Oct: Runway hero-shot jobs (agent runs them via MCP; Grok clip is the fallback)
+    if os.environ.get('GV_HERO', '1') != '0':     # Runway hero-shot jobs (agent runs them via MCP; Grok clip is the fallback)
         try:
             import storyboard as SB
             status['hero_jobs'] = [j['id'] for j in SB.hero_plan(P, getattr(a, 'day', None) or os.path.dirname(os.path.abspath(work)), gdir)]
-            if status['hero_jobs'] and os.environ.get('GV_SHEETS', '1') != '0':   # 24 Oct: director's shot sheet, score >= 8 before credits
+            if status['hero_jobs'] and os.environ.get('GV_SHEETS', '1') != '0':   # director's shot sheet, score >= 8 before credits
                 status['hero_sheets'] = {j['id']: j.get('spec_score') for j in SB.hero_sheets(P, gdir)}
         except Exception as e:
             status.setdefault('warnings', []).append(f'hero plan failed ({str(e)[:120]})')
-    for s in scenes:                               # 23 Oct (the owner: no still images): every scene is animated
+    for s in scenes:                               # every scene is animated
         if not (s.get('motion') or '').strip():
             s['motion'] = "Energetic natural movement of the person with a smooth handheld camera push-in."
     mv = sorted([s for s in scenes if s.get('motion') and os.path.exists(f"{gdir}/{s['id']}.png") and not dup_halves(f"{gdir}/{s['id']}.png")],
@@ -483,11 +483,11 @@ def generate(P, work, a, deadline, status):
     cj = [{'id': 'v_' + s['id'], 'kind': 'i2v', 'image': f"{gdir}/{s['id']}.png", 'duration': 6,
            'prompt': no_laptops(s['motion'].replace('[LEAD]', '')) + " Realistic natural motion, cinematic, no text, no laptops, keep the same people and outfits.", 'out': f"{gdir}/{s['id']}.mp4"} for s in mv]
     if cj and os.environ.get('GV_LOCAL', '1') != '0' and time.time() < deadline - 20 * 60:
-        cj = local_clips(cj, mv, status, gdir, deadline)   # 24 Oct: LTX b-roll / Wan hero on the Spark; leftovers go to Grok
+        cj = local_clips(cj, mv, status, gdir, deadline)   # LTX b-roll / Wan hero on the Spark; leftovers go to Grok
     if cj and time.time() < deadline - 6 * 60:
         b2 = R.Batcher(gdir, {'i2v': len(cj) + 2}, batch_size=3, max_parallel=3, timeout=900, deadline=deadline, tag='clips')
         b2.run(cj)
-        # 25 Oct: strict dense-frame QC (0.25 s contact sheets, prop rigidity, wardrobe, hand-prop, 2 reviewers on
+        # strict dense-frame QC (0.25 s contact sheets, prop rigidity, wardrobe, hand-prop, 2 reviewers on
         # hero/prop shots, fail closed) on EVERY Grok clip; then the old late-frame screen check as well
         from concurrent.futures import ThreadPoolExecutor
         wd = os.environ.get('GV_WARDROBE', '')
@@ -526,7 +526,7 @@ def map_lines(P, L, day):
 
 
 def wcut(s, n):
-    """21 Oct: shorten on a word boundary (never leave a cut-off word like 'Vir' on screen)."""
+    """shorten on a word boundary (never leave a cut-off word like 'Vir' on screen)."""
     s = str(s or '').strip()
     if len(s) <= n: return s
     return (s[:n].rsplit(' ', 1)[0] if ' ' in s[:n] else s[:n]).rstrip(' ,;:-')
@@ -539,7 +539,7 @@ def line_card(text, fact, used, handle=''):
     opts = [('headline', {'kicker': key, 'text': text, 'sub': wcut(fact, 80)}),
             ('quote', {'text': text, 'by': ('@' + handle) if handle else wcut(fact, 60)}),
             ('browser', {'url': 'news', 'site': 'TODAY', 'headline': text, 'lede': wcut(fact or text, 120), 'highlight': wcut(fact or text, 30)})]
-    # 21 Oct: no phone 'screen' fallback (the owner: no laptops, tablets or phones)
+    # no phone 'screen' fallback
     for g, pp in opts:
         if used.get(g, 0) < MAX_PER_TEMPLATE:
             return {'kind': 'gfx', 'g': g, 'p': pp}
@@ -547,7 +547,7 @@ def line_card(text, fact, used, handle=''):
 
 
 def timeline(P, L, dur, day, gdir, bad_scenes=()):
-    """LINE-LOCKED (20 Oct, the owner: scenes must match the line being sung): the shot(s) under each sung line are that
+    """LINE-LOCKED: the shot(s) under each sung line are that
     line's own planned visuals, nothing else; substitutes are redrawn for the same line (line_card). Pools (intro,
     breaks, outro) are only used where nothing is sung."""
     m = map_lines(P, L, day); inv = {v: k for k, v in m.items()}
@@ -612,7 +612,7 @@ def timeline(P, L, dur, day, gdir, bad_scenes=()):
             s_['v'] = v = line_card(txt, spec.get('fact', ''), used); s_['redrawn'] = 'scene missing/rejected'
         if v.get('kind') == 'gfx':
             g = 'terminal' if v.get('g') == 'term' else v.get('g')
-            if used.get(g, 0) >= (MAX_PER_TEMPLATE * 3 if g == 'terminal' else MAX_PER_TEMPLATE):   # 24 Oct the owner: story terminals wanted
+            if used.get(g, 0) >= (MAX_PER_TEMPLATE * 3 if g == 'terminal' else MAX_PER_TEMPLATE):   # story terminals wanted
                 s_['v'] = v = line_card(txt, spec.get('fact', ''), used); s_['redrawn'] = f'template {g} over cap'
                 g = v['g']
             used[g] = used.get(g, 0) + 1
@@ -625,14 +625,14 @@ def timeline(P, L, dur, day, gdir, bad_scenes=()):
             k = seen.get(sid, 0); seen[sid] = k + 1
             if os.path.exists(clip) and os.path.getsize(clip) > 10000:
                 s['src'] = ('clip', clip, [0.0, 2.6, 1.2][k % 3])
-            else:                                  # 23 Oct: NO still images; a scene without a clip becomes its line's graphic
+            else:                                  # NO still images; a scene without a clip becomes its line's graphic
                 li = s['line']; spec = pl.get(inv.get(li), {}) if li is not None else {}
                 v = line_card(L[li]['text'] if li is not None else title, spec.get('fact', ''), used)
                 used[v['g']] = used.get(v['g'], 0) + 1
                 s['v'] = v; s['redrawn'] = 'scene has no clip (no stills rule)'; s['src'] = ('gfx', v['g'], dict(v.get('p') or {}))
         else:
             s['src'] = ('gfx', v.get('g'), dict(v.get('p') or {}))
-    # 23 Oct: stamp/slam effects at most STAMP_MAX per video (stamp template + terminal stamps)
+    # stamp/slam effects at most STAMP_MAX per video (stamp template + terminal stamps)
     ns = 0
     for s in shots:
         if s['src'][0] != 'gfx': continue
@@ -648,7 +648,7 @@ def timeline(P, L, dur, day, gdir, bad_scenes=()):
     return shots
 
 
-# ---------------------------------------------------------------- pacing (23 Oct 2026, the owner)
+# ---------------------------------------------------------------- pacing
 # "cuts need to be quick throughout ... roughly 1-2 s per shot, landing on the beat; about 0.5-1 s in the choruses and
 # post-chorus chants; never hold longer than about 2.5 s, even in the breakdown; split long clips into beat-synced sub-cuts"
 STAMP_MAX = 2
@@ -687,7 +687,7 @@ def beat_grid(audio, dur):
 
 
 def section_is_chorus(t, L, day):
-    """True inside a chorus/hook/refrain section (25 Oct: the only place a clip may repeat)."""
+    """True inside a chorus/hook/refrain section."""
     secs = lyric_sections(day); timed = [i for i, ln in enumerate(L) if ln.get('start') is not None]
     if not timed or t < L[timed[0]]['start']: return False
     cur = None
@@ -729,12 +729,12 @@ def pace(shots, L, day, audio, dur):
             try: _dur[c] = float(subprocess.run(['ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', c], capture_output=True, text=True).stdout.strip())
             except Exception: _dur[c] = 0.0
         return _dur[c]
-    _ex = set(filter(None, os.environ.get('GV_CLIP_EXCLUDE', '').split(',')))   # 25 Oct: QC-failed clips
+    _ex = set(filter(None, os.environ.get('GV_CLIP_EXCLUDE', '').split(',')))   # QC-failed clips
     pool = [c for c in pool if os.path.basename(c) not in _ex]
     FORCE_GFX = [tuple(map(float, w.split('-'))) for w in os.environ.get('GV_FORCE_GFX', '').split(',') if w]
     outside = {}; chorus_used = []; use_log = []; ch = {'n': 0, 'prev': False}; ch_last = {}
     def allowed(c, chorus):
-        # 25 Oct rule (the owner): no repeats outside choruses. A clip >=5 s may give 2 distinct segments outside;
+        # rule : no repeats outside choruses. A clip >=5 s may give 2 distinct segments outside;
         # inside choruses a clip may come back as a deliberate callback (total cap CAP).
         if os.path.basename(c) in _ex or clips_seen.get(c, 0) >= CAP: return False
         if chorus: return ch_last.get(c) != ch['n']   # once per chorus; may return on a later chorus
@@ -755,7 +755,7 @@ def pace(shots, L, day, audio, dur):
         use_log.append((path.split('/')[-1], round(t or 0, 2), f"chorus{ch['n']}" if chorus else 'other'))
         k = clips_seen.get(path, 0); clips_seen[path] = k + 1
         off = [0.0, 3.0, 1.5, 4.2, 0.6, 2.4, 1.8, 3.6][k % 8]
-        try:   # 25 Oct: short hero clips (2-3 s) - keep the in-point inside the clip
+        try:   # short hero clips (2-3 s) - keep the in-point inside the clip
             cd = float(subprocess.run(['ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', path], capture_output=True, text=True).stdout.strip())
             off = off % max(0.01, cd - 1.6) if cd - 1.6 > 0.05 else 0.0
         except Exception: pass
@@ -790,7 +790,7 @@ def pace(shots, L, day, audio, dur):
         alt = near_clip(i) if s['src'][0] == 'gfx' else None
         for q, (a, b) in enumerate(fin):
             n_ = dict(s, t0=a, t1=b, energy=e)
-            _fg = any(a < y and b > x for x, y in FORCE_GFX)   # 25 Oct: QC-flagged windows -> graphic
+            _fg = any(a < y and b > x for x, y in FORCE_GFX)   # QC-flagged windows -> graphic
             if s['src'][0] == 'clip':
                 cs = None if _fg else clip_src(s['src'][1], chorus=e_ch, t=a)
                 if cs is None:   # every passing clip used CAP times: borrow the nearest graphic instead
@@ -880,12 +880,12 @@ def trans_vf(design, i, nfr):
             'punch': "scale=iw*1.08:ih*1.08,crop=iw/1.08:ih/1.08" if False else "zoompan=z='if(lt(on,5),1.10-0.02*on,1)':d=1:s=WxH:fps=30",
             'slide': "fade=in:st=0:d=0.08",
             'glitch': "rgbashift=rh=-8:bh=8:enable='lt(t,0.12)'",
-            # 26 Oct (the owner): no VHS/tape lines. Chorus-drop accent = hard cut + brief magenta flash + brief RGB split, no noise/tblend
+            # no VHS/tape lines. Chorus-drop accent = hard cut + brief magenta flash + brief RGB split, no noise/tblend
             'vhs': "fade=in:st=0:d=0.06:color=0xFF28C8,rgbashift=rh=-10:bh=10:enable='lt(t,0.12)'"}.get(t, '')
 
 
 def seg_design(des, s, L, day):
-    """24 Oct house style: chorus-drop shots switch to the Glitch Tape transition/grade; others keep Acid Deadpan."""
+    """house style: chorus-drop shots switch to the Glitch Tape transition/grade; others keep Acid Deadpan."""
     if not des.get('house') or s.get('src', [''])[1] == 'endcard': return des
     try:
         if energy_at((s['t0'] + s['t1']) / 2, L, day) == 'fast' and s['t0'] > 1.0:
@@ -924,7 +924,7 @@ def render_seg(job):
     if src == 'endcard':
         p.update(endp)
         bc = p.pop('bg_clip', None)
-        if bc and os.path.exists(bc):              # 23 Oct: moving end-card background (no stills)
+        if bc and os.path.exists(bc):              # moving end-card background (no stills)
             spd = min(1.0, 6.0 / max(dur, 0.1))
             raw = subprocess.run(['ffmpeg', '-v', 'error', '-i', bc, '-vf', f"setpts=PTS/{spd},{_vf_fill(W, H)},fps={FPS}",
                                   '-frames:v', str(nfr), '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'], capture_output=True).stdout
@@ -938,7 +938,7 @@ def render_seg(job):
         try:
             if bgframes: p['bg'] = bgframes[min(k, len(bgframes) - 1)]
             im = kgfx.render(src if src in kgfx.R else 'headline', W, H, toff + k / FPS, tdur, p)
-            if src != 'endcard':                   # 23 Oct: constant gentle push so no graphic ever sits still
+            if src != 'endcard':                   # constant gentle push so no graphic ever sits still
                 zz = 1.0 + 0.022 * ((toff + k / FPS) / max(tdur, 0.5))
                 cw, ch = int(W / zz), int(H / zz)
                 im = im.crop(((W - cw) // 2, (H - ch) // 2, (W - cw) // 2 + cw, (H - ch) // 2 + ch)).resize((W, H), Image.BILINEAR)
@@ -961,7 +961,7 @@ def band_png(W, H, path, design=None):
         im.save(path); return
     y0 = int(H * (0.60 if H > W else 0.62))
     for y in range(y0, H):
-        a = int(min(1, (y - y0) / (H * 0.10)) * 205)   # 21 Oct: was 175, darker band for dark photos
+        a = int(min(1, (y - y0) / (H * 0.10)) * 205)   # was 175, darker band for dark photos
         for xx in range(W): px[xx, y] = bc + (a,)
     im.save(path)
 
@@ -1090,7 +1090,7 @@ def spelling(texts, day):
 
 
 def fit_check(fitlog, texts, day):
-    """21 Oct: kgfx2 logs text that could not be shrunk to fit, and every string on each shot's final frame. A final-frame
+    """kgfx2 logs text that could not be shrunk to fit, and every string on each shot's final frame. A final-frame
     word that is not in the source text but is a strict prefix of a source word is a truncated fragment = failure."""
     srcw = set(norm(G.read(os.path.join(day, 'title.txt')) + ' ' + G.read(os.path.join(day, 'stories.md')) + ' ' + G.read(os.path.join(day, 'lyrics.txt'))).split())
     fails, trunc = [], set()
@@ -1109,7 +1109,7 @@ def fit_check(fitlog, texts, day):
         elif 'final' in r:
             fw = norm(r['final']).split()
             for i, w in enumerate(fw):
-                # 24 Oct: 'NBC News' vs source handle '@NBCNews' is not truncation; skip if w+next word is a source word
+                # 'NBC News' vs source handle '@NBCNews' is not truncation; skip if w+next word is a source word
                 if i + 1 < len(fw) and (w + fw[i + 1]) in srcw: continue
                 if (w + '-') in r['final'].lower(): continue  # hyphenated prefix like 'ex-editors'
                 if len(w) >= 2 and not w.isdigit() and w not in srcw and not real(w) and any(sw.startswith(w) and sw != w for sw in srcw):
@@ -1149,7 +1149,7 @@ def main():
     ap.add_argument('--skip-gen', action='store_true'); ap.add_argument('--replan', action='store_true')
     ap.add_argument('--no-fallback', action='store_true'); ap.add_argument('--no-16x9', action='store_true')
     ap.add_argument('--stills', type=int, default=int(os.environ.get('GV_KARAOKE_STILLS', 14)))
-    ap.add_argument('--clips', type=int, default=int(os.environ.get('GV_KARAOKE_CLIPS', 14)))   # 23 Oct: no stills -> every scene is a clip
+    ap.add_argument('--clips', type=int, default=int(os.environ.get('GV_KARAOKE_CLIPS', 14)))   # no stills -> every scene is a clip
     ap.add_argument('--time-limit', type=float, default=float(os.environ.get('GV_KARAOKE_LIMIT_MIN', 40)))
     ap.add_argument('--whisper-model', default='medium')
     a, passthru = ap.parse_known_args()
@@ -1208,7 +1208,7 @@ def main():
         if not P or P.get('ver') != PLAN_VER:
             t0 = time.time()
             try:
-                import storyboard as SB                    # 24 Oct songcraft: treatment + lead bible + shot list
+                import storyboard as SB                    # treatment + lead bible + shot list
                 try: SB.ensure_direction(day, lyric_lines(day))
                 except Exception as e: status['warnings'].append(f'storyboard direction failed ({str(e)[:120]})')
                 P = plan_opus(day, work, a.stills, a.clips)
@@ -1245,7 +1245,7 @@ def main():
             for s_ in shots:
                 if s_['src'][0] == 'gfx': used[s_['src'][1]] = used.get(s_['src'][1], 0) + 1
             bad_n = [r['n'] for r in tab if not r['match']]
-            _keep = set(filter(None, os.environ.get('GV_MATCH_KEEP', '').split(',')))   # 24 Oct: hand-verified clips are never redrawn
+            _keep = set(filter(None, os.environ.get('GV_MATCH_KEEP', '').split(',')))   # hand-verified clips are never redrawn
             bad_n = [n_ for n_ in bad_n if not ((shots[n_]['src'][0] == 'clip' and os.path.splitext(os.path.basename(str(shots[n_]['src'][1])))[0] in _keep) or (shots[n_]['src'][0] == 'gfx' and shots[n_]['src'][1] in _keep))]
             for n_ in bad_n:
                 s_ = shots[n_]; li = s_['line']; spec = pl_.get(inv_.get(li), {})
@@ -1266,13 +1266,13 @@ def main():
         shots, bpm_ = pace(shots, L, day, audio, dur); status['bpm'] = round(bpm_, 1)
         G.log(f'karaoke: paced {len(shots)} shots at {bpm_:.1f} BPM')
         end_t = shots[-1]['t0']
-        story = []   # 23 Oct: no story banner/chip over the video (standing rule)
+        story = []   # no story banner/chip over the video (standing rule)
         stills = sorted(f for f in os.listdir(gdir) if f.endswith('.png'))
         endp = {'title': G.read(os.path.join(day, 'title.txt')).strip(), 'credit': (P.get('credit') or '')[:80],
                 'sub': 'Grok Bot · ' + time.strftime('%-d %b %Y', time.strptime(os.path.basename(day)[:10], '%Y-%m-%d')) if re.match(r'\d{4}-\d\d-\d\d', os.path.basename(day)) else '',
                 'bg': os.path.join(gdir, stills[-1]) if stills else None}
-        endp['tags'] = end_tags(day)   # 21 Oct: end card lists the post's tagged accounts
-        if os.environ.get('GV_ENDCARD_PHOTO') != '1':  # 25 Oct: un-QC'd lead still behind the end card failed strict QC (plaid shirt) -> plain theme bg
+        endp['tags'] = end_tags(day)   # end card lists the post's tagged accounts
+        if os.environ.get('GV_ENDCARD_PHOTO') != '1':  # un-QC'd lead still behind the end card failed strict QC (plaid shirt) -> plain theme bg
             endp['bg'] = None
         if P.get('scenes') and stills:                # prefer the outro scene as the end-card background
             for v in P.get('outro', [])[::-1]:
@@ -1289,10 +1289,10 @@ def main():
             sd = os.path.join(work, f'seg_{W}x{H}'); os.makedirs(sd, exist_ok=True)
             jobs += [(s, W, H, os.path.join(sd, f'{i:03d}.mp4'), endp, seg_design(DES, s, L, day), i) for i, s in enumerate(shots)]
         rt = time.time()
-        fitlog = os.path.join(work, 'fit_log.jsonl'); open(fitlog, 'w').close(); os.environ['KGFX_FITLOG'] = fitlog  # 21 Oct
+        fitlog = os.path.join(work, 'fit_log.jsonl'); open(fitlog, 'w').close(); os.environ['KGFX_FITLOG'] = fitlog  
         with Pool(min(8, os.cpu_count() or 4)) as pool:
             segs = pool.map(render_seg, jobs, chunksize=1)
-        os.environ.pop('KGFX_FITLOG', None)   # 21 Oct: margin_check's synthetic truncation cases must not count
+        os.environ.pop('KGFX_FITLOG', None)   # margin_check's synthetic truncation cases must not count
         results = {}
         texts = all_texts(shots, story, endp) + [ln['text'] for ln in L]
         for W, H in sizes:
@@ -1308,11 +1308,11 @@ def main():
             dst = out if H > W else wide
             tmp = dst + '.part.mp4'
             subprocess.run(['ffmpeg', '-v', 'error', '-y', '-i', bg, '-i', bandf, '-i', audio, '-filter_complex',
-                            f"[0:v][1:v]overlay=0:0,ass='{assf}',scale=in_range=auto:out_range=tv,format=yuv420p[v]",  # 21 Oct: jpeg-range sources gave yuvj420p
+                            f"[0:v][1:v]overlay=0:0,ass='{assf}',scale=in_range=auto:out_range=tv,format=yuv420p[v]",  # jpeg-range sources gave yuvj420p
                             '-map', '[v]', '-map', '2:a', '-c:v', 'libx264', '-preset', 'medium', '-crf', '20', '-pix_fmt', 'yuv420p', '-color_range', 'tv',
                             '-profile:v', 'high', '-r', str(FPS), '-c:a', 'aac', '-b:a', '192k', '-t', f'{dur:.3f}', '-movflags', '+faststart', tmp], check=True)
             os.replace(tmp, dst); results[tag] = dst
-        # chat copy < 25 MB (21 Oct): two-pass at a bitrate derived from the duration, 22 MB target, retry lower if over
+        # chat copy < 25 MB: two-pass at a bitrate derived from the duration, 22 MB target, retry lower if over
         for tgt in (22, 19, 16):
             kbps = max(300, int((tgt * 8 * 1024) / dur) - 128)
             pl = os.path.join(work, 'chat2pass')
@@ -1338,7 +1338,7 @@ def main():
             if not mc['ok']: status['warnings'].append(f"margin check failed: {status['margin_fail']}")
         except Exception as e:
             status['warnings'].append(f'margin check error: {e!r}')
-        # 21 Oct 2026 (the owner: no on-screen text is ever cut off): fit failures and truncated words fail the build
+        # fit failures and truncated words fail the build
         fit_fail, trunc = fit_check(fitlog, texts, day)
         status.update(fit_fail=fit_fail, truncated_words=trunc, fit_ok=not fit_fail and not trunc)
         if fit_fail or trunc:
@@ -1379,7 +1379,7 @@ def main():
         for f in (out, chat, wide):
             if os.path.exists(f) and os.path.getmtime(f) >= t_start:
                 os.replace(f, os.path.splitext(f)[0] + '.failed.mp4')
-        # 24 Oct 2026: a verification-only failure means all paid media already exists in work_karaoke. Falling back to the
+        # a verification-only failure means all paid media already exists in work_karaoke. Falling back to the
         # Claudia/cine-real chain then burns 50+ min, hits the routine's time limit and loses post/sources. Stop here instead;
         # fix the check and re-render with: karaoke.py DAY --skip-gen --no-fallback  (no Grok spend).
         if why.startswith('RuntimeError: verification failed'):

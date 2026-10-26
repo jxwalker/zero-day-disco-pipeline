@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Lyric density metrics + limits (17 Oct 2026: 'Sleeping On The Job' felt rushed).
+"""Lyric density metrics + limits.
 Imported by lyrics_lint.py; run directly for a report:  lyric_metrics.py <lyrics.txt> [style.txt]"""
 import os, re, sys
 
@@ -26,7 +26,7 @@ def parse(text):
         if not s: continue
         if s.startswith("[") and s.endswith("]"):
             inner = s[1:-1].strip()
-            base = re.split(r":|\s+-\s+|,", inner)[0].strip().lower()   # 21 Oct: energy tags "[Chorus - full energy]"
+            base = re.split(r":|\s+-\s+|,", inner)[0].strip().lower()   # energy tags "[Chorus - full energy]"
             if re.match(r"(intro|verse|pre-?chorus|chorus|final chorus|post-?chorus|bridge|breakdown|outro|hook|interlude)\b", base) and ":" not in inner or \
                re.match(r"(verse|chorus|final chorus|bridge|outro)\b", base):
                 cur = [base, [], False]; secs.append(cur)
@@ -91,7 +91,7 @@ def problems(text, style=""):
         lim = L.get(f"{key}_lines_max")
         if lim and len(lines) > lim:
             p.append(f"[{tag}] has {len(lines)} lines (max {lim})")
-        if key == "chorus" and not re.match(r"(pre|post)[- ]?chorus", tag): choruses.append(lines)  # 2026-10-22: pre/post-chorus are not the hook chorus
+        if key == "chorus" and not re.match(r"(pre|post)[- ]?chorus", tag): choruses.append(lines)  # pre/post-chorus are not the hook chorus
     if choruses:
         bi = lambda l: set(zip(*[re.sub(r"[^a-z ]", "", l.lower()).split()[i:] for i in range(2)]))
         sets = [bi(l) for l in choruses[0]]

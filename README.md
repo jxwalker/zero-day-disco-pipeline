@@ -41,5 +41,4 @@ QC: `QC_STEP`, `QC_CUT_FPS`, `QC_GROK_MODEL`, `QC_PAR`, `QC_LOG`. Many `GV_*` / 
 inline where they are read. See `config.example.env`.
 
 ## Versioning
-Semantic versions in `VERSION`, tagged `vX.Y.Z`. History before v1.0.0 was reconstructed from dated backup files
-(see `CHANGELOG.md`).
+Semantic versions in `VERSION`, tagged `vX.Y.Z`. See `CHANGELOG.md`.

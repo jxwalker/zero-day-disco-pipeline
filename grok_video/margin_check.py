@@ -1,4 +1,4 @@
-"""Safe-area check (20 Oct 2026, the owner: 'some of the text is cut off at the margins').
+"""Safe-area check.
 Fails if any text/graphic pixels fall outside the title-safe rect: 6% left/right, 5% top, and bottom 15% on vertical
 (X UI) / 5% on 16:9. Checks (a) the lyric/chip ASS layer rendered alone on black at 4 fps over the whole song, and
 (b) every graphic template + the end card rendered at the longest real strings (from the plan and today's stories)."""

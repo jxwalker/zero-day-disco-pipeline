@@ -19,7 +19,7 @@ NO_TEXT = ("Absolutely no text anywhere: no letters, numbers, writing, signs, la
            "imperfect real skin with pores, motivated light from a real source, real lens optics; no plastic sheen, "
            "no airbrushed faces, no toy-like or video-game look, no bloom, no HDR, no over-saturation, "
            "muted true-to-life colour, visible film grain, off-centre natural composition, not symmetrical.")
-NO_PIP = os.environ.get('GV_PIP', '0') != '1'          # 14 Oct (the owner): Pip and all robots retired
+NO_PIP = os.environ.get('GV_PIP', '0') != '1'          # Pip and all robots retired
 PIP_DESC = ("this exact character as a small physical collectible vinyl toy figure, exactly the same design, proportions "
             "and colours: white egg-shaped body, two tall white bunny ears with pink insides, a thin antenna with a small "
             "yellow ball, a dark-navy face screen with glowing cyan closed happy arc eyes (^ ^) and pink blush, a pink "
@@ -49,10 +49,10 @@ def pip_clip(cid, first, out, seg, sec):
 
 
 def no_text(body):
-    """NO_TEXT, except the key numbers a shot shows as big physical painted figures (13 Oct: 41 vs 61 never appeared)."""
+    """NO_TEXT, except the key numbers a shot shows as big physical painted figures."""
     nums = re.findall(r'painted (?:wooden |metal |tin )?(?:numerals?|figures?|numbers?)\s+"?(\d{1,3}%?)"?(?:\s+(?:and|vs\.?)\s+"?(\d{1,3}%?)"?)?', body, re.I)
     keep = [n for t in nums for n in t if n][:2]
-    # 20 Oct (the owner: video "bears no relation to the story"): claudia books may put SHORT exact story facts on
+    # claudia books may put SHORT exact story facts on
     # screens/printouts, quoted in the prompt ("77 critical", "curl", "COBOL"). GV_SCREEN_TEXT=0 restores no-text.
     quoted = [q.strip() for q in re.findall(r'"([^"]{1,40})"', body) if 1 <= len(q.split()) <= 4][:4]
     if quoted and os.environ.get('GV_SCREEN_TEXT', '1') != '0':
@@ -66,7 +66,7 @@ def no_text(body):
 
 
 def robot_refs(body, who, cast):
-    """13 Oct: robot design drifted when a prompt said 'the robot horse' without its letter: pin the lettered robot."""
+    """robot design drifted when a prompt said 'the robot horse' without its letter: pin the lettered robot."""
     if not re.search(r'\brobot', body, re.I):
         return []
     bots = [k for k, c in cast.items() if re.search(r'\brobot', (c.get('role', '') + ' ' + c.get('description', '')), re.I)]
@@ -210,7 +210,7 @@ def build_jobs(plan, slots, work, LK, sec):
     cameo = {'id': 'cameo', 'kind': 'edit', 'images': [G.PIP_REF], 'aspect': '9:16',
              'prompt': pip_prompt(plan.get('cameo') or 'alone on an empty office desk at night, a desk lamp still on.', LK),
              'out': os.path.join(work, 'stills', 'cameo.jpg')}
-    if NO_PIP:                                         # 14 Oct: the sign-off is the real, empty payoff location
+    if NO_PIP:                                         # the sign-off is the real, empty payoff location
         cameo = {'id': 'cameo', 'kind': 'gen', 'aspect': '9:16', 'out': cameo['out'],
                  'prompt': ("A real photographed film still: " + (plan.get('cameo') or 'an empty office at night, one desk '
                             'lamp still on, chairs pushed back') + " No people, no toys, no robots. " + LK['prompt'] + ' ' + NO_TEXT)}
@@ -277,7 +277,7 @@ def prepare(day, work, look_genre, args, status):
         look, why = T.LOOK[tn['tone']], f"tone {tn['tone']} -> {T.LOOK[tn['tone']]}"
     import claudia as C
     claud = C.enabled(day) and getattr(args, 'real_planner', 'opus') == 'opus'
-    if claud and getattr(args, 'real_look', 'auto') in (None, 'auto'):   # 19 Oct: clean film grade, no VHS/flash default
+    if claud and getattr(args, 'real_look', 'auto') in (None, 'auto'):   # clean film grade, no VHS/flash default
         look, why = 'clean-film', 'claudia mode (headline): clean cinematic film look'
     LK = dict(SP.SLOP_LOOKS[look], type='sparse', handheld=not claud)
     try:
@@ -298,7 +298,7 @@ def prepare(day, work, look_genre, args, status):
     sec = args.real_clip_sec or 3
     planner = getattr(args, 'real_planner', 'opus')
     script = planner in ('script', 'opus')
-    if claud:                                          # 19 Oct Claudia mode: scenes + prompt book + one lead
+    if claud:                                          # Claudia mode: scenes + prompt book + one lead
         return prepare_claudia(day, work, look, LK, args, status, audio, dur, beats, seed, plines)
     if script:
         import slop_script as SS
@@ -307,7 +307,7 @@ def prepare(day, work, look_genre, args, status):
             mx = min(mx or 999, int(os.environ.get('NARRATIVE_MAX_SHOTS', 66)))     # narrative: fewer, crafted shots
         pslots = SS.script_slots(plines, n_clips=args.real_heroes, max_images=mx)
         if mx != args.real_images:                     # narrative: the hook is a cold open that may cover a long
-            for sl in pslots:                          # instrumental intro (13 Oct: 19 s on 1 still, used 19x)
+            for sl in pslots:                          # instrumental intro
                 if sl['kind'] == 'hook':
                     sl['images'] = 7
         intro = intro_seconds(day) if planner == 'opus' else None
@@ -317,7 +317,7 @@ def prepare(day, work, look_genre, args, status):
                     sl['images'] = 7
                     sl['dur_hint'] = 'unknown (3-20)'
             G.log("intro: length unknown at plan time -> hook planned with 7 distinct shots; the edit trims to the real intro")
-        if intro:                                      # 13 Oct: time the hook to the REAL intro (plan assumed 3.75 s, was 12 s)
+        if intro:                                      # time the hook to the REAL intro (plan assumed 3.75 s, was 12 s)
             for sl in pslots:
                 if sl['kind'] == 'hook':
                     sl['images'] = max(2, min(8, math.ceil(intro / 1.6)))
@@ -425,7 +425,7 @@ def generate_media(P, args, status):
                                  start_gap=4.0, tag='cast', timeout=300, deadline=(dl - CR.RENDER_RESERVE_S) if dl else None)
             r = B.run(cj)
             G.log(f"cast portraits: {sum(1 for j in P['cast_jobs'] if os.path.exists(j['out']))}/{len(P['cast_jobs'])}")
-        if P.get('claudia'):                           # 19 Oct: the lead's sheet is Opus-approved before any batch
+        if P.get('claudia'):                           # the lead's sheet is Opus-approved before any batch
             import claudia as C
             status['lead_approval'] = C.approve_lead(P, args)
         for j in P['stills']:                         # a cast portrait failed: describe the person in words instead
@@ -434,7 +434,7 @@ def generate_media(P, args, status):
         args.hero_parallel = 5
         import judge as J
         gated = os.environ.get('GV_REALISM') != '0'
-        if gated:                                      # 13 Oct realism gate: stills -> Opus review/reroll -> clips
+        if gated:                                      # realism gate: stills -> Opus review/reroll -> clips
             g1 = CR.generate(P['stills'], [], P['cameo'], P['pslots'], work, args, status)
             rg = J.realism_gate(P, args, status, g1.get('spent_pct'))
             blocked = set(rg.get('blocked_clips') or [])
@@ -454,7 +454,7 @@ def generate_media(P, args, status):
             gen['judge'] = J.loop(P, args, status, gen, stills_done=gated)
         except Exception as e:
             G.log(f"WARNING: judge loop not run: {e!r}"[:300])
-        if P.get('claudia'):                           # 19 Oct: Opus picks each clip's usable in/out window
+        if P.get('claudia'):                           # Opus picks each clip's usable in/out window
             try:
                 import claudia as C
                 ex = qa_exclude(work)
@@ -932,8 +932,7 @@ def edit_and_render_claudia(P, L, out, args, status, segs, cuts, ok, ex):
 
 
 def intro_seconds(day):
-    """Seconds before the first sung word, from an earlier alignment of this same audio (exact) if one exists, else None.
-    (13 Oct: whisper on the full mix gave 13-28 s for a 12.2 s intro, so the plan does not guess.)"""
+    """Seconds before the first sung word, from an earlier alignment of this same audio (exact) if one exists, else None."""
     import glob
     au = os.path.join(day, 'audio.mp3')
     for f in sorted(glob.glob(os.path.join(day, 'work*', 'align', 'timings.json')), key=os.path.getmtime, reverse=True):

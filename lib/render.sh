@@ -1,5 +1,5 @@
 #!/bin/bash
-# Render the karaoke video (27 Sep design). usage: render.sh AUDIO WORK_DIR OUT.mp4 [DURATION]
+# Render the karaoke video. usage: render.sh AUDIO WORK_DIR OUT.mp4 [DURATION]
 # Full song, audio untouched apart from AAC encode. Moving neon gradient bg, lissajous scope, cover with
 # gentle zoom + hue-cycling glow, gradient spectrum (+reflection), gradient waveform, ASS overlay.
 set -euo pipefail

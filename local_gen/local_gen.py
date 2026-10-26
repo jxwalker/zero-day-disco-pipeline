@@ -14,7 +14,7 @@ SERVER = os.environ.get("LOCAL_GEN_SERVER", "http://localhost:8188")
 NEG = ("色调艳丽，过曝，静态，细节模糊不清，字幕，风格，作品，画作，画面，静止，整体发灰，最差质量，低质量，JPEG压缩残留，丑陋的，残缺的，"
        "多余的手指，画得不好的手部，画得不好的脸部，畸形的，毁容的，形态畸形的肢体，手指融合，静止不动的画面，杂乱的背景，三条腿，背景人很多，倒着走, VHS, tape, scan lines, CRT, camcorder")
 
-# 24 Oct 2026: LTX-Video 2B 0.9.8 distilled "draft" mode for b-roll (~30 s/clip). QC lives in clip_qc.py.
+# LTX-Video 2B 0.9.8 distilled "draft" mode for b-roll (~30 s/clip). QC lives in clip_qc.py.
 NEG_LTX = ("low quality, worst quality, deformed, distorted, extra fingers, fused fingers, warped hands, melting objects, "
            "text, letters, mirrored text, upside-down text, watermark, tongue out, open mouth, grimace, pouting, duck face, "
            "face morphing, identity change, extreme close-up, zoom, crash zoom, fast camera, motion blur, jittery, shaky, VHS, tape, scan lines, CRT, camcorder, interlacing, horizontal lines, video noise")

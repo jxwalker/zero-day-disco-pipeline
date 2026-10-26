@@ -1,5 +1,5 @@
 #!/bin/bash
-# Daily lyrics step, headline mode (default from 14 Oct 2026).
+# Daily lyrics step, headline mode.
 # usage: tools/headline_day.sh <day_dir>      (needs <day_dir>/stories.md)
 # Writes lyrics.txt style.txt title.txt headline.json headline.md storyboard_draft.md tags.json (lint-checked, Opus self-scored).
 # Exit 0: use lyrics.txt/style.txt/title.txt in Suno; grok_video.sh then runs in headline mode automatically (headline.json).

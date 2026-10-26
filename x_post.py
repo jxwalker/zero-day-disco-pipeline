@@ -157,7 +157,7 @@ def main():
     ap.add_argument("--in-reply-to", metavar="TWEET_ID", help="post the main post as a reply to this post id")
     ap.add_argument("--skip-lint", action="store_true", help="skip post_lint.py (non-daily posts only)")
     ap.add_argument("--bot", choices=["suno", "interesting-x"], default="suno",
-                    help="post-check profile (20 Oct 2026): suno = Grok Bot/@grok/#slopcore rules (default); interesting-x = generic checks")
+                    help="post-check profile: suno = Grok Bot/@grok/#slopcore rules (default); interesting-x = generic checks")
     ap.add_argument("--lint-only", action="store_true", help="run the post checks and exit; posts nothing, needs no credentials")
     ap.add_argument("--delete", nargs="+", metavar="TWEET_ID", help="delete these post ids (own account only)")
     a = ap.parse_args()
@@ -181,7 +181,7 @@ def main():
     if not a.text_file:
         ap.error("--text-file required")
     text = open(a.text_file).read().strip()
-    if not a.skip_lint:   # 18 Oct 2026: daily post must credit Grok Bot, tag @grok, carry #slopcore, fit the limit
+    if not a.skip_lint:   # daily post must credit Grok Bot, tag @grok, carry #slopcore, fit the limit
         sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
         import post_lint as PL
         _, probs = PL.check_post(text, a.bot)

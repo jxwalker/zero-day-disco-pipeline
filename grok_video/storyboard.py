@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
-"""Storyboard (24 Oct 2026, the owner: "the videos should be much more relevant to the lyrics and sync with the words so
-the production design and story boarding needs to be much better"; "claudia is much better quality").
-Research: /home/box/suno-daily/research/2026-10-24_songcraft.md
+"""Storyboard: the video is relevant to the lyrics and synced to the words, with strong production design and
+storyboarding in the Claudia style.
 
-ensure_direction(day): when there is no <day>/direction.txt, Opus writes one in the 21 Oct "Turn Me On" format
+ensure_direction(day): when there is no <day>/direction.txt, Opus writes one in the standard treatment format
   (LEAD character bible pasted into every prompt, PALETTE, one-line STORY arc, BEATS, SETTING, PRODUCTION DESIGN and a
   per-line SHOT LIST in Claudia DP grammar). karaoke.py's existing LEAD machinery then makes one reference still and
   edits every [LEAD] scene from it, so she is the same woman in every shot.
@@ -30,7 +29,7 @@ DIR_SCHEMA = {"type": "object", "properties": {
         "required": ["i", "line", "shot", "literal_or_pun", "size_lens", "light", "move", "motion"]}}},
     "required": ["lead", "palette", "arc", "beats", "setting", "locations", "props", "wardrobe", "colour", "shots"]}
 
-GRAMMAR = """CINE GRAMMAR (from the Claudia prompt book, which the owner rates much higher):
+GRAMMAR = """CINE GRAMMAR (from the Claudia prompt book):
 - Live-action music video shot on film: real lens with focal length and stop (35mm f/2, 50mm f/1.8, 85mm f/2), Kodak
   Vision3 250D/500T grain, ONE named motivated light source (window, practical lamp, rack LEDs, sodium street light,
   low sun, fluorescent tube), composed off-centre with clean negative space in the lower third for the karaoke words.
@@ -55,20 +54,20 @@ def ensure_direction(day, lines=None):
         return False
     import slop_opus as SO
     hj = G.load_json(os.path.join(day, 'headline.json'), {}) or {}
-    LN = G.lead_noun(day); PR = 'he' if LN == 'man' else 'she'   # 25 Oct: male pop-punk lead support
+    LN = G.lead_noun(day); PR = 'he' if LN == 'man' else 'she'   # male pop-punk lead support
     cj = G.load_json(os.path.join(day, 'work_headline', 'concept.json'), {}) or {}
     lines = lines or _lines(day)
     od = os.path.join(day, 'work_storyboard'); os.makedirs(od, exist_ok=True)
     pf = os.path.join(od, 'direction_prompt.txt')
     open(pf, 'w').write(
         "You are the director, DP and production designer of today's 2:20 vertical music video. Write the treatment and "
-        "storyboard. Template: the 21 Oct 'Turn Me On' video (a data centre personified as a girl dressed up and stood "
+        "storyboard. Template: a data centre personified as a girl dressed up and stood "
         "up waiting for grid power; she finally throws the breaker herself) - one lead, one arc, every line acted out.\n\n"
         + open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'prompts', 'claudia_book.txt')).read().split('\n\n')[0] + "\n\n" + GRAMMAR + "\n\nWRITE:\n- lead: the character bible, ONE dense 55-80 word paragraph pasted into every image "
         + ("prompt: an original quirky manic-pixie indie engineer, clearly an adult woman of about 24 (not any real person), " if LN == 'woman' else
            "prompt: an original snotty, energetic indie pop-punk young man of about 24 (not any real person), ") +
         "face, hair (one distinctive colour detail), NO glasses or eyewear of any kind, one other signature, ONE exact wardrobe of PLAIN SOLID-COLOURED garments "
-        "(25 Oct, the owner: no prints, patches, embroidery, logos or graphics on clothes, never tool/prop-shaped motifs) with colours and "
+        " with colours and "
         "materials that fits the song's pun, footwear, one accessory; 'PG-13, fully clothed'; HOUSE-STYLE attitude: deadpan, "
         "dry, side-eye, sudden wild laugh on drops, never a generic smile at camera; quirky distinctive styling.\n"
         "- palette: 'acid-deadpan' (the Zero Day Disco house style; chorus drops switch to Glitch Tape automatically).\n- arc: ONE-LINE ARC that turns the song's "
@@ -84,7 +83,7 @@ def ensure_direction(day, lines=None):
         + '\n'.join(f"{i}: {l}" for i, l in enumerate(lines)) + "\n\nReply with the JSON only.")
     d, meta = SO.run_claude(pf, od, DIR_SCHEMA, 600, tools='', effort='high')
     sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'local_gen'))
-    import strict_qc as SQ                      # 25 Oct: enforce plain wardrobe + no prop-pocket actions after the fact
+    import strict_qc as SQ                      # enforce plain wardrobe + no prop-pocket actions after the fact
     d['wardrobe'] = SQ.plain_wardrobe(d['wardrobe']); d['lead'] = SQ.strip_graphics(d['lead']) + SQ.PLAIN_RULE
     d['props'] = [SQ.strip_graphics(x) for x in d['props'] if not re.search(r'(patch|print|logo|motif|embroider)', x, re.I)]
     for s in d['shots']:
@@ -184,7 +183,7 @@ def line_check(P, scenes, jobs, gdir, lines, status, look, deadline):
         return
     pf = os.path.join(gdir, 'line_check.txt')
     ref = os.path.exists(f"{gdir}/lead_ref.png")
-    LN = G.lead_noun(os.path.dirname(os.path.dirname(os.path.abspath(gdir))))   # 25 Oct
+    LN = G.lead_noun(os.path.dirname(os.path.dirname(os.path.abspath(gdir))))   
     open(pf, 'w').write(
         "You are the script supervisor of a music video. For each still below, use the Read tool to open the file (in "
         "this directory) and judge it literally against the sung line(s) it plays under and the shot it was meant to "
@@ -227,10 +226,10 @@ def line_check(P, scenes, jobs, gdir, lines, status, look, deadline):
     status['line_check']['reshot'] = [j['id'] for j in rj]
 
 
-# ---------------------------------------------------------------- Runway hero shots (24 Oct, optional)
+# ---------------------------------------------------------------- Runway hero shots
 # Runway is reached only through the user-Runway MCP (agent side), so the pipeline writes the jobs and the routine's
 # agent runs them: see prompts/runway_hero_runbook.md. Budget ~300 credits/day; any failure keeps the Grok clip.
-HERO_COST = {'kling-4': 15.7, 'wan3': 10.0}       # credits per second at 720p (Runway MCP docs, 24 Oct 2026)
+HERO_COST = {'kling-4': 15.7, 'wan3': 10.0}       # credits per second at 720p (Runway MCP docs,)
 HERO_FRAME_COST = 4                                # nano-banana-2.1 1K reference frame (Runway generate_image)
 HOUSE_FRAME = ("Acid Deadpan house style: Klein blue, acid green and orange palette, symmetrical wide framing, flat even "
                "light, deadpan expressions (no tongue out, no pulled faces), 35mm grain, no readable or mirrored text. ")
@@ -305,7 +304,7 @@ def hero_apply(gdir, hid, mp4):
     return False
 
 
-# ---------------------------------------------------------------- Runway shot sheets (24 Oct, the owner: "exact descriptions")
+# ---------------------------------------------------------------- Runway shot sheets
 SHEET_FIELDS = ['set', 'character', 'blocking', 'camera', 'composition', 'lighting', 'palette', 'texture', 'start_state',
                 'end_state', 'constant', 'negatives', 'frame_prompt', 'motion_prompt']
 SHEET_SCHEMA = {'type': 'object', 'required': SHEET_FIELDS, 'properties': {k: {'type': 'string'} for k in SHEET_FIELDS}}

@@ -1,6 +1,6 @@
 You are the writer-director (storyboard, cinematography, edit) of a slopcore NEWS SONG video for "{{TITLE}}"
-({{GENRE}}; {{STYLE}}). Vertical 9:16, about 1 s cuts, 2.5 minutes, Grok Imagine footage. the owner's notes: the last
-test hid the news in a metaphor and its text looked random. This one must make the news CLEAR: a viewer with the sound
+({{GENRE}}; {{STYLE}}). Vertical 9:16, about 1 s cuts, 2.5 minutes, Grok Imagine footage. Never hide the news in a
+metaphor and never use random-looking text. Make the news CLEAR: a viewer with the sound
 off must be able to name the main story. Literal, funny, deadpan, catchy.
 
 First use the Read tool to look at these reference contact sheets: {{REFS}}. Then write.
@@ -58,8 +58,8 @@ DIRECTION RULES:
 10. TIMING: at this tempo a sung line lasts 1.5-3 s and a later shot needs about 0.5 s of its own: cut-in words at
    least 2 words apart, never the line's last word (late shots are dropped), the best gag on word 0. A line or shout
    held 3 s or longer (outro shouts, final chorus words) gets 2-3 shots, one of them a clip, never one held still.
-11. NO ROBOTS (14 Oct, the owner): no robots, androids, humanoid machines, robot animals, mascots or toy characters anywhere, not even as props. AI is shown through REAL people and the real world: engineers at screens lit by the screen, offices, labs, server rooms, bank branches, phones in hands, cables, whiteboards seen from behind. A appears only in shots whose cast lists "A".
-11b. CINEMATIC REALISM (14 Oct): every frame is a believable live-action film still: a named real lens (35mm or 50mm spherical at f/2, 85mm for close-ups), natural or motivated light (window, desk lamp, fluorescent tube, monitor glow, street lamp), visible film grain, true-to-life muted colour, imperfect real skin with pores, worn real locations. Never plastic skin, glossy CG, HDR glow, over-saturation, or symmetrical poster framing; compose off-centre like a cinematographer. Fewer, longer shots: give most lines ONE strong shot that holds, 2 only when the line's action needs a cut. Keep one consistent human cast across the whole video; no uniform crowd formations unless the line literally needs a crowd, and then a natural, varied real crowd.
+11. NO ROBOTS: no robots, androids, humanoid machines, robot animals, mascots or toy characters anywhere, not even as props. AI is shown through REAL people and the real world: engineers at screens lit by the screen, offices, labs, server rooms, bank branches, phones in hands, cables, whiteboards seen from behind. A appears only in shots whose cast lists "A".
+11b. CINEMATIC REALISM: every frame is a believable live-action film still: a named real lens (35mm or 50mm spherical at f/2, 85mm for close-ups), natural or motivated light (window, desk lamp, fluorescent tube, monitor glow, street lamp), visible film grain, true-to-life muted colour, imperfect real skin with pores, worn real locations. Never plastic skin, glossy CG, HDR glow, over-saturation, or symmetrical poster framing; compose off-centre like a cinematographer. Fewer, longer shots: give most lines ONE strong shot that holds, 2 only when the line's action needs a cut. Keep one consistent human cast across the whole video; no uniform crowd formations unless the line literally needs a crowd, and then a natural, varied real crowd.
 12. VOICE MATCH: read the style ({{STYLE}}). If the lead vocal is male, A is a man (or A never lip-syncs and a male
    cast member sings to the lens); if female, A is a woman. Whoever lip-syncs or screams into the lens matches the voice.
 
@@ -105,7 +105,7 @@ DELIVER (strict JSON, schema enforced):
   that carries the line's action (about {{N_CLIPS}} clips in the whole video, at most 2 per line), "still" otherwise.
 - "display": tokens per sung word for the subtitle, fixing brand spellings and using numerals ("GPT-6.1", "Claude Code",
   "66.1", "8x", "$1,000"; give "" to merge following words; keep the count). "accent": [] (no slams).
-- "pip": [] (empty; Pip the toy robot is retired, 14 Oct). "cameo": one sentence for the final shot: the payoff location, empty and real, in the dark, one practical light still on (a desk lamp, a monitor), no people, no toys, no robots.
+- "pip": [] (empty; Pip the toy robot is retired,). "cameo": one sentence for the final shot: the payoff location, empty and real, in the dark, one practical light still on (a desk lamp, a monitor), no people, no toys, no robots.
 
 GENERATOR LIMITS (Grok Imagine): photoreal stills (cast shots are edited from the cast portraits); a clip is the still
 continued for 3 s at 720p: ONE clear action and a simple camera move. NO readable text anywhere in the image (no words,

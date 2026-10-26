@@ -1,4 +1,4 @@
-# Lyric rules (daily AI news song) — added 2026-10-10 after the owner's feedback
+# Lyric rules (daily AI news song)
 
 1. Never sing the phrase "AI news", or meta lines about the song, the news, the show,
    the broadcast or the listener ("sing it with me", "news on fire", "today's headlines",
@@ -11,7 +11,7 @@
      python3 /home/box/suno-daily/tools/lyrics_lint.py <day>/lyrics.txt --fix     # drops offending lines (backs up to lyrics.txt.prelint)
    Prefer rewriting a flagged line by hand (keep meter); --fix only deletes lines.
 
-## Density limits (17 Oct 2026)
+## Density limits
 "Sleeping On The Job" (84 BPM 6/8, 305 words, 12 syllables/line) felt rushed. lyrics_lint.py now fails over:
 - slow (<100 BPM or 6/8, 12/8, 3/4): max 8 syllables / 7 words per line, 150 words total
 - mid (100-119 BPM): max 9 / 8, 165 total
@@ -19,8 +19,8 @@
 - verses 4 lines, chorus 4 lines with a repeated hook, final chorus 5, bridge 4 (spoken max 12 words/line), intro/outro 1
 See `tools/lyric_metrics.py <lyrics.txt>` for the measurements. BPM/metre come from style.txt next to lyrics.txt.
 
-## Viral-hit format (21 Oct 2026, the owner: "make sure we always follow the viral hit format")
-Default for every daily song (model: 21 Oct "Turn Me On"). lyrics_lint.py fails (use --no-viral to skip) unless:
+## Viral-hit format
+Default for every daily song . lyrics_lint.py fails (use --no-viral to skip) unless:
 - the first section is a sung chant hook ([Intro - chant] + title line), no instrumental intro
 - the first [Chorus] has at most 7 sung lines before it (hook 1 + verse 4 + pre-chorus 2, ~25 s)
 - every section tag has an energy tag ("[Chorus - full energy]")

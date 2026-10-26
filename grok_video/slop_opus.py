@@ -11,10 +11,10 @@ import slop_plan as SP
 import slop_script as SS
 
 PROMPTS_V5 = os.environ.get('OPUS_PROMPTS', 'v5') != 'v4'
-PLANNER_VERSION = 'opus-2' if PROMPTS_V5 else 'opus-1'   # opus-2 = v5 prompts (Opus self-review 9 Oct); OPUS_PROMPTS=v4 -> old prompts
+PLANNER_VERSION = 'opus-2' if PROMPTS_V5 else 'opus-1'   # opus-2 = v5 prompts (Opus self-review); OPUS_PROMPTS=v4 -> old prompts
 CLAUDE = os.environ.get('CLAUDE_BIN', '/home/box/.local/bin/claude')
 TOKEN_FILE = os.path.expanduser('~/.claude_oauth_token')
-OPUS_MAIN_S, OPUS_DOCTOR_S, OPUS_TOTAL_S = 450, 240, 700   # 13 Oct: doctor timed out at 150 s on 76 shots      # v5 prompt measured 316 s (+ doctor ~30-60 s); v4 285 s
+OPUS_MAIN_S, OPUS_DOCTOR_S, OPUS_TOTAL_S = 450, 240, 700   # doctor timed out at 150 s on 76 shots      # v5 prompt measured 316 s (+ doctor ~30-60 s); v4 285 s
 REFS = ['04_voldemort2x_saysi_sheet01.jpg', '05_javif4_underclass_sheet01.jpg', '06_dvorahfr_theheir_sheet01.jpg',
         '01_donaldjewkes_sheet01.jpg']
 PROMPT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'prompts')
@@ -22,7 +22,7 @@ PROMPTS = os.environ.get('OPUS_PROMPTS', 'v5')
 
 
 STORY_NOTE = ''
-NARRATIVE = {}          # narrative mode (13 Oct): the day's treatment.json, set by slop_real.prepare via narrative()
+NARRATIVE = {}          # narrative mode: the day's treatment.json, set by slop_real.prepare via narrative()
 
 
 def narrative(day):
@@ -36,7 +36,7 @@ def narrative(day):
         return None
 
 
-HEADLINE = {}          # headline mode (13 Oct, the owner-approved): the day's headline.json, set by slop_real.prepare
+HEADLINE = {}          # headline mode: the day's headline.json, set by slop_real.prepare
 
 
 def headline(day):
@@ -57,7 +57,7 @@ def headline_text(h, day):
 
 
 def fix_cast(res):
-    """13 Oct: drop cast letters a shot lists but its prompt never names (a stray 'B' put the distiller on the climax
+    """drop cast letters a shot lists but its prompt never names (a stray 'B' put the distiller on the climax
     chimney). Conservative: only removes; 'A' as an article still counts as named."""
     ids = {c.get('id') for c in res.get('cast') or []}
     n = 0
@@ -227,8 +227,8 @@ WHAT MAKES SLOPCORE WORK (our notes):
 DETAILED ANALYSIS OF THE REFERENCES:
 {analysis}
 
-THE BRIEF FROM THE OWNER: the last two versions looked good but "the video doesn't seem related to the music lyrics" and
-"the script is bad". The script is the product. EVERY SHOT MUST ACT OUT THE WORDS BEING SUNG AT THAT MOMENT, as a
+THE BRIEF: the video must be clearly related to the music lyrics and the script must be strong.
+The script is the product. EVERY SHOT MUST ACT OUT THE WORDS BEING SUNG AT THAT MOMENT, as a
 funny, deadpan, literal gag a viewer gets instantly with the sound off while reading the subtitle. Show the nouns and
 verbs. Generic shots (people standing, staring, walking through an office, looking at screens) are failures.
 Example: "Ultrafast hits Sol, eight times the pace" -> A's laptop literally on fire while B's printer fires pages out
@@ -399,7 +399,7 @@ def plan(day, work, look, slots, L, deadline=None, reserve_s=17 * 60, force=Fals
                     s['motion'] = s['motion'].rstrip('. ') + '; camera: ' + s['camera']
         tmo = budget(OPUS_DOCTOR_S)
         if tmo >= 60 and os.environ.get('CINE_REAL_FAIL') != 'opus-doctor':
-            # 13 Oct: batched + parallel + fail-open (one call on 76+ shots timed out)
+            # batched + parallel + fail-open (one call on 76+ shots timed out)
             import concurrent.futures as CF
             beats = res['beats']; per = int(os.environ.get('GV_DOCTOR_BATCH', '26'))
             groups, cur, n_sh = [], [], 0

@@ -157,7 +157,7 @@ def audio_path(day):
 
 
 def lead_noun(day):
-    """25 Oct: 'man' when the lead vocal is male (headline.json lead_gender, else style.txt 'male lead'/'male vocal'), else 'woman'."""
+    """'man' when the lead vocal is male (headline.json lead_gender, else style.txt 'male lead'/'male vocal'), else 'woman'."""
     try:
         g = ((load_json(os.path.join(day, 'headline.json'), {}) or {}).get('lead_gender') or '').lower()
         if g in ('male', 'man'): return 'man'

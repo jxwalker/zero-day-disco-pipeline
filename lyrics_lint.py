@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Pre-Suno lyric lint. Flags meta/'AI news' lines and style words in sung lines, and (17 Oct) lyric density over
-the BPM/metre limits in lyric_metrics.py, and (21 Oct) the viral-hit format (--no-viral skips; title from title.txt or --title=) (reads style.txt beside lyrics.txt, or --style=PATH; --no-density skips).
+"""Pre-Suno lyric lint. Flags meta/'AI news' lines and style words in sung lines, and lyric density over
+the BPM/metre limits in lyric_metrics.py, and the viral-hit format (--no-viral skips; title from title.txt or --title=) (reads style.txt beside lyrics.txt, or --style=PATH; --no-density skips).
 Exit 0 clean, 1 violations (or 0 after --fix removes them)."""
 import os, re, sys, shutil
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import lyric_metrics as LM   # 17 Oct: density limits
+import lyric_metrics as LM   # density limits
 META = [r"\bai\s*news\b", r"\bthe\s+news\b", r"\bnews\s+(on\s+fire|ride|tonight|today)\b",
         r"\bheadlines?\b", r"\bsing\s+it\s+with\s+me\b", r"\bsing\s+along\b", r"\bthis\s+song\b",
         r"\bthe\s+show\b", r"\btune\s+in\b", r"\bbreaking\s+news\b", r"\bnews\s*(cast|feed|flash|wire)\b"]
@@ -13,7 +13,7 @@ STYLE = [r"\bjangly\b", r"\bguitars?\b", r"\bsynths?\b", r"\bsynthesi[sz]ers?\b"
          r"\bauto-?tune\b", r"\bfalsetto\b", r"\bindie\s+rock\b", r"\bedm\b", r"\blo-?fi\b", r"\bchiptune\b",
          r"\b(male|female)\s+(lead\s+)?vocals?\b", r"\binstrumental\b", r"\btempo\b", r"\bmix\b",
          r"\bmaster(ed|ing)\b", r"\bsidechain\b", r"\bpiano\b", r"\bchords?\b", r"\briffs?\b", r"\bstrings\b", r"\bbanger\b", r"\bgenre\b"]
-# 21 Oct 2026 (the owner: "make sure we always follow the viral hit format"). --no-viral skips.
+# . --no-viral skips.
 REQ = {"pre-chorus": r"pre-?chorus", "post-chorus": r"post-?chorus", "breakdown": r"breakdown", "final chorus": r"final chorus"}
 def viral(text, title=""):
     p, secs, cur = [], [], None
@@ -86,7 +86,7 @@ def main():
         open(path, "w", encoding="utf-8").write("\n".join(out))
         print(f"removed {bad} line(s); backup {path}.prelint — check meter/empty sections")
         sys.exit(0)
-    # 17 Oct 2026 (the owner: 'Sleeping On The Job' too wordy/rushed): hard density limits scaled by BPM/metre in style.txt
+    # hard density limits scaled by BPM/metre in style.txt
     if "--no-density" not in sys.argv:
         sp = next((a.split("=", 1)[1] for a in sys.argv if a.startswith("--style=")),
                   os.path.join(os.path.dirname(os.path.abspath(path)), "style.txt"))

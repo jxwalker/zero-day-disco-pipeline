@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Headline mode (13 Oct 2026): a clear, literal, funny news song + its video plan, written by Opus (headless claude).
+"""Headline mode: a clear, literal, funny news song + its video plan, written by Opus (headless claude).
 
 usage: headline.py write <src_day> [--out DIR]
 Structure: hook (headline gag + title) / Verse 1 = the MAIN story literally / identical chorus with a wordplay twist /
@@ -17,7 +17,7 @@ import common_gv as G
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 import style_lint as SL
 import copy
-import songcraft as SC   # 24 Oct: one-thread concept + strict Opus judge
+import songcraft as SC   # one-thread concept + strict Opus judge
 
 LINT = os.path.join(os.path.dirname(HERE), 'lyrics_lint.py')
 S = {"type": "string"}; I = {"type": "integer"}
@@ -93,7 +93,7 @@ def lyrics_text(res):
 def check(res, day):
     probs = []
     ch = [[l['text'].strip().lower() for l in s['lines']] for s in res['sections'] if re.fullmatch(r'chorus', re.split(r':|\s+-\s+|,', s['tag'].strip('[] '))[0].strip().lower())]
-    if len(ch) < 2 or any(not c or c[0] != ch[0][0] for c in ch[1:]):   # 24 Oct (the owner): chorus 2 may vary; hook line identical
+    if len(ch) < 2 or any(not c or c[0] != ch[0][0] for c in ch[1:]):   # chorus 2 may vary; hook line identical
         probs.append('every [Chorus] must open with the same hook line')
     fc = [s for s in res['sections'] if 'final' in s['tag'].lower()]
     if ch and fc:
@@ -103,9 +103,9 @@ def check(res, day):
         elif all(b == c[:len(b)] for c in ch):     # a changed/flipped line counts as the callback
             probs.append('the final chorus needs a flip or callback line')
     n = sum(len(s['lines']) for s in res['sections'])
-    if not 16 <= n <= 28:   # 17 Oct: sparser lyrics
+    if not 16 <= n <= 28:   # sparser lyrics
         probs.append(f'{n} lines (want about 20-24; cut lines if over)')
-    if not any('breakdown' in s['tag'].lower() for s in res['sections']):   # 21 Oct viral format
+    if not any('breakdown' in s['tag'].lower() for s in res['sections']):   # viral format
         probs.append('missing [Breakdown - stripped] before the final chorus')
     probs += ['style: ' + x for x in SL.problems(SL.fix(res['style']))]
     if any(v < 8 for v in res['scores'].values()):
@@ -116,7 +116,7 @@ def check(res, day):
         ok, bad = ticker_ok(t['text'], voc, st.get(t['story'], {}).get('handles', []))
         if not ok:
             probs.append(f"ticker for story {t['story']} not verbatim from stories.md: {bad}")
-    bots = re.compile(r'\b(robot|robotic|android|cyborg|mascot|toy|pip)s?\b', re.I)     # 14 Oct: no robots
+    bots = re.compile(r'\b(robot|robotic|android|cyborg|mascot|toy|pip)s?\b', re.I)     # no robots
     vis = json.dumps([res.get('cast'), res.get('storyboard'), res.get('pip'), res.get('outro_punchline_shot'),
                       [h['visual_gag'] for h in res.get('hook_options', [])]])
     if bots.search(vis):
@@ -133,7 +133,7 @@ def lint(path):
 
 
 def chosen(res):
-    """the picked hook option; Opus numbers them 1-based (13 Oct: index 1 showed option 2), so match the title first."""
+    """the picked hook option; Opus numbers them 1-based, so match the title first."""
     ho = res['hook_options']
     for x in ho:
         if x['title'].strip().lower() == res['title'].strip().lower():
@@ -206,7 +206,7 @@ def judge_loop(res, out, od, pf, stories_md, concept_txt):
     rounds = int(os.environ.get('HL_JUDGE_ROUNDS', 5))
     best, log = None, []
     for n in range(rounds + 1):
-        res, probs = _lint_repair(res, _files(res, out), out, od, n)   # 24 Oct: repair THIS draft, never fall back to a weaker clean one
+        res, probs = _lint_repair(res, _files(res, out), out, od, n)   # repair THIS draft, never fall back to a weaker clean one
         try:
             j = SC.judge(lyrics_text(res), res['title'], concept_txt, stories_md, od, n)
         except Exception as e:
@@ -230,7 +230,7 @@ def judge_loop(res, out, od, pf, stories_md, concept_txt):
                 open(pf).read(), json.dumps(res, ensure_ascii=False)) + '\n\n' + CRAFT)
         try:
             res, meta = SO.run_claude(rf, od, SCHEMA, int(os.environ.get('HL_JUDGE_REWRITE_S', 900)), tools='',
-                                      effort=os.environ.get('HL_JUDGE_EFFORT', 'medium'))   # 24 Oct: high timed out at 700 s
+                                      effort=os.environ.get('HL_JUDGE_EFFORT', 'medium'))   # high timed out at 700 s
         except Exception as e:
             print(f"judge rewrite failed: {e!r}"[:300]); break
     if best is None:
@@ -252,7 +252,7 @@ def write(src, out):
     pf = os.path.join(od, 'prompt.txt')
     stories_md = open(os.path.join(out, 'stories.md')).read().strip()
     concept_txt = ''
-    if os.environ.get('HL_SONGCRAFT', '1') != '0':      # 24 Oct songcraft: pick ONE thread + real-life pun first
+    if os.environ.get('HL_SONGCRAFT', '1') != '0':      # pick ONE thread + real-life pun first
         try:
             C = SC.concepts(stories_md, od)
             concept_txt = SC.concept_block(C, C['pick'].get('sharpen', ''))
@@ -271,7 +271,7 @@ def write(src, out):
         lp = os.path.join(out, 'lyrics.txt')
         open(lp, 'w').write(lyrics_text(res))
         open(os.path.join(out, 'style.txt'), 'w').write(SL.fix(res['style']).strip() + '\n')  # density lint reads BPM/metre
-        open(os.path.join(out, 'title.txt'), 'w').write(res['title'].strip() + '\n')  # 21 Oct: viral lint checks the title hook
+        open(os.path.join(out, 'title.txt'), 'w').write(res['title'].strip() + '\n')  # viral lint checks the title hook
         ok, msg = lint(lp)
         probs = check(res, out) + ([] if ok else [f'lint: {msg}'])
         if not probs or attempt == 2:
@@ -287,11 +287,11 @@ def write(src, out):
             res, meta = SO.run_claude(rf, od, SCHEMA, 700, tools='', effort='medium')
         except Exception as e:
             print(f"rewrite failed: {e!r}"[:300]); break
-    if os.environ.get('HL_SONGCRAFT', '1') != '0':      # 24 Oct: strict independent Opus judge, up to N rewrites
+    if os.environ.get('HL_SONGCRAFT', '1') != '0':      # strict independent Opus judge, up to N rewrites
         res = judge_loop(res, out, od, pf, stories_md, concept_txt)
-    res['style'] = SL.fix(res['style'])  # 16 Oct: no autotune/vocoder, no jingles
+    res['style'] = SL.fix(res['style'])  # no autotune/vocoder, no jingles
     open(os.path.join(out, 'style.txt'), 'w').write(res['style'].strip() + '\n')
-    res['cast'] = (res.get('cast') or [])[:3]      # 19 Oct (Claudia mode): one lead A + at most 2 supporting
+    res['cast'] = (res.get('cast') or [])[:3]      # (Claudia mode): one lead A + at most 2 supporting
     open(os.path.join(out, 'title.txt'), 'w').write(res['title'].strip() + '\n')
     json.dump(res, open(os.path.join(out, 'headline.json'), 'w'), indent=1, ensure_ascii=False)
     open(os.path.join(out, 'headline.md'), 'w').write(md(res, out))

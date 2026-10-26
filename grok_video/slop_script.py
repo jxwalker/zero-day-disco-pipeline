@@ -10,7 +10,7 @@ import slop_plan as SP
 from plan_gen import run_grok_text, _extract_json
 
 PLANNER_VERSION = 'script-1'
-SCRIPT_FIRST_S, SCRIPT_MAX_S = 570, 780   # call 1 attempt-1 cap; total planner cap (attempt 2 + the review). Measured 9 Oct: 477 s + 181 s
+SCRIPT_FIRST_S, SCRIPT_MAX_S = 570, 780   # call 1 attempt-1 cap; total planner cap (attempt 2 + the review). Measured: 477 s + 181 s
 REVIEW_MAX_S = 200
 N_DROPS = 2
 
@@ -37,7 +37,7 @@ def _force_end_clips(slots, by):
     return n
 
 
-LONG_SHOTS = __import__('os').environ.get('GV_LONG_SHOTS', '1') == '1'   # 14 Oct: fewer, longer shots
+LONG_SHOTS = __import__('os').environ.get('GV_LONG_SHOTS', '1') == '1'   # fewer, longer shots
 
 
 def script_slots(lines, n_clips=45, max_images=95):

@@ -135,14 +135,14 @@ GSCHEMA = {"type": "object", "properties": {"fails": {"type": "array", "items": 
     "id": {"type": "string"}, "reason": {"type": "string"}, "prompt": {"type": "string"}},
     "required": ["id", "reason", "prompt"]}}}, "required": ["fails"]}
 MAX_GATE_REROLLS = 30
-LIKENESS = ("LIKENESS (19 Oct, one-lead films): CAST A is the film's lead reference sheet. Every still labelled with A must "
+LIKENESS = ("LIKENESS: CAST A is the film's lead reference sheet. Every still labelled with A must "
             "show the SAME person as CAST A: same face shape, age, skin, hair colour/length and the same wardrobe. Reject "
             "any A still that drifts (different face, older/younger, other hair or clothes) with reason 'off-model lead'. "
             "Also reject harsh on-camera flash, cluttered busy frames with no clear subject, and neon-soup lighting.\n")
 
 
 def realism_gate(P, args, status, gen_spent):
-    """13 Oct (the owner: "the harnesses are quite AI-slop-like ... review reference images before video"): after the stills
+    """after the stills
     and BEFORE any clip, Opus reviews every still against its shot intent for photorealism and cinematic craft plus the
     usual QA fails, rewrites failing prompts toward real film craft, rerolls them (budget-capped), re-checks once, and
     excludes what still fails; clips are only made from passing stills (slop_real.generate_media). Fail-open."""

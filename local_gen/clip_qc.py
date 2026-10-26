@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""clip_qc.py (24 Oct 2026, the owner: LTX "fast and good just prone to mistakes") - strict per-clip vision QC and the
+"""clip_qc.py - strict per-clip vision QC and the
 b-roll cascade LTX -> LTX re-roll (new seed) -> Wan 2.2 -> Runway (agent job) / Grok. Every failure reason is logged.
 
   clip_qc.py qc <clip.mp4> --prompt "..."            # QC one clip, prints JSON
@@ -27,7 +27,7 @@ def frames(clip, n=6):
     return d, out
 
 def qc(clip, prompt, still=None, tier='hero', wardrobe=''):
-    """25 Oct (the owner: wrench shirt + floppy wrench): delegates to strict_qc - frames every 0.25 s as contact sheets,
+    """delegates to strict_qc - frames every 0.25 s as contact sheets,
     prop-rigidity / wardrobe / hand-prop rules, second independent reviewer (Grok) on hero and prop shots, both must
     pass on FAIL-level checks (serious glitches), WARN-level drift is logged only (strict_qc.log), fail closed. Set QC_LEGACY=1 for the old 6-frame single reviewer."""
     if os.environ.get('QC_LEGACY') != '1':
@@ -50,7 +50,7 @@ def _qc_legacy(clip, prompt, still=None, tier='hero'):
         "- face_drift: the face, hair or outfit changes identity between frames or versus the start still.\n"
         "- tongue_or_pulled_face: any tongue out, gurning, pouting, duck face, bratty or pulled expression.\n"
         "- text_flipped: any visible text upside down, mirrored or garbled.\n" + (
-        "  B-ROLL EXCEPTION (24 Oct, the owner): garbled or fuzzy text is ALLOWED when it sits on a small or out-of-focus "
+        "  B-ROLL EXCEPTION: garbled or fuzzy text is ALLOWED when it sits on a small or out-of-focus "
         "screen (watch face, background monitor) covering a small part of the frame (under ~5%). Large or in-focus text "
         "must still be legible and upright; upside-down or mirrored text fails everywhere.\n" if tier == 'broll' else "") + "- prompt_fidelity: the action/camera move in the "
         "prompt is clearly what happens, with no new people, morphing or scene change.\n"

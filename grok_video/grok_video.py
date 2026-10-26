@@ -36,13 +36,13 @@ def vocal_metrics(stem, music):
 
 def stem_says_vocals(vm):
     """True = clearly sung vocals (generation may start at once); False = low vocal stem, so wait for whisper to decide.
-    Calibrated on 2026-10-07: the vocal take measured -2.3 dB vs the backing with voice in 92% of half-second windows;
+    Calibrated: the vocal take measured -2.3 dB vs the backing with voice in 92% of half-second windows;
     the instrumental take's demucs bleed measured -14.3 dB and 30%."""
     return vm['rel_db'] > -8 and vm['active_frac'] >= 0.5
 
 
 def stem_is_low(vm):
-    """Clearly instrumental-looking stem (the 7 Oct instrumental: -14.3 dB, 30 %). Between this and stem_says_vocals the
+    """Clearly instrumental-looking stem (a typical instrumental: -14.3 dB, 30 %). Between this and stem_says_vocals the
     stem is ambiguous and never stops a run on its own."""
     return vm['rel_db'] <= -10 or vm['active_frac'] < 0.4
 
@@ -187,7 +187,7 @@ def main():
                     help='auto (default) picks from style.txt: big-room/EDM -> edm, rock -> rock, pop-punk -> punk, pop -> pop-video')
     ap.add_argument('--allow-instrumental', action='store_true', help='do not stop when the song looks instrumental')
     ap.add_argument('--style', choices=['cine-real', 'slopcore', 'mascot'], default='slopcore',
-                    help='slopcore (default since 10 Oct 2026): cine-real v2 (people-driven scenes with a recurring cast, '
+                    help='slopcore (default): cine-real v2 (people-driven scenes with a recurring cast, '
                          'one gritty look, mostly video clips, sparse type, 2-3 Pip cameos; writes video_cine_real_v2.mp4); '
                          'cine-real: the v1 photoreal lyric-literal video with a Pip cameo (first fallback); '
                          'mascot: the earlier Pip-clip video (last fallback)')
@@ -199,7 +199,7 @@ def main():
     ap.add_argument('--real-clip-sec', type=int, default=None, choices=[2, 3, 4, 5],
                     help='cine-real: hero clip length in seconds; default 4 (slopcore: 3)')
     ap.add_argument('--real-planner', choices=['opus', 'script', 'slop'], default='opus',
-                    help='slopcore planner: opus (default since 10 Oct: Claude Opus writes the script + storyboard, '
+                    help='slopcore planner: opus (default: Claude Opus writes the script + storyboard, '
                          'falls back to script then the template; writes work_cine_real_v4 / video_cine_real_v4.mp4), '
                          'script (Grok line-by-line script + critic, *_v3) or slop (the v2 cast/mood planner, *_v2)')
     ap.add_argument('--real-reuse-plan', action='store_true',
@@ -217,7 +217,7 @@ def main():
     ap.add_argument('--fallback-args', default='', help='cine-real: extra arguments for the mascot fallback run (tests)')
     a = ap.parse_args()
     v2 = a.style == 'slopcore'
-    for k, d1, d2 in (('real_images', 110, 95), ('real_heroes', 25, 45), ('real_clip_sec', 4, 3), ('real_time_limit', 32, 34 if os.environ.get('GV_REALISM') == '0' else 42)):   # 13 Oct: the realism gate runs stills -> review -> clips in sequence
+    for k, d1, d2 in (('real_images', 110, 95), ('real_heroes', 25, 45), ('real_clip_sec', 4, 3), ('real_time_limit', 32, 34 if os.environ.get('GV_REALISM') == '0' else 42)):   # the realism gate runs stills -> review -> clips in sequence
         if getattr(a, k) is None:
             setattr(a, k, d2 if v2 else d1)
     real = a.style in ('cine-real', 'slopcore')
@@ -292,7 +292,7 @@ def main():
             fail('lyric timing failed: ' + tres['err'], 4)
         cov, heard, _ = sync_cov()
         status['vocal_check'] = dict(vm or {}, whisper_coverage_pct=cov, whisper_words=heard)
-        # whisper alone is noisy on heavily produced vocals (a 2026-10-05 re-run heard 12 % where the routine's run heard
+        # whisper alone is noisy on heavily produced vocals (two runs on the same song can differ widely, e.g. 12 % vs
         # 69 %), so stopping needs BOTH a low stem and low coverage; with no stem measurement only a near-zero coverage stops
         instrumental = cov is not None and ((vm and stem_is_low(vm) and cov < 25) or (not vm and cov < 5))
         if cov is not None and cov < 25 and not instrumental:
@@ -423,7 +423,7 @@ def main():
     sys.exit(0 if vr['ok'] else 5)
 
 
-MESSENGER_MAX_BYTES = 18_000_000          # the owner's Messenger rejected 23 MB (9 Oct 22:19)
+MESSENGER_MAX_BYTES = 18_000_000          # Messenger limit (23 MB fails)
 
 
 def messenger_copy(out, status):

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Narrative mode (13 Oct 2026): song and video written together as ONE short musical story by Opus (headless claude).
+"""Narrative mode: song and video written together as ONE short musical story by Opus (headless claude).
 
 usage: narrative.py write <src_day> [--out DIR]
   Reads <src_day>/stories.md (+ sources.txt), asks Opus for: main-story pick, treatment, lyrics, title, style and a
@@ -77,7 +77,7 @@ def check_lyrics(lyr, title):
     elif any(c[:len(ch[0])] != ch[0] for c in ch[1:]):
         probs.append('chorus repeats are not identical (a final chorus may only ADD a tag line at the end)')
     n = sum(len(l) for _, l in secs)
-    if not 16 <= n <= 30:   # 17 Oct: sparser lyrics
+    if not 16 <= n <= 30:   # sparser lyrics
         probs.append(f'{n} lines (want about 20-26; cut lines if over)')
     if ch and title.lower().split()[0] not in ' '.join(ch[0]).lower():
         probs.append('title not in the chorus')
@@ -151,7 +151,7 @@ def write(src, out):
             res, meta = SO.run_claude(rf, od, SCHEMA, 600, tools='', effort='medium')
         except Exception as e:
             print(f"repair failed: {e!r}"[:300]); break
-    res['style'] = SL.fix(res['style'])  # 16 Oct: no autotune/vocoder, no jingles
+    res['style'] = SL.fix(res['style'])  # no autotune/vocoder, no jingles
     open(os.path.join(out, 'style.txt'), 'w').write(res['style'].strip() + '\n')
     open(os.path.join(out, 'title.txt'), 'w').write(res['title'].strip() + '\n')
     json.dump(res, open(os.path.join(out, 'treatment.json'), 'w'), indent=1, ensure_ascii=False)

@@ -350,7 +350,7 @@ def narrative_events(NV, sung, display, acc, end_type, dur):
         if ln['kind'] == 'chorus':                     # the chorus hook line, same style on every repeat
             ev.append(f"Dialogue: 5,{ts(a0)},{ts(a1)},Hook,,0,0,0,,{{\\fad(80,100)\\3c{acc}}}" + esc(' '.join(t[0] for t in toks).upper()))
         txt = ((NV.get('onscreen') or {}).get(lid) or '').strip()
-        if txt and a0 < NV.get('_dg_end', -1):          # never two diegetic labels at once (13 Oct QA)
+        if txt and a0 < NV.get('_dg_end', -1):          # never two diegetic labels at once
             NV['dropped'].append({'seg': lid, 'text': txt, 'bad': ['overlap']}); txt = ''
         if txt:
             ok, bad = diegetic_ok(txt, NV.get('vocab'))
@@ -371,7 +371,7 @@ LYR_MV = 1920 - TICK_Y + 26                   # lyric captions sit just above th
 
 
 def headline_events(HV, sung, display, acc, end_type, dur):
-    """headline mode (13 Oct): the title card in the hook (0-3 s); ONE big headline card on the main story's first sung
+    """headline mode: the title card in the hook (0-3 s); ONE big headline card on the main story's first sung
     line; the chorus hook words on chorus lines (one style); a news ticker along the bottom during story lines,
     scrolling '@handle fact' of the story being sung and changing exactly when the story changes. No other text."""
     ev = []
@@ -395,12 +395,12 @@ def headline_events(HV, sung, display, acc, end_type, dur):
             continue
         story = ls_.get(_norm(ln.get('text') or ' '.join(t[0] for t in toks)), 0)
         is_ch = ln['kind'] == 'chorus' or re.fullmatch(r'(final |last )?chorus.*', ln['section'].lower())
-        if not is_ch and story == 0 and ln['kind'] == 'other':  # 13 Oct: a meta tag ([Key Change]) parsed as a section
+        if not is_ch and story == 0 and ln['kind'] == 'other':  # a meta tag ([Key Change]) parsed as a section
             is_ch = True
         if is_ch:
             story = 0
 
-        # 13 Oct (the owner: "we might need all the lyrics"): EVERY sung line as a word-synced karaoke caption above the
+        # EVERY sung line as a word-synced karaoke caption above the
         # ticker; chorus lines bigger in the hook style. Words fill in as they are sung (\\kf from the alignment).
         kf, prev = [], a0
         for k, (tk, w0, w1) in enumerate(toks):

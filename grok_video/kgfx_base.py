@@ -1,4 +1,4 @@
-"""Motion-graphics base, from the ONUG No Window karaoke video (20 Oct 2026)."""
+"""Motion-graphics base for karaoke v1."""
 import math, random
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 FD='/usr/share/fonts/truetype/sand-box/google/'
