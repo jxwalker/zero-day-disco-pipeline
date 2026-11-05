@@ -20,10 +20,15 @@ A daily AI-news song and karaoke music video, made end to end by agents and post
 6. **Strict QC** – `local_gen/strict_qc.py` + `clip_qc.py`: frames every 0.25 s, two vision reviewers, FAIL vs WARN
    severity (bent/melting props, prints on clothes, extra hands, mirrored text, eyewear glitches, wardrobe swaps), then a
    whole-cut review at 2 fps. Nothing posts unless QC passes.
-7. **Posting** – `post_lint.py` → `x_post.py` (main post + video), `x_source_reply.py` (sources reply),
+7. **Hardened gates** – `grok_video/pipeline/`: prompt/wardrobe validation with negation ("no jewellery" passes),
+   screen-check cast/terminal waivers, scene-order timeline + reuse caps, coverage abort on missing twist/payoff,
+   per-character refs, lip-sync cutaway on failed takes, post-prod overlays (model never renders text), Grok-primary
+   render planner. Service facade `PopVideoJob` accepts image + song idea for a future SaaS path (no UI here).
+8. **Posting** – `post_lint.py` → `x_post.py` (main post + video), `x_source_reply.py` (sources reply),
    `postiz_upload.sh` (TikTok / YouTube Shorts via Postiz).
 
-Detailed operating notes: `docs/OPERATIONS.md`, `grok_video/README.md`, `local_gen/README.md`.
+Detailed operating notes: `docs/OPERATIONS.md`, `docs/technical/pipeline-hardening.md`, `grok_video/README.md`,
+`local_gen/README.md`.
 
 ## Setup
 - Python 3.10+, ffmpeg, `requests`; a venv with whisperx + demucs for alignment (`PY`, `DEMUCS`).
@@ -39,6 +44,11 @@ Secrets: `X_API_KEY`, `X_API_SECRET`, `X_ACCESS_TOKEN`, `X_ACCESS_TOKEN_SECRET`,
 Hosts: `LOCAL_GEN_SERVER`, `COMFY_BIND`, `SPARK_SSH`, `SPARK_SSH_KEY`. Tools: `GROK_BIN`, `CLAUDE_BIN`, `PY`, `DEMUCS`.
 QC: `QC_STEP`, `QC_CUT_FPS`, `QC_GROK_MODEL`, `QC_PAR`, `QC_LOG`. Many `GV_*` / `HL_*` feature switches are documented
 inline where they are read. See `config.example.env`.
+
+## Tests
+```bash
+python3 -m unittest discover -s test/unit -v
+```
 
 ## Versioning
 Semantic versions in `VERSION`, tagged `vX.Y.Z`. See `CHANGELOG.md`.

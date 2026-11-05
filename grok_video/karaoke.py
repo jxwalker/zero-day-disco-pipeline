@@ -297,12 +297,15 @@ DEVICE_PREFIX = ("CAMERA POSITION: behind the person, over their shoulder, so we
                  "of the device's screen (screen content faces the camera, the person faces away from camera). ")
 
 
-def screen_check(gdir, jobs, status, tag):
+def screen_check(gdir, jobs, status, tag, critical_ids=None):
     """Claude looks at every still: reject reversed/impossible screens (content on a laptop lid, screen facing away
-    while we are meant to see it, glowing backs), robots, readable gibberish text, duplicated/stacked frames, bad hands
-    or faces. Returns the set of rejected ids. Fails open (logs) if the checker is unavailable."""
+    while we are meant to see it, glowing backs), garbled readable gen-text, duplicated/stacked frames, bad hands
+    or faces. Robots/cast and blank/dark story devices are NOT rejected via other_problem (see pipeline.screen_policy).
+    Story-critical ids (TWIST/PAYOFF) are never silently dropped for soft other_problem. Returns rejected ids.
+    Fails open (logs) if the checker is unavailable."""
     if not jobs: return set()
     import slop_opus as SO
+    from pipeline.screen_policy import filter_rejections
     names = [os.path.basename(j['out']) for j in jobs]
     pf = os.path.join(gdir, f'screen_check_{tag}.txt')
     open(pf, 'w').write(
@@ -317,14 +320,17 @@ def screen_check(gdir, jobs, status, tag):
         "and the camera (we see their face over/behind the device).\n"
         "- display_visible_to_camera: we can see that device's lit screen content (UI, code, image).\n"
         "  If BOTH of the last two are true the screen is physically on the wrong side: that is the main failure.\n"
-        "- other_problem: anything in the list below.\n"
+        "- other_problem: garbled readable text, stacked duplicates, malformed hands/faces, clothing prints, eyewear artefacts, "
+        "silly pulled faces. Do NOT set other_problem merely because a robot/android/cast member is the subject, or because a "
+        "blank/dark terminal, monitor or handheld gadget faces the camera (story may require those; readable content is composited later).\n"
         "Reject (ok=false) if ANY of these: a laptop shows an image/screen content on the BACK of its lid; a laptop/monitor/"
         "phone that the person is using has its screen facing away from the camera while the shot is about what is on it "
         "(we only see the back of the lid/monitor, which looks like a screen); a screen glows on the wrong side; a device "
-        "is physically impossible; the frame is two stacked copies of the same picture; a robot or android; garbled "
+        "is physically impossible; the frame is two stacked copies of the same picture; garbled "
         "readable text that is prominent; ANY print, patch, logo or tool/prop-shaped graphic on clothing; a rigid prop that bends, melts or changes size; badly malformed hands or faces; anyone sticking their tongue out, pulling a silly/bratty face, gurning, pouting or making a duck face; any on-screen text (watch, sign, bubble) that is upside down, mirrored or garbled.; any glasses or eyewear on the lead, or eyewear rendering artefacts (warped, melted, doubled, floating or half-missing frames or lenses, frames fused into skin or hair). A laptop seen from behind is ONLY acceptable if "
         "its lid back is plain (no picture) and we are clearly looking at the person's face, not the screen; when unsure, "
-        "reject.: ANY laptop at all is a reject. Wall displays, rack monitors and holographic HUDs are fine.\nGive a short issue for each problem image, '' otherwise. id = the file name without .png (for _f.png frames use the name without _f.png).\n\nFILES:\n"
+        "reject.: ANY laptop at all is a reject. Wall displays, rack monitors and holographic HUDs are fine. Robots/androids "
+        "as story cast are allowed; blank/dark device screens facing camera are allowed.\nGive a short issue for each problem image, '' otherwise. id = the file name without .png (for _f.png frames use the name without _f.png).\n\nFILES:\n"
         + '\n'.join(names))
     try:
         res, meta = SO.run_claude(pf, gdir, SCREEN_SCHEMA, 420, tools='Read', effort='medium')
@@ -333,12 +339,15 @@ def screen_check(gdir, jobs, status, tag):
         status.setdefault('warnings', []).append('screen check unavailable'); return set()
     rs = {r['id'].replace('_f.png', '').replace('.png', '').replace('_f', ''): r for r in (res or {}).get('results', [])}
     G.save_json(rs, os.path.join(gdir, f'screen_check_{tag}.json'))
-    for r in rs.values():
-        r['ok'] = not ((r.get('user_faces_camera_behind_device') and r.get('display_visible_to_camera')) or r.get('other_problem')
-                       or r.get('laptop_present') or r.get('screen_on_outer_lid') or r.get('screen_not_facing_camera'))  # stricter
-    bad = {k for k, r in rs.items() if not r.get('ok')}
-    G.log(f"karaoke: screen check {tag}: {len(rs)} checked, rejected {sorted(bad)}")
+    bad, verdicts = filter_rejections(rs, critical_ids=critical_ids or [])
+    G.save_json(verdicts, os.path.join(gdir, f'screen_check_{tag}_verdicts.json'))
+    for k, r in rs.items():
+        r['ok'] = k not in bad
+        if verdicts.get(k, {}).get('waived'):
+            r['waived'] = verdicts[k].get('reason')
+    G.log(f"karaoke: screen check {tag}: {len(rs)} checked, rejected {sorted(bad)} (waivers applied)")
     status.setdefault('screen_checks', {})[tag] = {k: r.get('issue') for k, r in rs.items() if not r.get('ok')}
+    status.setdefault('screen_waivers', {})[tag] = {k: v for k, v in verdicts.items() if v.get('waived')}
     return bad
 
 
@@ -439,7 +448,15 @@ def generate(P, work, a, deadline, status):
         for j in dups: os.replace(j['out'], j['out'] + '.dup.png')
         b3 = R.Batcher(gdir, {'gen': len(dups)}, batch_size=5, max_parallel=2, deadline=deadline - 9 * 60, tag='reroll')
         b3.no_salvage = True; b3.run(dups)
-    bad = screen_check(gdir, [j for j in jobs if os.path.exists(j['out'])], status, 'stills')
+    try:
+        from pipeline.coverage import critical_scene_ids
+        from pipeline.overlays import model_text_forbidden, terminal_must_be_blank
+        _crit = critical_scene_ids(scenes)
+        for j in jobs:
+            j['prompt'] = terminal_must_be_blank(model_text_forbidden(j['prompt']))
+    except Exception:
+        _crit = []
+    bad = screen_check(gdir, [j for j in jobs if os.path.exists(j['out'])], status, 'stills', critical_ids=_crit)
     if bad and time.time() < deadline - 9 * 60:
         G.log(f"karaoke: rerolling {len(bad)} stills with screen problems: {sorted(bad)}")
         rj = []
@@ -452,7 +469,7 @@ def generate(P, work, a, deadline, status):
                                           "holographic HUD seen straight-on. " + j['prompt'].replace(DEVICE_PREFIX, ''))))
         b4 = R.Batcher(gdir, {'gen': len(rj), 'edit': len(rj)}, batch_size=5, max_parallel=3, deadline=deadline - 8 * 60, tag='screenfix')
         b4.no_salvage = True; b4.run(rj)
-        bad2 = screen_check(gdir, [j for j in rj if os.path.exists(j['out'])], status, 'reroll')
+        bad2 = screen_check(gdir, [j for j in rj if os.path.exists(j['out'])], status, 'reroll', critical_ids=_crit)
         for j in rj:
             if j['id'] in bad2 or not os.path.exists(j['out']):
                 if os.path.exists(j['out']): os.replace(j['out'], j['out'] + '.screen2.png')
@@ -508,7 +525,7 @@ def generate(P, work, a, deadline, status):
                 fp = j['out'][:-4] + '_f.png'
                 subprocess.run(['ffmpeg', '-v', 'error', '-y', '-sseof', '-1.2', '-i', j['out'], '-frames:v', '1', fp])
                 if os.path.exists(fp) and os.path.exists(j['out']): fj.append({'id': j['id'], 'out': fp, 'clip': j['out']})
-        badc = screen_check(gdir, fj, status, 'clips') if fj else set()
+        badc = screen_check(gdir, fj, status, 'clips', critical_ids=_crit) if fj else set()
         for j in fj:
             if os.path.basename(j['out']).replace('_f.png', '') in badc:
                 os.replace(j['clip'], j['clip'] + '.screen.mp4'); status.setdefault('clip_rejected', []).append(j['clip'])
@@ -722,7 +739,7 @@ def pace(shots, L, day, audio, dur):
     clips_seen = {}
     _gd = os.path.dirname(next((x['src'][1] for x in body if x['src'][0] == 'clip'), '') or '.')
     pool = sorted(f"{_gd}/{f}" for f in os.listdir(_gd) if f.endswith('.mp4') and f.count('.') == 1) if os.path.isdir(_gd) else []
-    CAP = int(os.environ.get('GV_CLIP_MAX_USES', '4'))
+    CAP = int(os.environ.get('GV_CLIP_MAX_USES', '2'))  # postmortem: default 2×; regenerate shortfalls, do not loop
     _dur = {}
     def cdur(c):
         if c not in _dur:
@@ -1220,6 +1237,21 @@ def main():
             P['ver'] = PLAN_VER; P['plan_s'] = round(time.time() - t0)
             G.save_json(P, os.path.join(work, 'plan_raw.json'))
             status['warnings'] += fact_lint(P, day)
+            # Hardening: SING only on dedicated performance shots; prompt gate rewrites (never silent lock-leak swap)
+            try:
+                from pipeline.plan_fix import fix_plan_singing
+                from pipeline.prompt_gate import gate_prompts
+                from pipeline.coverage import plan_fingerprint
+                P = fix_plan_singing(P, sing_share=float(os.environ.get('GV_SING_SHARE', '0') or 0))
+                gated = gate_prompts(P.get('scenes') or [])
+                P['scenes'] = gated['scenes']
+                G.save_json(gated['report'], os.path.join(work, 'prompt_gate.json'))
+                status['prompt_gate'] = {k: gated[k] for k in ('kept', 'dropped', 'critical_fail', 'ok')}
+                if gated['critical_fail']:
+                    raise RuntimeError(f"prompt gate: {gated['critical_fail']} story-critical prompts failed rewrite")
+                P['plan_fp'] = plan_fingerprint(P)
+            except ImportError as e:
+                status['warnings'].append(f'pipeline hardening import failed ({e})')
             G.save_json(P, pp)
         import design as DZ
         DES = DZ.resolve(day, P.get('design'), force_palette=direction(day)['palette']); status['design'] = DES
@@ -1237,6 +1269,31 @@ def main():
         if not sync_ok: status['warnings'].append(f'word sync weak {sync} -> line-level karaoke')
         rep = sanitize(L)
         if rep: status['warnings'].append(f"timing sanity: re-spread the tail of {len(rep)} line(s): {rep}")
+        # Coverage gate: abort clearly if too few filmed clips or TWIST/PAYOFF missing (never assemble a hollow cut)
+        try:
+            from pipeline.coverage import assert_coverage, CoverageError, critical_scene_ids
+            from pipeline.timeline_policy import load_pinned_timeline
+            avail_ids = [s['id'] for s in P.get('scenes', [])
+                         if os.path.exists(f"{gdir}/{s['id']}.mp4") and os.path.getsize(f"{gdir}/{s['id']}.mp4") > 10000]
+            if P.get('scenes') and os.environ.get('GV_COVERAGE_GATE', '1') != '0':
+                # Ratio is measured against the intended film set (stills/clips budget), not every plan row.
+                intended = (P.get('scenes') or [])[:max(a.stills, a.clips)]
+                cov = assert_coverage(intended, avail_ids, require_critical=False)
+                # Story-critical tags anywhere in the plan must have clips.
+                assert_coverage(P.get('scenes') or [], avail_ids, min_ratio=0.0, require_critical=True)
+                status['coverage'] = cov
+                G.log(f"karaoke: coverage {cov['pct']}% ({cov['have']}/{cov['wanted']}); critical ok")
+            # Stale pin: only reuse timeline_pinned.json when plan_fp matches
+            pin_path = os.path.join(work, 'timeline_pinned.json')
+            pinned = load_pinned_timeline(pin_path, P)
+            if pinned is None and os.path.exists(pin_path):
+                status['warnings'].append('stale timeline_pinned.json ignored (plan_fp mismatch)')
+                G.log('karaoke: ignoring stale timeline pin (plan fingerprint mismatch)')
+        except CoverageError as e:
+            status.update(ok=False, error=str(e), coverage=getattr(e, 'details', {}))
+            G.save_json(status, sp)
+            print(f"GROK_VIDEO_STATUS=failed code=8 style=karaoke reason={str(e)[:300]!r}", flush=True)
+            sys.exit(8)
         shots = timeline(P, L, dur, day, gdir)
         pl_ = {ln['i']: ln for ln in P['lines']}; inv_ = {v: k for k, v in map_lines(P, L, day).items()}
         tab = match_check(shots, L, P, work, gdir, status)
@@ -1266,7 +1323,24 @@ def main():
         shots, bpm_ = pace(shots, L, day, audio, dur); status['bpm'] = round(bpm_, 1)
         G.log(f'karaoke: paced {len(shots)} shots at {bpm_:.1f} BPM')
         end_t = shots[-1]['t0']
-        story = []   # no story banner/chip over the video (standing rule)
+        # Post-production overlays are first-class (model never renders text). Default ON.
+        story = []
+        overlay_texts = []
+        if os.environ.get('GV_NEWS_TEXT', '1') != '0' and os.environ.get('GV_NO_GFX', '0') != '1':
+            story = story_events(P, L, day, dur, end_t)
+            try:
+                from pipeline.overlays import build_overlay_texts, overlays_to_json
+                overlay_texts = overlays_to_json(build_overlay_texts(P, [
+                    {'i': i, 'start': ln.get('start', 0.0), 'end': ln.get('end', 0.0)}
+                    for i, ln in enumerate(L) if ln.get('start') is not None
+                ]))
+                G.save_json(overlay_texts, os.path.join(work, 'overlay_texts.json'))
+                if os.environ.get('GV_TERM_COMPOSITE', '1') != '0' and any(o.get('g') == 'terminal' for o in overlay_texts):
+                    status['term_composite'] = True
+            except Exception as e:
+                status['warnings'].append(f'overlay build failed ({str(e)[:120]})')
+        else:
+            G.save_json([], os.path.join(work, 'overlay_texts.json'))
         stills = sorted(f for f in os.listdir(gdir) if f.endswith('.png'))
         endp = {'title': G.read(os.path.join(day, 'title.txt')).strip(), 'credit': (P.get('credit') or '')[:80],
                 'sub': 'Grok Bot · ' + time.strftime('%-d %b %Y', time.strptime(os.path.basename(day)[:10], '%Y-%m-%d')) if re.match(r'\d{4}-\d\d-\d\d', os.path.basename(day)) else '',
@@ -1281,8 +1355,11 @@ def main():
                     if os.environ.get('GV_ENDCARD_PHOTO') != '1': endp['bg'] = None; break
                     if os.path.exists(os.path.join(gdir, f"{v['id']}.mp4")): endp['bg_clip'] = os.path.join(gdir, f"{v['id']}.mp4")
                     break
-        G.save_json({'shots': [{'t0': round(s['t0'], 2), 't1': round(s['t1'], 2), 'src': [s['src'][0], s['src'][1]], 'line': s.get('line'), 'redrawn': s.get('redrawn')} for s in shots],
-                     'story': story}, os.path.join(work, 'timeline.json'))
+        # Persist timeline with plan_fp so later pins cannot outlive a re-plan
+        from pipeline.coverage import plan_fingerprint as _pfp
+        G.save_json({'plan_fp': P.get('plan_fp') or _pfp(P),
+                     'shots': [{'t0': round(s['t0'], 2), 't1': round(s['t1'], 2), 'src': [s['src'][0], s['src'][1]], 'line': s.get('line'), 'redrawn': s.get('redrawn')} for s in shots],
+                     'story': story, 'overlays': len(overlay_texts)}, os.path.join(work, 'timeline.json'))
         sizes = [(1080, 1920)] + ([] if a.no_16x9 else [(1920, 1080)])
         jobs = []
         for W, H in sizes:
