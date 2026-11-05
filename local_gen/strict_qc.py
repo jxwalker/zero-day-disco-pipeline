@@ -28,6 +28,14 @@ POCKET_RE = re.compile(r"\bpocket(s|ed|ing)?\b|\btuck(s|ed|ing)?\b|\bholster|\bs
                        r"\bhang(s|ing)?\b[^.;]{0,60}\b(peg ?board|hook|belt|outline)|\bwith (her|his) teeth\b", re.I)
 GRAPHIC_WARDROBE_RE = re.compile(r"(\w+[- ]?(shaped|print|printed|pattern|patterned|motif|patch(es)?|logo|graphic|embroider\w*|appliqu\w*|badge|decal))|"
                                  r"(stitched|embroidered|printed|painted) \w+ (patch(es)?|motif|print|graphic)", re.I)
+# Accessories banned unless the mention is negated ("no jewellery", "without chains").
+ACCESSORY_RE = re.compile(
+    r"\b(jewellery|jewelry|necklace|bracelet|earrings?|chains?|choker|pendant|bangle|rings?)\b", re.I,
+)
+ACCESSORY_NEGATION_RE = re.compile(
+    r"\b(?:no|without|free of|free from|lacking|avoid(?:ing)?|never(?: with)?|zero|sans)\b[\s,:-]*$",
+    re.I,
+)
 
 # Severity: FAIL = serious glitch, blocks. WARN = small drift, logged only.
 CHECKS = {
@@ -203,11 +211,28 @@ def qc_cut(video, wardrobe='', out=None, chunk_s=30.0):
     json.dump(res, open(out or os.path.join(d, 'qc_cut.json'), 'w'), indent=1)
     return res
 
+def _accessory_negated(prompt, start):
+    """True when an accessory token at ``start`` is under a negation ("no jewellery", "without chains")."""
+    window = (prompt or '')[max(0, start - 48):start]
+    return bool(ACCESSORY_NEGATION_RE.search(window))
+
+
+def accessory_problems(prompt):
+    """Banned accessories unless explicitly negated. Negated forms must pass."""
+    p = []
+    for m in ACCESSORY_RE.finditer(prompt or ''):
+        if _accessory_negated(prompt, m.start()):
+            continue
+        p.append(f"banned accessory '{m.group(0)}' without negation; use 'no {m.group(0)}' / 'without {m.group(0)}' or remove it")
+    return p
+
+
 def lint_prompt(prompt):
     """Pre-generation lint. Returns problems; any problem -> rewrite the action or swap the shot for a graphic card."""
     p = []
     if POCKET_RE.search(prompt or ''): p.append('prop-in-pocket/clip/holster action: avoid, or swap this shot for a graphic card')
     if GRAPHIC_WARDROBE_RE.search(prompt or ''): p.append('wardrobe graphic (patch/print/logo/motif): use plain solid garments only')
+    p.extend(accessory_problems(prompt))
     return p
 
 PLAIN_RULE = " All garments plain and solid-coloured: no prints, patches, embroidery, logos or graphics on any clothing."

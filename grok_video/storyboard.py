@@ -41,7 +41,11 @@ GRAMMAR = """CINE GRAMMAR (from the Claudia prompt book):
   final-chorus word swap gets its own payoff image. Pure literal word-by-word clip art is banned: the lead DOES it.
 - Banned filler words: cinematic, 4k, 8k, ultra-detailed, masterpiece, stunning, epic, hyperreal, award-winning.
 - No robots/androids/mascots except the mandatory Pip cameo (1-2 short moving shots, tag [PIP]); no laptops, tablets or phones anywhere (any screen is a wall display or terminal seen
-  straight-on, with real commands); no real or famous people; everyone 21-28; no logos."""
+  straight-on, blank/dark for readable content which is composited in the edit); no real or famous people; everyone 21-28; no logos.
+- Adaptable craft (scale to the song; one world is fine): one visual premise every shot advances; if two worlds, contrast
+  grade/design/camera; distinct character styling anchors; performances on musical accents; varied shot scale/POV and
+  physical interactions; recurring locations may transform for payoff; HUD/kinetic type/captions are code-built overlays
+  only — the model never renders readable text."""
 
 
 def _lines(day):
@@ -81,6 +85,11 @@ def ensure_direction(day, lines=None):
         + json.dumps(cj.get('chosen') or {}, ensure_ascii=False) + "\n\nTITLE: " + (hj.get('title') or G.read(os.path.join(day, 'title.txt')))
         + "\n\nSTORIES:\n" + G.read(os.path.join(day, 'stories.md'))[:6000] + "\n\nSUNG LINES (index: text):\n"
         + '\n'.join(f"{i}: {l}" for i, l in enumerate(lines)) + "\n\nReply with the JSON only.")
+    try:
+        from pipeline.creative_contract import storyboard_direction_addendum
+        open(pf, 'a').write(storyboard_direction_addendum())
+    except Exception:
+        pass
     d, meta = SO.run_claude(pf, od, DIR_SCHEMA, 600, tools='', effort='high')
     sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'local_gen'))
     import strict_qc as SQ                      # enforce plain wardrobe + no prop-pocket actions after the fact
