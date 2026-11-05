@@ -149,3 +149,19 @@ energy and momentum of the Claudia videos):
 - No story banner/chip over the video.
 
 HARD RULE: no tongue out, no pulled or silly faces, no gurning, no bratty faces, no pouting or duck faces; every expression is natural and confident.
+
+STORY COHERENCE (required for every NEW plan; hard-gated before any Grok spend):
+- `arc`: ONE sentence visual premise (sound-off readable). Also mirror it in design.why.
+- `viewer_retell`: ONE sentence the planner expects a viewer to say after watching sound-off.
+  Describe ACTION + CONSEQUENCE (what changes). Do NOT write "An independent viewer sees…" —
+  independence is a separate storyboard review field, not planner text.
+- `payoff_design`: object {scene_id, summary, world_after} designed BEFORE filling middle beats.
+- `required_shots`: structural climax/twist/payoff scene ids (not keyword matching).
+- `required_accents`: musical accents that MUST be covered by performance peaks
+  (e.g. ["hook","drop"]). Every listed accent needs a scene/performance_beat with that accent.
+- EVERY scene requires: world_before (object), action (string), world_after (object).
+- Consequence actions (yank/pull/plug/kill-switch/reveal turns) MUST include authored
+  `requires_next: ["<next_scene_id>"]`. Never leave causal edges implied; never invent them later.
+- Tag structural_role on twist/payoff scenes. Prefer mouths-closed performance; singing is opt-in.
+- Caption/title GFX (headline/quote used as lyric cards) are edit infrastructure; do NOT use
+  bignum/story PowerPoint cards as the primary story carrier on black voids.
