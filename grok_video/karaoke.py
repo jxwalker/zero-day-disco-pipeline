@@ -1242,7 +1242,24 @@ def main():
                 from pipeline.plan_fix import fix_plan_singing
                 from pipeline.prompt_gate import gate_prompts
                 from pipeline.coverage import plan_fingerprint
+                from pipeline.creative_contract import (
+                    ensure_creative_contract, validate_creative_contract, apply_no_text_to_scenes,
+                )
                 P = fix_plan_singing(P, sing_share=float(os.environ.get('GV_SING_SHARE', '0') or 0))
+                P = ensure_creative_contract(P)
+                P = apply_no_text_to_scenes(P)
+                crep = validate_creative_contract(
+                    P, mode=os.environ.get('GV_CREATIVE_CONTRACT_MODE', 'adaptive'))
+                P['creative_contract'] = crep.contract
+                G.save_json(crep.to_dict(), os.path.join(work, 'creative_contract.json'))
+                status['creative_contract'] = {
+                    'ok': crep.ok, 'summary': crep.summary,
+                    'warnings': len(crep.to_dict().get('warnings') or []),
+                }
+                if not crep.ok and os.environ.get('GV_CREATIVE_CONTRACT_ABORT', '0') == '1':
+                    raise RuntimeError(f"creative contract failed: {crep.summary}")
+                elif not crep.ok:
+                    status['warnings'].append(f'creative contract: {crep.summary}')
                 gated = gate_prompts(P.get('scenes') or [])
                 P['scenes'] = gated['scenes']
                 G.save_json(gated['report'], os.path.join(work, 'prompt_gate.json'))

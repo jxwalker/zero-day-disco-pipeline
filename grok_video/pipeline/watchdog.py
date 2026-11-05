@@ -44,13 +44,16 @@ class StageEvent:
 
 HINTS = {
     'plan': 'Re-run with --replan after fixing lyrics/stories; check plan.json.',
+    'creative_contract': 'Set visual_premise, character anchors, graphics_plan (model_renders_text=false). '
+                         'Dual worlds must contrast on grade/camera/design; location_arcs need state changes.',
     'prompt_gate': 'Inspect prompt_gate report; rewrite incompatible prompts; do not silent-drop story shots.',
     'generate': 'Check Grok auth (`grok login`), budget, and cache under work/*/grok/.',
     'screen_check': 'See screen_check_*.json; cast/robots should not die via other_problem.',
     'coverage': 'Fewer than 90% of scenes have clips, or TWIST/PAYOFF missing — abort, do not assemble.',
     'timeline': 'Rebuild from scene order; delete stale timeline_pinned.json if plan_fp mismatch.',
     'lipsync': 'Failed takes must cut away; run offset search; SING sources >= 720p height.',
-    'overlays': 'Ensure GV_NEWS_TEXT=1 and overlay_texts.json is written from plan story_text.',
+    'overlays': 'Ensure GV_NEWS_TEXT=1 and overlay_texts.json is written from plan story_text/graphics_plan. '
+                'HUD/kinetic/terminal are edit-composited; never model-burned.',
     'render': 'Budget exhausted or local fallback failed; reuse cache before regenerating stills.',
 }
 

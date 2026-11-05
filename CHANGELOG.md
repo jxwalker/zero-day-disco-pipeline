@@ -9,6 +9,10 @@ All notable changes are listed here. Versions follow semantic versioning and are
   identity routing, SING-only-on-sing-shots plan fix, post-production story/UI/terminal overlays ON by
   default, lip-sync pin gate with offset search, Grok-primary render planner with cache/budget/local
   fallback, progress watchdog, and a service-facing `PopVideoJob` contract (image + song idea).
+- Adaptable `creative_contract` (visual premise, optional world contrast, character styling anchors,
+  performance-on-accent beats, shot variety, location transformation/payoff, code-built HUD/kinetic
+  graphics plan with model-never-renders-text). Wired into `PopVideoJob`, karaoke planning, and
+  storyboard direction prompts without rejecting legitimate simpler single-world videos.
 - Regression tests under `test/unit/`. Technical notes: `docs/technical/pipeline-hardening.md`.
 
 ## v1.1.0

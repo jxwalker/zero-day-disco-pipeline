@@ -7,11 +7,17 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import time
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional
 
 from .coverage import assert_coverage, plan_fingerprint
+from .creative_contract import (
+    apply_no_text_to_scenes,
+    ensure_creative_contract,
+    validate_creative_contract,
+)
 from .identity import CharacterRefs, farm_lock_suffix, ref_images_for_scene, singing_instruction
 from .lipsync import decide_take, offset_candidates
 from .overlays import (
@@ -78,22 +84,32 @@ class PopVideoResult:
 
 
 def _default_plan_from_idea(req: PopVideoRequest) -> dict:
-    """Minimal plan scaffold for dry-run / tests. Production planners replace this."""
+    """Minimal plan scaffold for dry-run / tests. Production planners replace this.
+
+    Includes an adaptable creative_contract (premise, optional dual worlds when the idea
+    implies contrast, styling anchors, performance beats, graphics_plan). Not a clone of
+    any specific benchmark video.
+    """
     idea = req.song_idea.strip()
+    dual = bool(re_search_contrast(idea))
     scenes = [
-        {'id': 's01_setup', 'prompt': f'[LEAD] establishes the world for: {idea}. No jewellery.',
-         'motion': 'gentle push-in', 'role': 'setup', 'tags': 'SETUP'},
-        {'id': 's02_sing', 'prompt': '[SING][HERO] front-facing close-up singing this LINE "pull the plug"',
-         'motion': 'subtle head sway', 'role': 'singing', 'tags': 'SING'},
-        {'id': 's03_action', 'prompt': '[LEAD] yanks the wall plug, cable sparks, no chains',
-         'motion': 'yank action', 'role': 'action', 'tags': 'ACTION'},
-        {'id': 's04_twist', 'prompt': '[GROK] robot yanks the cable [TWIST]',
-         'motion': 'twist reveal', 'role': 'robot', 'tags': 'TWIST'},
-        {'id': 's05_payoff', 'prompt': '[OVERSEER] holds a blank dark handheld gadget [PAYOFF]',
-         'motion': 'payoff hold', 'role': 'payoff', 'tags': 'PAYOFF',
-         'terminal_text': 'WHY WOULD I DECEIVE YOU?'},
+        {'id': 's01_setup', 'prompt': f'[LEAD] WIDE establishes the world for: {idea}. No jewellery.',
+         'motion': 'gentle push-in', 'role': 'setup', 'tags': 'SETUP', 'size_lens': 'WIDE 35mm',
+         'world': 'A'},
+        {'id': 's02_sing', 'prompt': '[SING][HERO] MCU front-facing close-up singing this LINE "pull the plug"',
+         'motion': 'subtle head sway on the beat', 'role': 'singing', 'tags': 'SING',
+         'size_lens': 'MCU 50mm', 'emotion': 'urgent', 'world': 'A'},
+        {'id': 's03_action', 'prompt': '[LEAD] CU yanks the wall plug, cable sparks, no chains',
+         'motion': 'yank action', 'role': 'action', 'tags': 'ACTION', 'size_lens': 'CU 85mm',
+         'world': 'B' if dual else 'A'},
+        {'id': 's04_twist', 'prompt': '[GROK] MS robot yanks the cable [TWIST]',
+         'motion': 'twist reveal', 'role': 'robot', 'tags': 'TWIST', 'size_lens': 'MS 35mm',
+         'world': 'B' if dual else 'A'},
+        {'id': 's05_payoff', 'prompt': '[OVERSEER] MCU holds a blank dark handheld gadget [PAYOFF]',
+         'motion': 'payoff hold', 'role': 'payoff', 'tags': 'PAYOFF', 'size_lens': 'MCU 50mm',
+         'terminal_text': 'WHY WOULD I DECEIVE YOU?', 'world': 'A'},
     ]
-    return {
+    plan = {
         'scenes': scenes,
         'lines': [
             {'i': 0, 'shows': 'setup', 'fact': idea[:80], 'v': [{'kind': 'scene', 'id': 's01_setup'}]},
@@ -107,8 +123,57 @@ def _default_plan_from_idea(req: PopVideoRequest) -> dict:
         ],
         'slams': [{'line': 2, 'text': 'PULL'}],
         'intro': [], 'breaks': [], 'outro': [], 'credit': req.title or 'Pop Video',
-        'design': {},
+        'design': {'palette': 'acid-deadpan', 'grade': 'flat saturated', 'texture': '35mm grain'},
+        'arc': idea[:120],
+        'creative_contract': {
+            'visual_premise': idea[:160],
+            'character_anchors': [
+                {'id': 'LEAD', 'styling': 'lead from user image', 'signature': 'uploaded likeness'},
+                {'id': 'GROK', 'styling': 'robot unit', 'signature': 'faction robot'},
+                {'id': 'OVERSEER', 'styling': 'founder figure', 'signature': 'handheld gadget'},
+            ],
+            'performance_beats': [
+                {'scene_id': 's02_sing', 'accent': 'hook', 'emotion': 'urgent', 'musical_cue': 'chorus'},
+            ],
+            'shot_variety': {
+                'scales': ['WIDE', 'MCU', 'CU', 'MS'],
+                'physical_interactions': True,
+            },
+            'location_arcs': [
+                {'location': 'server rack hall', 'states': ['powered', 'yanked dark'],
+                 'payoff_scene': 's05_payoff'},
+            ] if dual else [],
+            'worlds': (
+                [
+                    {'id': 'A', 'label': 'clean', 'grade': 'cool clean', 'camera': 'static',
+                     'design': 'luxury polish', 'palette': 'steel cyan'},
+                    {'id': 'B', 'label': 'hidden', 'grade': 'warm dirty', 'camera': 'handheld',
+                     'design': 'exhausted backstage', 'palette': 'amber grit'},
+                ] if dual else [
+                    {'id': 'A', 'label': 'primary', 'grade': 'flat saturated', 'camera': 'motivated',
+                     'design': 'story world', 'palette': 'acid-deadpan'},
+                ]
+            ),
+            'graphics_plan': {
+                'model_renders_text': False,
+                'hud': [{'text': 'SYS.OK', 'scene_id': 's01_setup', 'style': 'hud', 'composite': True}],
+                'kinetic': [{'line': 2, 'text': 'PULL', 'style': 'kinetic_slam', 'composite': True}],
+                'terminal': [{'scene_id': 's05_payoff', 'text': 'WHY WOULD I DECEIVE YOU?',
+                             'composite': True}],
+                'caption': [],
+            },
+            'beat_escalation': {'enabled': True, 'notes': 'Escalate on accents; hold on payoff.'},
+        },
     }
+    return ensure_creative_contract(plan, song_idea=idea)
+
+
+def re_search_contrast(idea: str) -> bool:
+    """Heuristic: song idea mentions a hidden/dual world → opt into contrast checks."""
+    return bool(re.search(
+        r'\b(secret\w*|hidden|behind|teleop\w*|sweatshop|vs\.?|versus|two worlds|underneath|operators?)\b',
+        idea or '', re.I,
+    ))
 
 
 class PopVideoJob:
@@ -136,9 +201,24 @@ class PopVideoJob:
             self.req.validate()
             self.watch.start('plan')
             plan = fix_plan_singing(self.planner(self.req))
+            plan = ensure_creative_contract(plan, song_idea=self.req.song_idea)
+            plan = apply_no_text_to_scenes(plan)
             plan['plan_fp'] = plan_fingerprint(plan)
             json.dump(plan, open(os.path.join(self.work, 'plan.json'), 'w'), indent=1)
             self.watch.ok('plan', f"{len(plan.get('scenes', []))} scenes")
+
+            # Adaptable creative contract (premise / worlds / anchors / overlays plan)
+            self.watch.start('creative_contract')
+            mode = (self.req.extras or {}).get('creative_mode') or os.environ.get(
+                'GV_CREATIVE_CONTRACT_MODE', 'adaptive')
+            crep = validate_creative_contract(plan, mode=mode, song_idea=self.req.song_idea)
+            plan['creative_contract'] = crep.contract
+            report['creative_contract'] = crep.to_dict()
+            json.dump(crep.to_dict(), open(os.path.join(self.work, 'creative_contract.json'), 'w'), indent=1)
+            if not crep.ok:
+                self.watch.fail('creative_contract', crep.summary,
+                                hint='Fix visual premise, world contrast, or graphics_plan (model never renders text).')
+            self.watch.ok('creative_contract', crep.summary)
 
             self.watch.start('prompt_gate')
             gated = gate_prompts(plan.get('scenes') or [])

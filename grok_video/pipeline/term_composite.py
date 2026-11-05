@@ -42,10 +42,19 @@ def filter_for_overlay(ov: dict, *, W: int = 1920, H: int = 1080,
     return ','.join(parts)
 
 
+COMPOSITE_KINDS = frozenset({'terminal', 'hud', 'caption'})
+
+
 def from_overlays(overlays: Sequence[dict], *, W: int = 1920, H: int = 1080,
                   fontfile: str = '') -> str:
-    """Combine all terminal overlays into one -vf chain (may be empty)."""
-    terms = [o for o in overlays if (o.get('g') or o.get('kind')) == 'terminal' and o.get('text')]
+    """Combine terminal/HUD/caption overlays into one -vf chain (may be empty).
+
+    Kinetic/story/slam overlays are typically ASS/kgfx layers; terminal+HUD use drawtext.
+    """
+    terms = [
+        o for o in overlays
+        if (o.get('g') or o.get('kind')) in COMPOSITE_KINDS and o.get('text')
+    ]
     if not terms:
         return ''
     return ','.join(filter_for_overlay(o, W=W, H=H, fontfile=fontfile) for o in terms)

@@ -23,6 +23,9 @@ TERM_KIND = 'terminal'
 STORY_KIND = 'story'
 SLAM_KIND = 'slam'
 UI_KIND = 'ui'
+HUD_KIND = 'hud'
+KINETIC_KIND = 'kinetic'
+CAPTION_KIND = 'caption'
 
 
 @dataclass
@@ -147,6 +150,47 @@ def build_overlay_texts(plan: dict,
                 src=str(sid or ''),
                 rect=sc.get('term_rect') or [0.55, 0.20, 0.40, 0.45],
                 style='terminal',
+            ))
+
+    # Code-built HUD / kinetic / caption seeds from creative_contract.graphics_plan
+    cc = plan.get('creative_contract') or plan.get('story_contract') or {}
+    gp = cc.get('graphics_plan') or plan.get('graphics_plan') or {}
+    for kind, default_style, default_rect in (
+        (HUD_KIND, 'hud', [0.04, 0.04, 0.42, 0.22]),
+        (KINETIC_KIND, 'kinetic', None),
+        (CAPTION_KIND, 'caption', None),
+        (TERM_KIND, 'terminal', [0.55, 0.20, 0.40, 0.45]),
+    ):
+        for item in gp.get(kind) or []:
+            if isinstance(item, str):
+                text, meta = item, {}
+            else:
+                text, meta = (item.get('text') or ''), item
+            if not text:
+                continue
+            t0 = meta.get('t0')
+            t1 = meta.get('t1')
+            if t0 is None and meta.get('line') is not None:
+                tl = by_i.get(meta['line'])
+                if tl:
+                    t0 = float(tl.get('start', 0.0))
+                    t1 = float(tl.get('end', t0 + 0.8))
+            if t0 is None:
+                t0, t1 = 0.0, 2.0
+            if t1 is None:
+                t1 = float(t0) + (0.8 if kind == KINETIC_KIND else 2.0)
+            # Avoid duplicating terminal text already added from scene.terminal_text
+            if kind == TERM_KIND and any(o.kind == TERM_KIND and o.text == text for o in out):
+                continue
+            out.append(OverlaySpec(
+                kind=kind,
+                text=str(text),
+                t0=float(t0), t1=float(t1),
+                kicker=str(meta.get('kicker') or kind.upper()),
+                src=str(meta.get('scene_id') or meta.get('src') or ''),
+                rect=meta.get('rect') or default_rect,
+                style=str(meta.get('style') or default_style),
+                meta={'composite': True, 'source': 'graphics_plan'},
             ))
     return out
 

@@ -19,6 +19,22 @@ Sustainable, public-repo versions of the Pull-the-Plug production fixes. No priv
 | `renderer.py` | Grok-primary plan with cache reuse, local b-roll fallback, budget guard |
 | `watchdog.py` | Progress events + actionable error hints |
 | `service.py` | `PopVideoRequest` / `PopVideoJob` — image + song idea → gated job (SaaS-ready, no UI) |
+| `creative_contract.py` | Adaptable story craft: visual premise, optional world contrast, character anchors, performance-on-accent, shot variety, location transformations, code-built graphics plan (never model text) |
+
+## Creative contract (quality benchmark lessons)
+
+Craft lessons (visual premise per shot; contrasting worlds via grade/design/camera; styling anchors;
+performances on musical accents; shot variety + physical interaction; recurring-location payoff;
+persistent code-built HUD / kinetic type; beat-timed escalation) are encoded as an **adaptable**
+`creative_contract` on the plan — not a rigid clone of any one video.
+
+- **Simple jobs** (one world): pass with premise + anchors + `graphics_plan.model_renders_text=false`.
+- **Dual-world jobs**: contrast checks unlock only when `worlds` has 2+ entries.
+- **Location arcs**: optional; when present, require ≥2 visible states and a real `payoff_scene`.
+- **Graphics**: HUD / kinetic / terminal / captions are always edit-composited (`overlays.py` + `term_composite.py`).
+
+Mode: `GV_CREATIVE_CONTRACT_MODE=adaptive|strict|advisory` (default `adaptive`).
+Karaoke logs warnings by default; set `GV_CREATIVE_CONTRACT_ABORT=1` to hard-fail.
 
 ## Defaults (override via env)
 
@@ -50,3 +66,4 @@ python3 -m unittest discover -s test/unit -v
 
 - No production deploys, no posting, no private benchmark binaries in-repo
 - No secrets / host paths / personal prompts committed
+- No new paid APIs; no SaaS UI; PopVideoJob facade preserved

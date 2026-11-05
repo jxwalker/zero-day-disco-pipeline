@@ -4,6 +4,11 @@ Service-facing entry: ``pipeline.service.PopVideoJob``.
 All gates are pure / local-first so they can be unit-tested without GPUs or accounts.
 """
 from .coverage import CoverageError, assert_coverage, plan_fingerprint
+from .creative_contract import (
+    ContractReport,
+    ensure_creative_contract,
+    validate_creative_contract,
+)
 from .identity import (
     CharacterRefs,
     duplicate_lead_flags,
@@ -28,6 +33,7 @@ from .watchdog import ProgressWatchdog, WatchdogError
 
 __all__ = [
     'CoverageError', 'assert_coverage', 'plan_fingerprint',
+    'ContractReport', 'ensure_creative_contract', 'validate_creative_contract',
     'CharacterRefs', 'duplicate_lead_flags', 'ref_images_for_scene', 'singing_allowed',
     'LipsyncDecision', 'decide_take', 'offset_candidates', 'ensure_min_height',
     'NO_TEXT_NEG', 'OverlaySpec', 'build_overlay_texts', 'model_text_forbidden',
