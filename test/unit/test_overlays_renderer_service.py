@@ -157,7 +157,10 @@ class TestWatchdogAndService(unittest.TestCase):
             req = PopVideoRequest(
                 job_id='t2', image_path=img, song_idea='idea', work_dir=os.path.join(td, 'work2'),
             )
-            res = PopVideoJob(req).run(dry_run=True, available_clips=clips)
+            res = PopVideoJob(req).run(
+                dry_run=True, available_clips=clips,
+                storyboard_review={'score': 8, 'verdict': 'ready'},
+            )
             self.assertFalse(res.ok)
             self.assertTrue(res.failure_kind)
             blob = (res.error + res.failure_kind).upper()

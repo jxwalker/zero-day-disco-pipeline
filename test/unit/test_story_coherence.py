@@ -58,16 +58,48 @@ def _wm_like_plan():
             sc['prop_state'] = {'plug': 'yanked', 'scale': 'wall_plug'}
             sc['requires_next'] = ['s05']
         scenes.append(sc)
+    premise = 'Feed traps her → she dumps it → builds her channel → curls up watching this.'
+    retell = 'She dumps a trapping feed, builds her own channel, and curls up watching this.'
+    # Performance peaks need accent placement
+    for sc in scenes:
+        if sc.get('role') == 'performance_closed' or 'HOOK' in str(sc.get('tags', '')).upper():
+            sc['musical_cue'] = 'chorus'
+            sc['accent'] = 'hook'
+            sc['emotion'] = sc.get('emotion') or 'defiant'
     return {
         'scenes': scenes,
         'required_shots': ['s07', 's08'],
-        'arc': 'Feed traps her → she dumps it → builds her own channel → curls up watching this.',
+        'arc': premise,
+        'viewer_retell': retell,
+        'payoff_design': {
+            'scene_id': 's08',
+            'summary': 'Bookend sofa: she watches her own channel',
+            'world_after': {'place': 'living_room', 'feed': 'off', 'watching': 'own_channel'},
+        },
         'creative_contract': {
-            'visual_premise': 'Feed traps her → she dumps it → builds her channel → bookend sofa.',
+            'visual_premise': premise,
+            'viewer_retell': retell,
+            'payoff_design': {
+                'scene_id': 's08',
+                'summary': 'Bookend sofa: she watches her own channel',
+                'world_after': {'place': 'living_room', 'feed': 'off', 'watching': 'own_channel'},
+            },
             'character_anchors': [
                 {'id': 'LEAD', 'styling': 'fixed wardrobe', 'signature': 'remote + popcorn'},
             ],
-            'graphics_plan': {'model_renders_text': False, 'hud': [], 'kinetic': [], 'terminal': []},
+            'performance_beats': [
+                {'scene_id': sc['id'], 'accent': 'hook', 'emotion': 'defiant',
+                 'musical_cue': 'chorus', 'mouths_closed': True}
+                for sc in scenes
+                if sc.get('role') == 'performance_closed' or sc.get('emotion')
+            ],
+            'location_arcs': [
+                {'location': 'living_room', 'states': ['feed on', 'feed off / own channel'],
+                 'payoff_scene': 's08'},
+            ],
+            'graphics_plan': {
+                'model_renders_text': False, 'hud': [], 'kinetic': [], 'terminal': [],
+            },
             'worlds': [{'id': 'A', 'label': 'primary', 'grade': 'warm', 'camera': 'static',
                         'design': '60s living room', 'palette': 'mustard-tangerine'}],
         },
@@ -257,7 +289,9 @@ class TestNarrativeQA(unittest.TestCase):
     def test_missing_premise_fails(self):
         plan = ensure_scene_states(_wm_like_plan())
         plan['arc'] = ''
+        plan['viewer_retell'] = ''
         plan['creative_contract']['visual_premise'] = ''
+        plan['creative_contract']['viewer_retell'] = ''
         with self.assertRaises(JobFailure) as cm:
             assert_narrative_qa(plan)
         self.assertEqual(cm.exception.kind, FailureKind.NARRATIVE)
@@ -265,7 +299,103 @@ class TestNarrativeQA(unittest.TestCase):
     def test_wm_like_passes(self):
         plan = ensure_scene_states(_wm_like_plan())
         rep = assert_narrative_qa(plan)
-        self.assertTrue(rep.ok)
+        self.assertTrue(rep.ok, rep.summary)
+
+
+class TestCuratorCraftGates(unittest.TestCase):
+    """Cross-curator craft: retell, payoff-first, lyric props, diegetic gfx, location, accents."""
+
+    def test_missing_viewer_retell_fails(self):
+        plan = ensure_scene_states(_wm_like_plan())
+        plan['viewer_retell'] = ''
+        plan['creative_contract']['viewer_retell'] = ''
+        with self.assertRaises(JobFailure) as cm:
+            assert_narrative_qa(plan)
+        self.assertIn('retell', cm.exception.message.lower())
+
+    def test_retell_mismatch_fails(self):
+        plan = ensure_scene_states(_wm_like_plan())
+        plan['viewer_retell'] = 'A completely unrelated beach party with no shared spine.'
+        plan['creative_contract']['viewer_retell'] = plan['viewer_retell']
+        with self.assertRaises(JobFailure) as cm:
+            assert_narrative_qa(plan)
+        self.assertTrue(
+            any(c in cm.exception.message for c in ('retell_mismatch', 'align')),
+            cm.exception.message,
+        )
+
+    def test_payoff_not_designed_before_middle_fails(self):
+        plan = ensure_scene_states(_wm_like_plan())
+        plan.pop('payoff_design', None)
+        plan['creative_contract'].pop('payoff_design', None)
+        # Strip end-state from payoff scene so inference cannot rescue
+        for sc in plan['scenes']:
+            if sc.get('structural_role') == 'payoff':
+                sc['world_after'] = {}
+                sc['action'] = ''
+        with self.assertRaises(JobFailure) as cm:
+            assert_narrative_qa(plan)
+        self.assertIn('payoff', cm.exception.message.lower())
+
+    def test_lyric_literal_prop_without_consequence_fails(self):
+        plan = ensure_scene_states(_wm_like_plan())
+        plan['scenes'].append({
+            'id': 's_lit',
+            'prompt': '[LEAD] holds a literal lyric prop once',
+            'role': 'lyric_insert',
+            'lyric_literal': True,
+            'world_before': {'place': 'living_room', 'feed': 'off'},
+            'action': 'show prop',
+            'world_after': {'place': 'living_room', 'feed': 'off'},
+            'prop_state': {'gimmick': 'once'},
+            'requires_next': [],
+        })
+        with self.assertRaises(JobFailure) as cm:
+            assert_narrative_qa(plan)
+        self.assertIn('lyric', cm.exception.message.lower())
+
+    def test_non_diegetic_story_graphics_fail(self):
+        plan = ensure_scene_states(_wm_like_plan())
+        plan['creative_contract']['graphics_plan'] = {
+            'model_renders_text': False,
+            'story': [{'text': 'WE ASKED GPT-6', 'composite': True}],
+            'bignum': [{'text': '3.5', 'composite': True}],
+            'hud': [], 'kinetic': [], 'terminal': [],
+        }
+        with self.assertRaises(JobFailure) as cm:
+            assert_narrative_qa(plan)
+        self.assertIn('diegetic', cm.exception.message.lower())
+
+    def test_recurring_location_without_transform_fails(self):
+        plan = ensure_scene_states(_wm_like_plan())
+        plan['creative_contract']['location_arcs'] = []
+        for sc in plan['scenes']:
+            sc['world_before'] = {'place': 'living_room', 'feed': 'on'}
+            sc['world_after'] = {'place': 'living_room', 'feed': 'on'}
+        with self.assertRaises(JobFailure) as cm:
+            assert_narrative_qa(plan)
+        self.assertIn('location', cm.exception.message.lower())
+
+    def test_performance_peak_off_accent_fails(self):
+        plan = ensure_scene_states(_wm_like_plan())
+        plan['creative_contract']['performance_beats'] = []
+        for sc in plan['scenes']:
+            sc.pop('accent', None)
+            sc.pop('musical_cue', None)
+            if sc.get('role') == 'performance_closed':
+                sc['emotion'] = 'defiant'
+        with self.assertRaises(JobFailure) as cm:
+            assert_narrative_qa(plan)
+        self.assertIn('accent', cm.exception.message.lower())
+
+    def test_wm_like_craft_checklist_passes(self):
+        plan = ensure_scene_states(_wm_like_plan())
+        rep = assert_narrative_qa(plan)
+        self.assertTrue(rep.checklist.get('has_viewer_retell'))
+        self.assertTrue(rep.checklist.get('payoff_designed_first'))
+        self.assertTrue(rep.checklist.get('no_orphan_lyric_props'))
+        self.assertTrue(rep.checklist.get('recurring_locations_transform'))
+        self.assertTrue(rep.checklist.get('performance_on_accents'))
 
 
 class TestPopVideoJobContract(unittest.TestCase):
@@ -307,7 +437,10 @@ class TestPopVideoJobContract(unittest.TestCase):
                 job_id='fail_cov', image_path=img, song_idea='idea',
                 work_dir=os.path.join(td, 'work'),
             )
-            res = PopVideoJob(req).run(dry_run=True, available_clips=clips)
+            res = PopVideoJob(req).run(
+                dry_run=True, available_clips=clips,
+                storyboard_review={'score': 8, 'verdict': 'ready'},
+            )
             self.assertFalse(res.ok)
             self.assertEqual(res.failure_kind, FailureKind.COVERAGE.value)
             self.assertTrue(res.report.get('failure'))
@@ -323,6 +456,7 @@ class TestPopVideoJobContract(unittest.TestCase):
             )
             res = PopVideoJob(req).run(
                 dry_run=True, available_clips=clips, rejected_ids=['s05_payoff.mp4.qcfail.mp4'],
+                storyboard_review={'score': 8, 'verdict': 'ready'},
             )
             self.assertFalse(res.ok)
             self.assertEqual(res.failure_kind, FailureKind.COVERAGE.value)
@@ -361,9 +495,17 @@ class TestPopVideoJobContract(unittest.TestCase):
                 p['scenes'][1]['tags'] = 'SING'
                 p['scenes'][1]['prompt'] = '[SING][HERO] MCU singing this LINE "pull"'
                 p['scenes'][1]['id'] = 's02_sing'
+                p['scenes'][1]['emotion'] = 'urgent'
+                p['scenes'][1]['accent'] = 'hook'
+                p['scenes'][1]['musical_cue'] = 'chorus'
                 # Keep consequence graph consistent after the id rename.
                 p['scenes'][0]['requires_next'] = ['s02_sing']
                 p['scenes'][1]['requires_next'] = ['s03_action']
+                p['creative_contract']['performance_beats'] = [
+                    {'scene_id': 's02_sing', 'accent': 'hook', 'emotion': 'urgent',
+                     'musical_cue': 'chorus'},
+                ]
+                p['storyboard_review'] = {'score': 8, 'verdict': 'ok'}
                 return p
 
             bad_tl = [

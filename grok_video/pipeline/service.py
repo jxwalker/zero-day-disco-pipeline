@@ -15,17 +15,12 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional
 
-from .coverage import CoverageError, assert_coverage, plan_fingerprint
-from .creative_contract import (
-    apply_no_text_to_scenes,
-    ensure_creative_contract,
-    validate_creative_contract,
-)
+from .coverage import CoverageError, assert_coverage
+from .creative_contract import ensure_creative_contract
 from .failures import FailureKind, JobFailure, failure_from_exception
 from .graphics_lint import assert_graphics_and_sing, lint_overlays
 from .identity import CharacterRefs, farm_lock_suffix, ref_images_for_scene, singing_instruction
 from .lipsync import decide_take, offset_candidates
-from .narrative_gate import assert_narrative_qa, assert_storyboard_review
 from .overlays import (
     NO_TEXT_NEG,
     build_overlay_texts,
@@ -33,11 +28,9 @@ from .overlays import (
     overlays_to_json,
     terminal_must_be_blank,
 )
-from .plan_fix import fix_plan_singing
-from .prompt_gate import gate_prompts
+from .plan_gates import apply_coherence_gates
 from .renderer import RenderBudget, plan_renders
 from .screen_policy import filter_rejections
-from .story_model import assert_story_model, ensure_scene_states
 from .timeline_policy import (
     TimelineBuildError,
     assert_reuse_cap,
@@ -160,9 +153,21 @@ def _default_plan_from_idea(req: PopVideoRequest) -> dict:
             'requires_next': [],
         },
     ]
+    premise = idea[:160] if len(idea) >= 12 else f'Visual story for: {idea}'
+    retell = (
+        f'An independent viewer sees: {premise}'
+        if len(premise) >= 12 else
+        f'An independent viewer can retell the visual story for {idea}'
+    )
     plan = {
         'scenes': scenes,
         'required_shots': ['s04_twist', 's05_payoff'],
+        'viewer_retell': retell,
+        'payoff_design': {
+            'scene_id': 's05_payoff',
+            'summary': 'Overseer reveal; who really controlled the plug',
+            'world_after': {'who_controls': 'overseer', 'reveal': True},
+        },
         'lines': [
             {'i': 0, 'shows': 'setup', 'fact': idea[:80], 'v': [{'kind': 'scene', 'id': 's01_setup'}]},
             {'i': 1, 'shows': 'perf', 'fact': '', 'v': [{'kind': 'scene', 'id': 's02_perf'}]},
@@ -176,7 +181,7 @@ def _default_plan_from_idea(req: PopVideoRequest) -> dict:
         'slams': [{'line': 2, 'text': 'PULL'}],
         'intro': [], 'breaks': [], 'outro': [], 'credit': req.title or 'Pop Video',
         'design': {'palette': 'acid-deadpan', 'grade': 'flat saturated', 'texture': '35mm grain'},
-        'arc': idea[:120],
+        'arc': premise,
         'art_bible': {
             'photoreal': True,
             'banned_styles': ['clay', 'cartoon', 'toy', 'mannequin'],
@@ -184,7 +189,13 @@ def _default_plan_from_idea(req: PopVideoRequest) -> dict:
             'mouths_closed_default': True,
         },
         'creative_contract': {
-            'visual_premise': idea[:160],
+            'visual_premise': premise,
+            'viewer_retell': retell,
+            'payoff_design': {
+                'scene_id': 's05_payoff',
+                'summary': 'Overseer reveal; who really controlled the plug',
+                'world_after': {'who_controls': 'overseer', 'reveal': True},
+            },
             'character_anchors': [
                 {'id': 'LEAD', 'styling': 'lead from user image', 'signature': 'uploaded likeness'},
                 {'id': 'GROK', 'styling': 'photoreal robot unit', 'signature': 'faction robot'},
@@ -198,10 +209,15 @@ def _default_plan_from_idea(req: PopVideoRequest) -> dict:
                 'scales': ['WIDE', 'MCU', 'CU', 'MS'],
                 'physical_interactions': True,
             },
-            'location_arcs': [
-                {'location': 'server rack hall', 'states': ['powered', 'yanked dark'],
-                 'payoff_scene': 's05_payoff'},
-            ] if dual else [],
+            'location_arcs': (
+                [
+                    {'location': 'server rack hall', 'states': ['powered', 'yanked dark'],
+                     'payoff_scene': 's05_payoff'},
+                ] if dual else [
+                    {'location': 'home', 'states': ['watching feed', 'feed rejected / reveal'],
+                     'payoff_scene': 's05_payoff'},
+                ]
+            ),
             'worlds': (
                 [
                     {'id': 'A', 'label': 'clean', 'grade': 'cool clean', 'camera': 'static',
@@ -216,11 +232,12 @@ def _default_plan_from_idea(req: PopVideoRequest) -> dict:
             'graphics_plan': {
                 'model_renders_text': False,
                 'hud': [{'text': 'SYS.OK', 'scene_id': 's01_setup', 'style': 'hud',
-                         'composite': True, 'plate': 's01_setup'}],
+                         'composite': True, 'plate': 's01_setup', 'diegetic': True}],
                 'kinetic': [{'line': 2, 'text': 'PULL', 'style': 'kinetic_slam',
                              'composite': True, 'plate': 's03_action'}],
                 'terminal': [{'scene_id': 's05_payoff', 'text': 'WHY WOULD I DECEIVE YOU?',
-                              'composite': True, 'plate': 's05_payoff'}],
+                              'composite': True, 'plate': 's05_payoff', 'diegetic': True,
+                              'state_change': True}],
                 'caption': [],
             },
             'beat_escalation': {'enabled': True, 'notes': 'Escalate on accents; hold on payoff.'},
@@ -284,65 +301,37 @@ class PopVideoJob:
             self.req.validate()
             self.watch.start('plan')
             sing_on = bool((self.req.extras or {}).get('sing_enabled')) or os.environ.get('GV_SING', '0') == '1'
-            plan = fix_plan_singing(self.planner(self.req), sing_enabled=sing_on)
-            plan = ensure_scene_states(plan)
-            plan = ensure_creative_contract(plan, song_idea=self.req.song_idea)
-            plan = apply_no_text_to_scenes(plan)
-            plan['plan_fp'] = plan_fingerprint(plan)
-            json.dump(plan, open(os.path.join(self.work, 'plan.json'), 'w'), indent=1)
+            raw = self.planner(self.req)
+            # Inject review before shared gates (required — no fail-open)
+            if storyboard_review is not None:
+                raw = dict(raw)
+                raw['storyboard_review'] = storyboard_review
+            stage = 'coherence_gates'
+            self.watch.start('coherence_gates')
+            gated = apply_coherence_gates(
+                raw,
+                song_idea=self.req.song_idea,
+                storyboard_review=storyboard_review if storyboard_review is not None
+                else raw.get('storyboard_review'),
+                sing_enabled=sing_on,
+                require_storyboard=True,
+                allow_large=bool((self.req.extras or {}).get('allow_large_plan')),
+                creative_mode=(self.req.extras or {}).get('creative_mode'),
+            )
+            plan = gated['plan']
+            report.update(gated['reports'])
+            with open(os.path.join(self.work, 'plan.json'), 'w') as fh:
+                json.dump(plan, fh, indent=1)
+            for name in ('story_model', 'narrative_qa', 'creative_contract', 'gfx_plan_lint'):
+                if name in gated['reports']:
+                    with open(os.path.join(self.work, f'{name}.json'), 'w') as fh:
+                        json.dump(gated['reports'][name], fh, indent=1)
+            self.watch.ok(
+                'coherence_gates',
+                f"{len(plan.get('scenes', []))} scenes mode={plan.get('performance_mode')}",
+            )
             report['performance_mode'] = plan.get('performance_mode')
             report['plan_fix'] = plan.get('plan_fix')
-            self.watch.ok('plan', f"{len(plan.get('scenes', []))} scenes mode={plan.get('performance_mode')}")
-
-            # Storyboard hard gate (before any generate spend)
-            stage = 'storyboard_review'
-            self.watch.start('storyboard_review')
-            rev = storyboard_review if storyboard_review is not None else plan.get('storyboard_review')
-            if rev:
-                plan['storyboard_review'] = rev
-            assert_storyboard_review(plan, rev)
-            self.watch.ok('storyboard_review', f"score={(rev or {}).get('score', 'n/a')}")
-
-            # Scene-state / art / consequence / cap
-            stage = 'story_model'
-            self.watch.start('story_model')
-            allow_large = bool((self.req.extras or {}).get('allow_large_plan'))
-            srep = assert_story_model(plan, allow_large=allow_large, require_states=True)
-            report['story_model'] = srep.to_dict()
-            json.dump(srep.to_dict(), open(os.path.join(self.work, 'story_model.json'), 'w'), indent=1)
-            self.watch.ok('story_model', srep.summary)
-
-            # Narrative QA (Watch Me checklist)
-            stage = 'narrative_qa'
-            self.watch.start('narrative_qa')
-            nrep = assert_narrative_qa(plan)
-            report['narrative_qa'] = nrep.to_dict()
-            json.dump(nrep.to_dict(), open(os.path.join(self.work, 'narrative_qa.json'), 'w'), indent=1)
-            self.watch.ok('narrative_qa', nrep.summary)
-
-            # Adaptable creative contract
-            stage = 'creative_contract'
-            self.watch.start('creative_contract')
-            mode = (self.req.extras or {}).get('creative_mode') or os.environ.get(
-                'GV_CREATIVE_CONTRACT_MODE', 'adaptive')
-            crep = validate_creative_contract(plan, mode=mode, song_idea=self.req.song_idea)
-            plan['creative_contract'] = crep.contract
-            report['creative_contract'] = crep.to_dict()
-            json.dump(crep.to_dict(), open(os.path.join(self.work, 'creative_contract.json'), 'w'), indent=1)
-            if not crep.ok:
-                self.watch.fail('creative_contract', crep.summary,
-                                hint='Fix visual premise, world contrast, or graphics_plan (model never renders text).')
-            self.watch.ok('creative_contract', crep.summary)
-
-            stage = 'prompt_gate'
-            self.watch.start('prompt_gate')
-            gated = gate_prompts(plan.get('scenes') or [])
-            plan['scenes'] = gated['scenes']
-            report['prompt_gate'] = {k: gated[k] for k in ('kept', 'dropped', 'critical_fail', 'ok')}
-            json.dump(gated['report'], open(os.path.join(self.work, 'prompt_gate.json'), 'w'), indent=1)
-            if not gated['ok']:
-                self.watch.fail('prompt_gate', 'story-critical prompts failed rewrite')
-            self.watch.ok('prompt_gate')
 
             # Identity routing + no-text / blank terminals on every prompt
             cast = CharacterRefs()

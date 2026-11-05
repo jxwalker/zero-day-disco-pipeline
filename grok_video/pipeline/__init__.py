@@ -15,7 +15,11 @@ from .creative_contract import (
     validate_creative_contract,
 )
 from .failures import FailureKind, JobFailure, failure_from_exception, finished_ok
-from .graphics_lint import assert_graphics_and_sing, lint_sing_reuse, lint_timeline_graphics
+from .graphics_lint import (
+    assert_graphics_and_sing, assert_plan_graphics,
+    lint_plan_graphics, lint_sing_reuse, lint_timeline_graphics,
+)
+from .plan_gates import apply_coherence_gates
 from .identity import (
     CharacterRefs,
     duplicate_lead_flags,
@@ -58,7 +62,9 @@ __all__ = [
     'plan_fingerprint', 'required_payoff_ids',
     'ContractReport', 'ensure_creative_contract', 'validate_creative_contract',
     'FailureKind', 'JobFailure', 'failure_from_exception', 'finished_ok',
-    'assert_graphics_and_sing', 'lint_sing_reuse', 'lint_timeline_graphics',
+    'assert_graphics_and_sing', 'assert_plan_graphics',
+    'lint_plan_graphics', 'lint_sing_reuse', 'lint_timeline_graphics',
+    'apply_coherence_gates',
     'CharacterRefs', 'duplicate_lead_flags', 'ref_images_for_scene', 'singing_allowed',
     'LipsyncDecision', 'decide_take', 'offset_candidates', 'ensure_min_height',
     'NarrativeReport', 'assert_narrative_qa', 'assert_storyboard_review',

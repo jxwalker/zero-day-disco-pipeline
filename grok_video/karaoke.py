@@ -1221,79 +1221,98 @@ def main():
                     if 'L' not in tres: tres['err'] = repr(e2)
         th = threading.Thread(target=tj, daemon=True); th.start()
         pp = os.path.join(work, 'plan.json')
+        resumed = False
         P = G.load_json(pp) if os.path.exists(pp) and not a.replan else None
-        if not P or P.get('ver') != PLAN_VER:
+        if P and P.get('ver') == PLAN_VER:
+            resumed = True
+            G.log('karaoke: resuming existing plan.json — coherence gates still required (no bypass)')
+        else:
             t0 = time.time()
             try:
                 import storyboard as SB                    # treatment + lead bible + shot list
                 try: SB.ensure_direction(day, lyric_lines(day))
                 except Exception as e: status['warnings'].append(f'storyboard direction failed ({str(e)[:120]})')
                 P = plan_opus(day, work, a.stills, a.clips)
-                try: SB.review(P, day, work, lyric_lines(day))  # Opus storyboard review before any Grok spend
-                except Exception as e: status['warnings'].append(f'storyboard review failed ({str(e)[:120]})')
+                # Storyboard review is mandatory before any Grok spend — reviewer errors abort (no swallow).
+                try:
+                    rev = SB.review(P, day, work, lyric_lines(day))
+                except Exception as e:
+                    from pipeline.failures import JobFailure, FailureKind
+                    raise JobFailure(
+                        kind=FailureKind.STORYBOARD,
+                        message=f'storyboard review failed: {str(e)[:200]}',
+                        stage='storyboard_review',
+                        hint='Fix reviewer availability / storyboard and re-run; do not generate without a passing review.',
+                    ) from e
+                if rev is None and not (P.get('storyboard_review') or {}):
+                    from pipeline.failures import JobFailure, FailureKind
+                    raise JobFailure(
+                        kind=FailureKind.STORYBOARD,
+                        message='storyboard review returned nothing; must not go to camera without a present, passing review',
+                        stage='storyboard_review',
+                        hint='Ensure GV_STORYBOARD is on and scenes exist; re-run review before generate.',
+                    )
             except Exception as e:
+                from pipeline.failures import JobFailure
+                if isinstance(e, JobFailure):
+                    status.update(ok=False, error=str(e), failure_kind=getattr(e.kind, 'value', str(e.kind)),
+                                  failure=e.to_dict())
+                    G.save_json(status, sp)
+                    print(f"GROK_VIDEO_STATUS=failed code={e.exit_code} style=karaoke "
+                          f"kind={getattr(e.kind, 'value', e.kind)!r} reason={str(e)[:300]!r}", flush=True)
+                    sys.exit(e.exit_code)
                 status['warnings'].append(f'opus planner failed ({str(e)[:120]}); template plan, no Grok scenes')
                 P = plan_template(day)
             P['ver'] = PLAN_VER; P['plan_s'] = round(time.time() - t0)
             G.save_json(P, os.path.join(work, 'plan_raw.json'))
             status['warnings'] += fact_lint(P, day)
-            # Hardening: mouths-closed default; story model; storyboard hard gate; never silent lock-leak swap
-            try:
-                from pipeline.plan_fix import fix_plan_singing
-                from pipeline.prompt_gate import gate_prompts
-                from pipeline.coverage import plan_fingerprint
-                from pipeline.creative_contract import (
-                    ensure_creative_contract, validate_creative_contract, apply_no_text_to_scenes,
-                )
-                from pipeline.story_model import ensure_scene_states, assert_story_model
-                from pipeline.narrative_gate import assert_storyboard_review, assert_narrative_qa
-                from pipeline.failures import JobFailure
-                P = fix_plan_singing(P, sing_share=float(os.environ.get('GV_SING_SHARE', '0') or 0))
-                P = ensure_scene_states(P)
-                P = ensure_creative_contract(P)
-                P = apply_no_text_to_scenes(P)
-                # Storyboard review below threshold / "must not go to camera" → hard-abort before generate
-                assert_storyboard_review(P)
-                srep = assert_story_model(
-                    P, lyric_line_count=len(lyric_lines(day)),
-                    allow_large=os.environ.get('GV_ALLOW_LARGE_PLAN', '0') == '1',
-                )
-                G.save_json(srep.to_dict(), os.path.join(work, 'story_model.json'))
-                status['story_model'] = {'ok': srep.ok, 'summary': srep.summary,
-                                         'required_shots': srep.required_shots}
-                nrep = assert_narrative_qa(P)
-                G.save_json(nrep.to_dict(), os.path.join(work, 'narrative_qa.json'))
-                status['narrative_qa'] = {'ok': nrep.ok, 'summary': nrep.summary}
-                crep = validate_creative_contract(
-                    P, mode=os.environ.get('GV_CREATIVE_CONTRACT_MODE', 'adaptive'))
-                P['creative_contract'] = crep.contract
-                G.save_json(crep.to_dict(), os.path.join(work, 'creative_contract.json'))
-                status['creative_contract'] = {
-                    'ok': crep.ok, 'summary': crep.summary,
-                    'warnings': len(crep.to_dict().get('warnings') or []),
-                }
-                if not crep.ok and os.environ.get('GV_CREATIVE_CONTRACT_ABORT', '0') == '1':
-                    raise RuntimeError(f"creative contract failed: {crep.summary}")
-                elif not crep.ok:
-                    status['warnings'].append(f'creative contract: {crep.summary}')
-                gated = gate_prompts(P.get('scenes') or [])
-                P['scenes'] = gated['scenes']
-                G.save_json(gated['report'], os.path.join(work, 'prompt_gate.json'))
-                status['prompt_gate'] = {k: gated[k] for k in ('kept', 'dropped', 'critical_fail', 'ok')}
-                if gated['critical_fail']:
-                    raise RuntimeError(f"prompt gate: {gated['critical_fail']} story-critical prompts failed rewrite")
-                P['plan_fp'] = plan_fingerprint(P)
-                status['performance_mode'] = P.get('performance_mode')
-            except JobFailure as e:
-                status.update(ok=False, error=str(e), failure_kind=getattr(e, 'kind', '') and e.kind.value,
-                              failure=getattr(e, 'to_dict', lambda: {})())
-                G.save_json(status, sp)
-                print(f"GROK_VIDEO_STATUS=failed code={getattr(e, 'exit_code', 8)} style=karaoke "
-                      f"kind={getattr(e.kind, 'value', e.kind)!r} reason={str(e)[:300]!r}", flush=True)
-                sys.exit(getattr(e, 'exit_code', 8))
-            except ImportError as e:
-                status['warnings'].append(f'pipeline hardening import failed ({e})')
-            G.save_json(P, pp)
+        # Coherence gates on BOTH fresh plans and resume — never skip via existing plan.json
+        try:
+            from pipeline.plan_gates import apply_coherence_gates
+            from pipeline.failures import JobFailure
+            gated = apply_coherence_gates(
+                P,
+                lyric_line_count=len(lyric_lines(day)),
+                storyboard_review=P.get('storyboard_review'),
+                require_storyboard=True,
+                allow_large=os.environ.get('GV_ALLOW_LARGE_PLAN', '0') == '1',
+            )
+            P = gated['plan']
+            status['coherence_gates'] = {k: (v if not isinstance(v, dict) else {
+                kk: v[kk] for kk in v if kk in ('ok', 'summary', 'score', 'verdict', 'performance_mode')
+            }) for k, v in gated['reports'].items()}
+            status['story_model'] = gated['reports'].get('story_model')
+            status['narrative_qa'] = gated['reports'].get('narrative_qa')
+            status['creative_contract'] = gated['reports'].get('creative_contract')
+            status['performance_mode'] = P.get('performance_mode')
+            status['resumed_plan'] = resumed
+            G.save_json(gated['reports'].get('story_model') or {}, os.path.join(work, 'story_model.json'))
+            G.save_json(gated['reports'].get('narrative_qa') or {}, os.path.join(work, 'narrative_qa.json'))
+            G.save_json(gated['reports'].get('creative_contract') or {}, os.path.join(work, 'creative_contract.json'))
+            crep = gated['reports'].get('creative_contract') or {}
+            if not crep.get('ok', True):
+                if os.environ.get('GV_CREATIVE_CONTRACT_ABORT', '0') == '1':
+                    from pipeline.failures import FailureKind
+                    raise JobFailure(
+                        kind=FailureKind.NARRATIVE,
+                        message=f"creative contract failed: {crep.get('summary')}",
+                        stage='creative_contract',
+                    )
+                status['warnings'].append(f"creative contract: {crep.get('summary')}")
+        except JobFailure as e:
+            status.update(
+                ok=False, error=str(e),
+                failure_kind=getattr(getattr(e, 'kind', None), 'value', str(getattr(e, 'kind', ''))),
+                failure=e.to_dict() if hasattr(e, 'to_dict') else {},
+            )
+            G.save_json(status, sp)
+            print(f"GROK_VIDEO_STATUS=failed code={getattr(e, 'exit_code', 8)} style=karaoke "
+                  f"kind={getattr(getattr(e, 'kind', None), 'value', '')!r} "
+                  f"reason={str(e)[:300]!r}", flush=True)
+            sys.exit(getattr(e, 'exit_code', 8))
+        except ImportError as e:
+            status['warnings'].append(f'pipeline hardening import failed ({e})')
+        G.save_json(P, pp)
         import design as DZ
         DES = DZ.resolve(day, P.get('design'), force_palette=direction(day)['palette']); status['design'] = DES
         G.log(f"karaoke: design {DES}")

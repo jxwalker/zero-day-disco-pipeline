@@ -190,20 +190,20 @@ def extract_scene_state(sc: dict) -> SceneState:
     )
 
 
-def ensure_scene_states(plan: dict, *, infer_edges: bool = True) -> dict:
+def ensure_scene_states(plan: dict, *, infer_edges: bool = False) -> dict:
     """Attach ``scene_state`` on every scene; ensure plan.required_shots is populated.
 
-    Does not invent lore. Consequence edges are inferred only when an action hint is
-    present and the next scene id exists — callers may still fail validation if edges
-    are missing for edge-required actions.
+    Does **not** invent lore or auto-wire consequence edges by default.
+    ``infer_edges=True`` is opt-in for offline scaffolding only — acceptance paths
+    (PopVideoJob / karaoke gates) must keep ``infer_edges=False`` so missing authored
+    ``requires_next`` fails ``assert_story_model`` with an actionable error.
     """
     out = dict(plan)
     scenes = [dict(s) for s in (plan.get('scenes') or [])]
-    ids = [str(s.get('id')) for s in scenes if s.get('id')]
     for i, sc in enumerate(scenes):
         st = extract_scene_state(sc)
         if infer_edges and not st.requires_next and ACTION_EDGE_HINT.search(sc.get('prompt') or ''):
-            # Point at the immediate next scene as the minimum consequence edge.
+            # Opt-in scaffold only — never used on acceptance / generate paths.
             if i + 1 < len(scenes) and scenes[i + 1].get('id'):
                 st.requires_next = [str(scenes[i + 1]['id'])]
         sc['world_before'] = st.world_before
@@ -212,8 +212,9 @@ def ensure_scene_states(plan: dict, *, infer_edges: bool = True) -> dict:
         sc['prop_state'] = st.prop_state
         if st.allegiance:
             sc['allegiance'] = st.allegiance
-        if st.requires_next:
-            sc['requires_next'] = st.requires_next
+        # Preserve explicit requires_next (including empty list); do not invent edges.
+        if 'requires_next' in sc or st.requires_next:
+            sc['requires_next'] = list(st.requires_next)
         if st.structural_role:
             sc['structural_role'] = st.structural_role
         sc['scene_state'] = st.to_dict()

@@ -62,9 +62,21 @@ Rejected required clips (`clip_rejected` ∩ required set) hard-abort; never ass
 
 ### Graphics
 
-- Cards/terminals are edit-composited overlays on live plates.
-- Continuous black-void gfx &gt; `GV_MAX_BLACK_GFX_S` (default 1.5s) → typed `gfx` failure.
-- `gfx_share` &gt; `GV_MAX_GFX_SHARE` (default 10%) → typed `gfx` failure.
+- **Infrastructure** (endcard, karaoke/lyrics captions) is allowed and excluded from narrative `gfx_share`.
+- **Narrative slides** (bignum / story / long headline voids) on black without a live plate
+  and &gt; `GV_MAX_BLACK_GFX_S` (default 1.5s) → typed `gfx` failure.
+- Narrative `gfx_share` &gt; `GV_MAX_GFX_SHARE` (default 10%) → typed `gfx` failure.
+- `graphics_plan` is linted **before generation** (`assert_plan_graphics`).
+
+### Consequence edges
+
+- `requires_next` must be **authored**. `ensure_scene_states(infer_edges=False)` is the default;
+  acceptance paths never auto-wire edges. Missing edges → typed `consequence` failure.
+
+### Storyboard / resume
+
+- A present, passing storyboard review is required on every generate **and** resume path.
+- Reviewer exceptions abort (no swallow). Existing `plan.json` does **not** bypass gates.
 
 ## Creative contract (quality benchmark lessons)
 

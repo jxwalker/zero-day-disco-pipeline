@@ -1,16 +1,17 @@
-"""Narrative QA + storyboard hard gate (Watch Me checklist).
+"""Narrative QA + storyboard hard gate (Watch Me + cross-curator craft checklist).
 
 Lyric timing stays for captions; story structure is gated here before any generation spend.
+Craft rules are narrative/storyboard/edit gates — not keyword checks or benchmark clones.
 """
 from __future__ import annotations
 
 import os
 import re
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 
 from .failures import FailureKind, JobFailure
-from .story_model import required_shot_ids
+from .story_model import required_shot_ids, structural_role_of
 
 # Storyboard review must clear this score (1–10) or hard-abort before generation.
 STORYBOARD_MIN_SCORE = int(os.environ.get('GV_STORYBOARD_MIN_SCORE', '7'))
@@ -19,6 +20,20 @@ MUST_NOT_CAMERA_RE = re.compile(
     r'refuse(?:s)? (?:to )?film|block(?:s)? (?:the )?shoot|halt production',
     re.I,
 )
+
+STOPWORDS = frozenset({
+    'that', 'with', 'from', 'this', 'have', 'into', 'about', 'visual', 'story',
+    'then', 'when', 'they', 'them', 'their', 'hers', 'him', 'she', 'the', 'and',
+    'for', 'her', 'his', 'own', 'onto', 'over', 'under', 'after', 'before',
+})
+
+ACCENTS = frozenset({'drop', 'hit', 'hold', 'build', 'break', 'hook', 'punchline', 'chorus'})
+
+# Full-frame story carriers that must be diegetic / state-changing if used as narrative.
+STORY_CARRIER_GFX = frozenset({
+    'headline', 'bignum', 'bars', 'post', 'feed', 'quote', 'compare', 'stamp',
+    'story', 'card', 'browser', 'rows',
+})
 
 
 @dataclass
@@ -38,13 +53,20 @@ class NarrativeReport:
 
 def storyboard_must_abort(review: Optional[dict],
                           *,
-                          min_score: Optional[int] = None) -> Optional[str]:
-    """Return abort reason if storyboard review is below threshold or forbids camera.
+                          min_score: Optional[int] = None,
+                          require_present: bool = True) -> Optional[str]:
+    """Return abort reason if storyboard review is missing, below threshold, or forbids camera.
 
     ``review`` is the dict saved on plan['storyboard_review'] / storyboard_review.json.
-    Missing review is not an abort (offline / GV_STORYBOARD=0); only an explicit bad review.
+    By default a *missing* review is an abort — every generate/resume path needs a
+    present, passing review (no fail-open via absent artifacts).
     """
     if not review:
+        if require_present:
+            return (
+                'storyboard review missing; must not go to camera without a present, '
+                'passing review (no fail-open / resume bypass)'
+            )
         return None
     thr = STORYBOARD_MIN_SCORE if min_score is None else min_score
     verdict = str(review.get('verdict') or review.get('summary') or '')
@@ -53,7 +75,6 @@ def storyboard_must_abort(review: Optional[dict],
             f"storyboard review forbids camera: {verdict[:200]!r} "
             f"(must not go to camera → hard-abort before generation)"
         )
-    # Also scan free-text notes / issues
     blob = ' '.join(str(review.get(k) or '') for k in (
         'verdict', 'summary', 'notes', 'reason', 'blocker',
     ))
@@ -79,30 +100,108 @@ def storyboard_must_abort(review: Optional[dict],
 def assert_storyboard_review(plan: dict,
                              review: Optional[dict] = None,
                              *,
-                             min_score: Optional[int] = None) -> None:
-    """Hard-abort on bad storyboard review. Raises JobFailure(STORYBOARD)."""
-    rev = review if review is not None else (plan.get('storyboard_review') or {})
-    reason = storyboard_must_abort(rev, min_score=min_score)
+                             min_score: Optional[int] = None,
+                             require_present: bool = True) -> None:
+    """Hard-abort on missing/bad storyboard review. Raises JobFailure(STORYBOARD)."""
+    rev = review if review is not None else (plan.get('storyboard_review') or None)
+    if rev is not None and not isinstance(rev, dict):
+        rev = {'verdict': str(rev)}
+    # Empty dict counts as missing
+    if isinstance(rev, dict) and not rev:
+        rev = None
+    reason = storyboard_must_abort(
+        rev, min_score=min_score, require_present=require_present,
+    )
     if reason:
         raise JobFailure(
             kind=FailureKind.STORYBOARD,
             message=reason,
             stage='storyboard_review',
-            hint='Fix the storyboard (premise, cast lock, consequence) and re-review before generate.',
-            details={'review': {k: rev.get(k) for k in ('score', 'verdict') if k in rev}},
+            hint='Produce a passing storyboard review before generate/resume; do not bypass via plan.json.',
+            details={'review': {k: (rev or {}).get(k) for k in ('score', 'verdict')}},
         )
 
 
-def narrative_checklist(plan: dict, timeline: Optional[Sequence[dict]] = None) -> NarrativeReport:
-    """Watch Me checklist from plan (+ optional timeline) — sound-off readable story.
+def _content_words(text: str) -> Set[str]:
+    return {
+        w for w in re.findall(r"[a-z]{3,}", (text or '').lower())
+        if w not in STOPWORDS
+    }
 
-    Hard errors (abort):
+
+def _one_sentence(text: str) -> bool:
+    """True when text is a single readable sentence-ish premise (not a multi-para dump)."""
+    t = (text or '').strip()
+    if not t or len(t) < 12:
+        return False
+    # Allow em-dash / arrow beats inside one sentence; reject multi-paragraph.
+    if '\n\n' in t:
+        return False
+    # More than 2 hard sentence terminators → not one sentence
+    stops = len(re.findall(r'[.!?]+(?:\s|$)', t))
+    return stops <= 2 and len(t) <= 280
+
+
+def _place_of(sc: dict) -> str:
+    """Location id from world state or prompt — structural place, not lyric keywords."""
+    for blob in (sc.get('world_before'), sc.get('world_after'), sc.get('prop_state')):
+        if isinstance(blob, dict):
+            for key in ('place', 'location', 'set', 'room'):
+                if blob.get(key):
+                    return str(blob[key]).strip().lower()
+    loc = str(sc.get('location') or sc.get('place') or '').strip().lower()
+    return loc
+
+
+def _world_sig(sc: dict, which: str = 'after') -> Tuple:
+    d = sc.get('world_after') if which == 'after' else sc.get('world_before')
+    if not isinstance(d, dict) or not d:
+        return ()
+    return tuple(sorted((str(k), str(v)) for k, v in d.items()))
+
+
+def _payoff_design(plan: dict, cc: dict, scenes: List[dict]) -> Optional[dict]:
+    """Return declared payoff design (end state designed before the middle is filled)."""
+    pd = plan.get('payoff_design') or cc.get('payoff_design') or plan.get('final_payoff')
+    if isinstance(pd, dict) and pd:
+        return pd
+    if isinstance(pd, str) and pd.strip():
+        return {'summary': pd.strip()}
+    # Infer from structural payoff scene with a real end state
+    for sc in scenes:
+        role = structural_role_of(sc)
+        if role in ('payoff', 'final_payoff', 'climax', 'bookend'):
+            after = sc.get('world_after') or {}
+            if after:
+                return {
+                    'scene_id': sc.get('id'),
+                    'world_after': dict(after),
+                    'summary': sc.get('action') or '',
+                    'inferred': True,
+                }
+    return None
+
+
+def _viewer_retell_text(plan: dict, cc: dict) -> str:
+    return (
+        (plan.get('viewer_retell') or '').strip()
+        or (cc.get('viewer_retell') or '').strip()
+        or (plan.get('retell') or '').strip()
+    )
+
+
+def narrative_checklist(plan: dict, timeline: Optional[Sequence[dict]] = None) -> NarrativeReport:
+    """Watch Me + cross-curator craft checklist (sound-off / retell / payoff-first).
+
+    Hard errors (abort) for multi-beat stories:
       - no one-sentence visual premise
-      - no required climax/twist/payoff structural ids declared when scenes imply a twisty arc
-      - no bookend / payoff closure signal on a multi-scene story
-      - consequence-required actions without edges (delegated detail lives on story_model;
-        here we only require that required_shots is non-empty when structural roles exist)
-    Soft warnings: thin cast anchors, missing graphics_plan object.
+      - no independent viewer_retell aligned with the premise
+      - payoff not designed (payoff_design / structural end state) before a filled middle
+      - lyric-literal props that do not change persistent world state
+      - graphics not planned in preproduction, or non-diegetic story carriers
+      - recurring locations that never visibly transform toward payoff
+      - emotional performance peaks not placed on musical accents
+      - missing required climax ids / bookend when structural roles exist
     """
     issues: List[dict] = []
     check: Dict[str, bool] = {}
@@ -114,68 +213,261 @@ def narrative_checklist(plan: dict, timeline: Optional[Sequence[dict]] = None) -
         or (plan.get('logline') or '').strip()
         or (plan.get('premise') or '').strip()
     )
-    check['has_premise'] = bool(premise)
+    check['has_premise'] = bool(premise) and _one_sentence(premise)
     if not premise:
         issues.append({
             'severity': 'error', 'code': 'missing_premise',
             'detail': 'No one-sentence visual premise; every shot must advance one readable arc.',
         })
+    elif not _one_sentence(premise):
+        issues.append({
+            'severity': 'error', 'code': 'premise_not_one_sentence',
+            'detail': 'visual_premise must be one short sentence an independent viewer can hold.',
+        })
 
     scenes = list(plan.get('scenes') or [])
+    n = len(scenes)
+    multi = n >= 4
+
+    # --- Independent viewer-retell gate ---
+    retell = _viewer_retell_text(plan, cc)
+    check['has_viewer_retell'] = bool(retell) and _one_sentence(retell)
+    if multi and not retell:
+        issues.append({
+            'severity': 'error', 'code': 'missing_viewer_retell',
+            'detail': (
+                'Declare viewer_retell: one sentence an independent viewer would say '
+                'after watching with the sound off (must match the premise arc).'
+            ),
+        })
+    elif retell and not _one_sentence(retell):
+        issues.append({
+            'severity': 'error', 'code': 'retell_not_one_sentence',
+            'detail': 'viewer_retell must be one sentence.',
+        })
+    elif retell and premise:
+        pw, rw = _content_words(premise), _content_words(retell)
+        overlap = pw & rw
+        # Need some shared spine words; allow short premises with ≥1 overlap
+        need = 1 if len(pw) <= 4 else max(2, len(pw) // 4)
+        check['retell_aligns_premise'] = len(overlap) >= need
+        if not check['retell_aligns_premise']:
+            issues.append({
+                'severity': 'error', 'code': 'retell_mismatch',
+                'detail': (
+                    'viewer_retell does not align with visual_premise '
+                    f'(shared content words {sorted(overlap)[:8]}; need ≥{need}).'
+                ),
+            })
+    else:
+        check['retell_aligns_premise'] = bool(retell) or not multi
+
     req = required_shot_ids(plan)
     check['has_required_shots'] = bool(req)
-    # Multi-scene stories that declare twisty tags/roles must expose structural required ids
-    structural = [s for s in scenes if (s.get('structural_role') or '').lower() in {
-        'twist', 'payoff', 'climax', 'reveal', 'turn', 'final_payoff',
+    structural = [s for s in scenes if structural_role_of(s) in {
+        'twist', 'payoff', 'climax', 'reveal', 'turn', 'final_payoff', 'bookend',
     }]
     if structural and not req:
         issues.append({
             'severity': 'error', 'code': 'missing_required_shot_ids',
             'detail': 'Structural twist/payoff scenes present but required_shots is empty.',
         })
-    elif len(scenes) >= 8 and not req:
-        # Ambition without a declared climax list → narrative risk
+    elif n >= 8 and not req:
         issues.append({
             'severity': 'warning', 'code': 'no_declared_climax',
             'detail': 'Plan has 8+ scenes but no required_shots / climax structural ids.',
         })
 
-    # Bookend / payoff closure: first and last scene, or explicit bookend role, or required payoff
+    # --- Payoff designed before the middle ---
+    payoff = _payoff_design(plan, cc, scenes)
+    check['payoff_designed_first'] = bool(payoff)
+    if multi and not payoff:
+        issues.append({
+            'severity': 'error', 'code': 'payoff_not_designed',
+            'detail': (
+                'Design the final payoff before filling the middle: set payoff_design '
+                '(end world state + scene id) or a structural payoff scene with world_after.'
+            ),
+        })
+    elif multi and payoff and not req:
+        issues.append({
+            'severity': 'error', 'code': 'payoff_missing_required_id',
+            'detail': 'payoff_design present but required_shots lacks the climax/payoff structural ids.',
+        })
+
+    # Bookend / payoff closure
     roles = {(s.get('structural_role') or s.get('role') or '').lower() for s in scenes}
-    has_bookend = 'bookend' in roles or 'payoff' in roles or 'final_payoff' in roles or bool(req)
-    if scenes and str(scenes[0].get('id')) and str(scenes[-1].get('id')):
-        # Same location token across first/last counts as bookend signal
-        def loc_tok(sc: dict) -> str:
-            blob = (sc.get('prompt') or '').lower()
-            for w in ('sofa', 'couch', 'living room', 'lab', 'rooftop', 'kitchen', 'bedroom'):
-                if w in blob:
-                    return w
-            return ''
-        if loc_tok(scenes[0]) and loc_tok(scenes[0]) == loc_tok(scenes[-1]):
+    has_bookend = (
+        'bookend' in roles or 'payoff' in roles or 'final_payoff' in roles
+        or bool(req) or bool(payoff)
+    )
+    if scenes:
+        p0, p1 = _place_of(scenes[0]), _place_of(scenes[-1])
+        if p0 and p0 == p1:
             has_bookend = True
     check['has_bookend_or_payoff'] = bool(has_bookend)
-    if len(scenes) >= 4 and not has_bookend:
+    if multi and not has_bookend:
         issues.append({
             'severity': 'error', 'code': 'missing_bookend_or_payoff',
             'detail': 'Story lacks bookend/payoff closure (structural payoff id or matching open/close).',
         })
 
-    # Cast anchors (soft unless empty on multi-cast prompts)
+    # Cast anchors (soft)
     anchors = cc.get('character_anchors') or plan.get('character_anchors') or []
     check['has_cast_lock'] = bool(anchors) or bool(plan.get('lead') or plan.get('wardrobe'))
-    if len(scenes) >= 3 and not check['has_cast_lock']:
+    if n >= 3 and not check['has_cast_lock']:
         issues.append({
             'severity': 'warning', 'code': 'missing_cast_lock',
             'detail': 'No character styling anchors / lead wardrobe lock.',
         })
 
-    # Graphics plan object present (may be empty lists) — cards must not carry the story alone
+    # --- Graphics: planned in preproduction; diegetic / state-changing ---
     gp = cc.get('graphics_plan') or plan.get('graphics_plan')
     check['has_graphics_plan'] = gp is not None
-    if gp is None and len(scenes) >= 3:
+    if gp is None and n >= 3:
         issues.append({
-            'severity': 'warning', 'code': 'missing_graphics_plan',
-            'detail': 'Declare graphics_plan (code-built overlays on live plates; may be empty).',
+            'severity': 'error', 'code': 'graphics_not_preplanned',
+            'detail': (
+                'Graphics must be planned in preproduction (creative_contract.graphics_plan); '
+                'empty lists are fine — unplanned edit cards are not.'
+            ),
+        })
+    elif isinstance(gp, dict):
+        bad_carriers = []
+        for kind in STORY_CARRIER_GFX:
+            for item in gp.get(kind) or []:
+                if isinstance(item, str):
+                    bad_carriers.append(f'{kind}:bare_string')
+                    continue
+                if not isinstance(item, dict):
+                    continue
+                diegetic = bool(item.get('diegetic') or item.get('in_world'))
+                state_chg = bool(item.get('state_change') or item.get('world_change'))
+                if not (diegetic or state_chg):
+                    bad_carriers.append(f"{kind}:{item.get('text', '')[:40]}")
+        check['graphics_diegetic_or_stateful'] = not bad_carriers
+        if bad_carriers:
+            issues.append({
+                'severity': 'error', 'code': 'graphics_not_diegetic',
+                'detail': (
+                    'Story-carrier graphics must be diegetic or state-changing '
+                    f'(set diegetic/state_change on preplanned items): {bad_carriers[:6]}'
+                ),
+            })
+        # Kinetic/slam/hud/terminal are allowed as punchlines when composited on plates
+        for kind in ('hud', 'kinetic', 'terminal', 'slam', 'caption', 'ui'):
+            for item in gp.get(kind) or []:
+                if isinstance(item, dict) and item.get('composite') is False:
+                    issues.append({
+                        'severity': 'error', 'code': 'graphics_not_composite',
+                        'detail': f'{kind} graphics must be edit-composited (composite=true).',
+                    })
+    else:
+        check['graphics_diegetic_or_stateful'] = True
+
+    # --- Ban lyric-literal props without persistent world-state consequences ---
+    literal_bad = []
+    for sc in scenes:
+        props = sc.get('prop_state') if isinstance(sc.get('prop_state'), dict) else {}
+        flagged = bool(sc.get('lyric_literal') or sc.get('lyric_prop'))
+        # Inserts that show a prop but leave world unchanged and have no consequence edge
+        before, after = _world_sig(sc, 'before'), _world_sig(sc, 'after')
+        unchanged = before == after
+        no_edge = not (sc.get('requires_next') or [])
+        role = str(sc.get('role') or '').lower()
+        is_insert = role in ('insert', 'prop_insert', 'lyric_insert') or flagged
+        if (flagged or is_insert) and unchanged and no_edge and structural_role_of(sc) not in {
+            'bookend', 'payoff', 'final_payoff',
+        }:
+            literal_bad.append(str(sc.get('id')))
+            continue
+        # Explicit lyric_literal without any world key change involving the prop
+        if flagged and props and unchanged:
+            literal_bad.append(str(sc.get('id')))
+    check['no_orphan_lyric_props'] = not literal_bad
+    if literal_bad:
+        issues.append({
+            'severity': 'error', 'code': 'lyric_literal_prop',
+            'detail': (
+                'Lyric-literal props banned unless they produce persistent world-state '
+                f'consequences (world_after change and/or requires_next): {literal_bad[:8]}'
+            ),
+        })
+
+    # --- Recurring locations must visibly transform for payoff ---
+    by_place: Dict[str, List[dict]] = {}
+    for sc in scenes:
+        place = _place_of(sc)
+        if place:
+            by_place.setdefault(place, []).append(sc)
+    stagnant = []
+    for place, group in by_place.items():
+        if len(group) < 2:
+            continue
+        sigs = {_world_sig(sc, 'after') or _world_sig(sc, 'before') for sc in group}
+        sigs.discard(())
+        # Declared location_arc covering this place counts as transform
+        arcs = cc.get('location_arcs') or plan.get('location_arcs') or []
+        covered = any(
+            place in str(a.get('location') or '').lower()
+            and len(a.get('states') or []) >= 2
+            for a in arcs
+        )
+        if len(sigs) < 2 and not covered:
+            stagnant.append(place)
+    check['recurring_locations_transform'] = not stagnant
+    if stagnant and multi:
+        issues.append({
+            'severity': 'error', 'code': 'location_no_transform',
+            'detail': (
+                'Recurring locations must visibly transform for the payoff '
+                f'(distinct world states or location_arcs.states≥2): {stagnant[:6]}'
+            ),
+        })
+    # Also enforce declared arcs still need ≥2 states (mirror creative_contract, as hard narrative)
+    for arc in cc.get('location_arcs') or []:
+        if len(arc.get('states') or []) < 2:
+            issues.append({
+                'severity': 'error', 'code': 'location_arc_needs_states',
+                'detail': (
+                    f"location_arc '{arc.get('location')}' needs ≥2 visible states for payoff."
+                ),
+            })
+
+    # --- Emotional performance peaks on musical accents ---
+    beats = cc.get('performance_beats') or plan.get('performance_beats') or []
+    beat_by_id = {
+        str(b.get('scene_id')): b for b in beats if isinstance(b, dict) and b.get('scene_id')
+    }
+    peak_roles = {
+        'performance_closed', 'performance', 'singing', 'sing', 'lipsync', 'hook',
+    }
+    peaks_missing = []
+    for sc in scenes:
+        role = str(sc.get('role') or '').lower()
+        tags = str(sc.get('tags') or '').upper()
+        is_peak = (
+            role in peak_roles
+            or bool(sc.get('emotion'))
+            or 'HOOK' in tags or 'CHORUS' in tags
+            or sc.get('performance_peak')
+        )
+        if not is_peak:
+            continue
+        sid = str(sc.get('id'))
+        b = beat_by_id.get(sid) or {}
+        accent = str(b.get('accent') or sc.get('accent') or sc.get('musical_cue') or '').lower()
+        cue = str(b.get('musical_cue') or sc.get('musical_cue') or '')
+        if accent not in ACCENTS and not cue:
+            peaks_missing.append(sid)
+    check['performance_on_accents'] = not peaks_missing
+    if peaks_missing and multi:
+        issues.append({
+            'severity': 'error', 'code': 'performance_off_accent',
+            'detail': (
+                'Emotional performance peaks must sit on musical accents '
+                f'(performance_beats.accent or musical_cue): {peaks_missing[:8]}'
+            ),
         })
 
     # Sound-off readable: majority of scenes should have an action or prop_state
@@ -220,6 +512,8 @@ def narrative_checklist(plan: dict, timeline: Optional[Sequence[dict]] = None) -
     summary = (
         f"narrative_qa: {'ok' if ok else 'FAIL'} "
         f"premise={'yes' if check.get('has_premise') else 'no'} "
+        f"retell={'yes' if check.get('has_viewer_retell') else 'no'} "
+        f"payoff_first={'yes' if check.get('payoff_designed_first') else 'no'} "
         f"required_shots={req[:8]} errors={len(errors)}"
     )
     return NarrativeReport(ok=ok, issues=issues, checklist=check, summary=summary)
@@ -235,6 +529,9 @@ def assert_narrative_qa(plan: dict, timeline: Optional[Sequence[dict]] = None) -
             e.get('detail', '') for e in rep.issues if e.get('severity') == 'error'
         )[:400],
         stage='narrative_qa',
-        hint='Fix premise, structural required_shots, bookend/payoff, and sound-off action before GATE.',
+        hint=(
+            'Fix premise, viewer_retell, payoff_design-first, lyric-prop consequences, '
+            'diegetic preplanned graphics, location transforms, and accent-timed performance.'
+        ),
         details=rep.to_dict(),
     )
