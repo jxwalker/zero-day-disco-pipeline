@@ -2,6 +2,15 @@
 
 All notable changes are listed here. Versions follow semantic versioning and are tagged `vX.Y.Z`.
 
+## v1.3.1
+- PR #2 release-blocker follow-up: karaoke caption/title/endcard gfx tagged as infra
+  (2.2s headline fallback + endcard pass; bare narrative headline still fails);
+  karaoke SCHEMA/prompt/normalize require arc, viewer_retell, payoff_design, scene
+  before/after/requires_next, required_accents without inventing edges;
+  storyboard requires numeric score; independent retell from review stage (not
+  planner "An independent viewer…" echo); required_accents coverage gate;
+  final public-path repros in `test/unit/test_pr2_final_blockers.py`.
+
 ## v1.3.0
 - Watch Me–class story coherence recovery on top of v1.2 hardening:
   lean scene-state model (before/action/after, role/allegiance/prop, consequence edges),

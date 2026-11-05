@@ -168,7 +168,7 @@ class TestServiceIntegration(unittest.TestCase):
             )
             res = PopVideoJob(req).run(
                 dry_run=True, available_clips=clips,
-                storyboard_review={'score': 8, 'verdict': 'ready'},
+                storyboard_review={'score': 8, 'verdict': 'ready', 'viewer_retell': 'She dumps the feed, yanks the plug, and the overseer still holds power.'},
             )
             self.assertTrue(res.ok, res.error)
             self.assertIn('creative_contract', res.report)
@@ -196,7 +196,7 @@ class TestServiceIntegration(unittest.TestCase):
             )
             res = PopVideoJob(req).run(
                 dry_run=True, available_clips=clips,
-                storyboard_review={'score': 8, 'verdict': 'ready'},
+                storyboard_review={'score': 8, 'verdict': 'ready', 'viewer_retell': 'She dumps the feed, yanks the plug, and the overseer still holds power.'},
             )
             self.assertTrue(res.ok, res.error)
             self.assertEqual(len(res.report['creative_contract']['contract']['worlds']), 1)

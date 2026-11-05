@@ -154,14 +154,14 @@ def _default_plan_from_idea(req: PopVideoRequest) -> dict:
         },
     ]
     premise = idea[:160] if len(idea) >= 12 else f'Visual story for: {idea}'
+    # Planner retell = intended sound-off consequence sentence (NOT labeled independent).
     retell = (
-        f'An independent viewer sees: {premise}'
-        if len(premise) >= 12 else
-        f'An independent viewer can retell the visual story for {idea}'
+        'She dumps the feed, yanks the wall plug, and the overseer still holds power.'
     )
     plan = {
         'scenes': scenes,
         'required_shots': ['s04_twist', 's05_payoff'],
+        'required_accents': ['hook'],
         'viewer_retell': retell,
         'payoff_design': {
             'scene_id': 's05_payoff',
@@ -190,7 +190,8 @@ def _default_plan_from_idea(req: PopVideoRequest) -> dict:
         },
         'creative_contract': {
             'visual_premise': premise,
-            'viewer_retell': retell,
+            'planner_retell': retell,
+            'required_accents': ['hook'],
             'payoff_design': {
                 'scene_id': 's05_payoff',
                 'summary': 'Overseer reveal; who really controlled the plug',

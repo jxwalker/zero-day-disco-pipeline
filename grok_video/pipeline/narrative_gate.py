@@ -84,11 +84,17 @@ def storyboard_must_abort(review: Optional[dict],
         return f"storyboard review blocker: {blob[:240]!r}"
     score = review.get('score')
     if score is None:
-        return None
+        return (
+            'storyboard review missing valid numeric score; '
+            'a harmless verdict alone is not enough (must not go to camera)'
+        )
     try:
         sc = float(score)
     except (TypeError, ValueError):
-        return None
+        return (
+            f'storyboard review score {score!r} is not numeric; '
+            'require a valid score before generation'
+        )
     if sc < thr:
         return (
             f"storyboard review score {sc} < {thr}; "
@@ -182,12 +188,61 @@ def _payoff_design(plan: dict, cc: dict, scenes: List[dict]) -> Optional[dict]:
     return None
 
 
-def _viewer_retell_text(plan: dict, cc: dict) -> str:
+_ACTION_CONSEQUENCE_RE = re.compile(
+    r'\b(yank|pull|plug|dump|reject|reveal|control|controls|controlled|power|'
+    r'change|changes|changed|turn|turns|kill|unplug|hold|holds|held|overseer|'
+    r'consequence|aftermath|result)\b',
+    re.I,
+)
+
+
+def _planner_retell_text(plan: dict, cc: dict) -> str:
+    """Planner-authored intended retell — never treated as independent review."""
     return (
         (plan.get('viewer_retell') or '').strip()
-        or (cc.get('viewer_retell') or '').strip()
+        or (cc.get('planner_retell') or '').strip()
         or (plan.get('retell') or '').strip()
+        # Intentionally ignore cc.viewer_retell when it was a fabricated "independent" copy
     )
+
+
+def _independent_retell_text(plan: dict, cc: dict) -> str:
+    """Retell from a separate review stage — not planner-authored premise echo."""
+    review = plan.get('storyboard_review') or plan.get('independent_review') or {}
+    text = (
+        (review.get('viewer_retell') or '').strip()
+        or (review.get('independent_retell') or '').strip()
+        or (plan.get('independent_retell') or '').strip()
+        or (cc.get('independent_retell') or '').strip()
+    )
+    return text
+
+
+def _retell_is_fabricated(retell: str, premise: str) -> bool:
+    low = (retell or '').lower().strip()
+    if low.startswith('an independent viewer'):
+        return True
+    # Exact / near-copy of premise is not an independent retell
+    if premise and low.replace(' ', '') == premise.lower().replace(' ', ''):
+        return True
+    if premise and low in {
+        f'an independent viewer sees: {premise.lower()}',
+        f'an independent viewer can retell the visual story for {premise.lower()}',
+    }:
+        return True
+    return False
+
+
+def _retell_is_substantive(retell: str, scenes: List[dict]) -> bool:
+    """Require action/consequence language, not mere keyword overlap with the premise."""
+    if not retell:
+        return False
+    if _ACTION_CONSEQUENCE_RE.search(retell):
+        return True
+    # Fall back: share a content word with any scene action string
+    actions = ' '.join(str(sc.get('action') or '') for sc in scenes)
+    aw, rw = _content_words(actions), _content_words(retell)
+    return bool(aw & rw)
 
 
 def narrative_checklist(plan: dict, timeline: Optional[Sequence[dict]] = None) -> NarrativeReport:
@@ -229,38 +284,78 @@ def narrative_checklist(plan: dict, timeline: Optional[Sequence[dict]] = None) -
     n = len(scenes)
     multi = n >= 4
 
-    # --- Independent viewer-retell gate ---
-    retell = _viewer_retell_text(plan, cc)
-    check['has_viewer_retell'] = bool(retell) and _one_sentence(retell)
-    if multi and not retell:
+    # --- Planner retell + independent review retell (separate stages) ---
+    planner_retell = _planner_retell_text(plan, cc)
+    indep_retell = _independent_retell_text(plan, cc)
+    check['has_viewer_retell'] = bool(planner_retell) and _one_sentence(planner_retell)
+    check['has_independent_retell'] = bool(indep_retell) and _one_sentence(indep_retell)
+
+    if multi and not planner_retell:
         issues.append({
             'severity': 'error', 'code': 'missing_viewer_retell',
             'detail': (
-                'Declare viewer_retell: one sentence an independent viewer would say '
-                'after watching with the sound off (must match the premise arc).'
+                'Declare planner viewer_retell: one sentence describing the sound-off '
+                'action/consequence arc (do not label it independent).'
             ),
         })
-    elif retell and not _one_sentence(retell):
+    elif planner_retell and not _one_sentence(planner_retell):
         issues.append({
             'severity': 'error', 'code': 'retell_not_one_sentence',
             'detail': 'viewer_retell must be one sentence.',
         })
-    elif retell and premise:
-        pw, rw = _content_words(premise), _content_words(retell)
+    elif planner_retell and _retell_is_fabricated(planner_retell, premise):
+        issues.append({
+            'severity': 'error', 'code': 'retell_fabricated_independent',
+            'detail': (
+                'Planner viewer_retell must not claim independence or echo the premise '
+                'under "An independent viewer sees…". Independence is a separate review stage.'
+            ),
+        })
+
+    if multi and not indep_retell:
+        issues.append({
+            'severity': 'error', 'code': 'missing_independent_retell',
+            'detail': (
+                'Independent retell missing: provide storyboard_review.viewer_retell '
+                '(or independent_retell) from a separate review stage — not planner text.'
+            ),
+        })
+    elif indep_retell and _retell_is_fabricated(indep_retell, premise):
+        issues.append({
+            'severity': 'error', 'code': 'independent_retell_fabricated',
+            'detail': 'Independent retell must not be a labeled echo of the planner premise.',
+        })
+    elif indep_retell and not _retell_is_substantive(indep_retell, scenes):
+        issues.append({
+            'severity': 'error', 'code': 'independent_retell_not_substantive',
+            'detail': (
+                'Independent retell must state action/consequence '
+                '(what changes in the world), not keyword-overlap with the premise alone.'
+            ),
+        })
+    elif indep_retell and premise:
+        # Soft spine check against payoff / actions, not tautological premise copy
+        spine = ' '.join(
+            filter(None, [
+                premise,
+                str((_payoff_design(plan, cc, scenes) or {}).get('summary') or ''),
+                ' '.join(str(sc.get('action') or '') for sc in scenes),
+            ])
+        )
+        pw, rw = _content_words(spine), _content_words(indep_retell)
         overlap = pw & rw
-        # Need some shared spine words; allow short premises with ≥1 overlap
-        need = 1 if len(pw) <= 4 else max(2, len(pw) // 4)
+        need = 1 if len(pw) <= 6 else max(2, len(pw) // 8)
         check['retell_aligns_premise'] = len(overlap) >= need
         if not check['retell_aligns_premise']:
             issues.append({
                 'severity': 'error', 'code': 'retell_mismatch',
                 'detail': (
-                    'viewer_retell does not align with visual_premise '
+                    'independent retell does not align with premise/actions/payoff '
                     f'(shared content words {sorted(overlap)[:8]}; need ≥{need}).'
                 ),
             })
     else:
-        check['retell_aligns_premise'] = bool(retell) or not multi
+        check['retell_aligns_premise'] = bool(indep_retell) or not multi
 
     req = required_shot_ids(plan)
     check['has_required_shots'] = bool(req)
@@ -434,11 +529,59 @@ def narrative_checklist(plan: dict, timeline: Optional[Sequence[dict]] = None) -
                 ),
             })
 
-    # --- Emotional performance peaks on musical accents ---
+    # --- Required musical accents must be covered (not vacuous peak-tag-only check) ---
     beats = cc.get('performance_beats') or plan.get('performance_beats') or []
     beat_by_id = {
         str(b.get('scene_id')): b for b in beats if isinstance(b, dict) and b.get('scene_id')
     }
+    required_accents = [
+        str(a).lower().strip()
+        for a in (
+            plan.get('required_accents')
+            or cc.get('required_accents')
+            or plan.get('musical_accents')
+            or []
+        )
+        if str(a).strip()
+    ]
+    covered: Set[str] = set()
+    for sc in scenes:
+        b = beat_by_id.get(str(sc.get('id'))) or {}
+        for raw in (
+            b.get('accent'), sc.get('accent'), b.get('musical_cue'), sc.get('musical_cue'),
+        ):
+            tok = str(raw or '').lower().strip()
+            if tok in ACCENTS:
+                covered.add(tok)
+            for part in re.split(r'[\s,/|]+', tok):
+                if part in ACCENTS:
+                    covered.add(part)
+    for b in beats:
+        if not isinstance(b, dict):
+            continue
+        tok = str(b.get('accent') or '').lower().strip()
+        if tok in ACCENTS:
+            covered.add(tok)
+    check['has_required_accents'] = bool(required_accents) or not multi
+    if multi and not required_accents:
+        issues.append({
+            'severity': 'error', 'code': 'missing_required_accents',
+            'detail': (
+                'Plan must declare required_accents (musical accents to cover: '
+                'hook/drop/chorus/…). Coverage is validated; tagging peaks alone is not enough.'
+            ),
+        })
+    missing_cov = [a for a in required_accents if a not in covered and a.split()[0] not in covered]
+    check['accent_coverage'] = not missing_cov
+    if missing_cov:
+        issues.append({
+            'severity': 'error', 'code': 'accent_coverage_gap',
+            'detail': (
+                f'required_accents not covered by any scene/performance_beat: {missing_cov}; '
+                f'covered={sorted(covered)}'
+            ),
+        })
+
     peak_roles = {
         'performance_closed', 'performance', 'singing', 'sing', 'lipsync', 'hook',
     }
@@ -458,7 +601,7 @@ def narrative_checklist(plan: dict, timeline: Optional[Sequence[dict]] = None) -
         b = beat_by_id.get(sid) or {}
         accent = str(b.get('accent') or sc.get('accent') or sc.get('musical_cue') or '').lower()
         cue = str(b.get('musical_cue') or sc.get('musical_cue') or '')
-        if accent not in ACCENTS and not cue:
+        if accent not in ACCENTS and not cue and not any(a in accent for a in ACCENTS):
             peaks_missing.append(sid)
     check['performance_on_accents'] = not peaks_missing
     if peaks_missing and multi:

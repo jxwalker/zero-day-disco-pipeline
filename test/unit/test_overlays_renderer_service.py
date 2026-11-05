@@ -126,7 +126,7 @@ class TestWatchdogAndService(unittest.TestCase):
             res = PopVideoJob(req).run(
                 dry_run=True,
                 available_clips=clips,
-                storyboard_review={'score': 8, 'verdict': 'ready'},
+                storyboard_review={'score': 8, 'verdict': 'ready', 'viewer_retell': 'She dumps the feed, yanks the plug, and the overseer still holds power.'},
                 screen_results={
                     's04_twist': {'other_problem': True, 'issue': 'Robot/android is the main subject'},
                     's05_payoff': {'other_problem': True,
@@ -159,7 +159,7 @@ class TestWatchdogAndService(unittest.TestCase):
             )
             res = PopVideoJob(req).run(
                 dry_run=True, available_clips=clips,
-                storyboard_review={'score': 8, 'verdict': 'ready'},
+                storyboard_review={'score': 8, 'verdict': 'ready', 'viewer_retell': 'She dumps the feed, yanks the plug, and the overseer still holds power.'},
             )
             self.assertFalse(res.ok)
             self.assertTrue(res.failure_kind)

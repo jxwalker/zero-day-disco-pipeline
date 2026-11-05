@@ -43,7 +43,7 @@ def _clips(td, sids):
 
 
 SIDS = ['s01_setup', 's02_perf', 's03_action', 's04_twist', 's05_payoff']
-PASS_REVIEW = {'score': 8, 'verdict': 'ready for camera'}
+PASS_REVIEW = {'score': 8, 'verdict': 'ready for camera', 'viewer_retell': 'She dumps the feed, yanks the plug, and the overseer still holds power.'}
 
 
 class TestBlocker1GraphicsInfraVsNarrative(unittest.TestCase):

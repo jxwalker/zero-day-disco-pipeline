@@ -48,10 +48,11 @@ def apply_coherence_gates(plan: dict,
 
     rev = storyboard_review if storyboard_review is not None else P.get('storyboard_review')
     if rev:
-        P['storyboard_review'] = rev
+        P['storyboard_review'] = rev  # also supplies independent_retell for narrative_qa
     assert_storyboard_review(P, rev, require_present=require_storyboard)
     reports['storyboard_review'] = {
         'score': (rev or {}).get('score'), 'verdict': (rev or {}).get('verdict'),
+        'viewer_retell': (rev or {}).get('viewer_retell') or (rev or {}).get('independent_retell'),
         'ok': True,
     }
 

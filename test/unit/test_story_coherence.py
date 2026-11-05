@@ -69,8 +69,15 @@ def _wm_like_plan():
     return {
         'scenes': scenes,
         'required_shots': ['s07', 's08'],
+        'required_accents': ['hook'],
         'arc': premise,
         'viewer_retell': retell,
+        'storyboard_review': {
+            'score': 8, 'verdict': 'ready',
+            'viewer_retell': (
+                'She dumps the trapping feed, builds her channel, and the living room changes.'
+            ),
+        },
         'payoff_design': {
             'scene_id': 's08',
             'summary': 'Bookend sofa: she watches her own channel',
@@ -78,7 +85,8 @@ def _wm_like_plan():
         },
         'creative_contract': {
             'visual_premise': premise,
-            'viewer_retell': retell,
+            'planner_retell': retell,
+            'required_accents': ['hook'],
             'payoff_design': {
                 'scene_id': 's08',
                 'summary': 'Bookend sofa: she watches her own channel',
@@ -163,8 +171,8 @@ class TestStoryboardHardGate(unittest.TestCase):
             }})
 
     def test_good_review_passes(self):
-        self.assertIsNone(storyboard_must_abort({'score': 8, 'verdict': 'ready'}))
-        assert_storyboard_review({}, {'score': 8, 'verdict': 'ship it'})
+        self.assertIsNone(storyboard_must_abort({'score': 8, 'verdict': 'ready', 'viewer_retell': 'She dumps the feed, yanks the plug, and the overseer still holds power.'}))
+        assert_storyboard_review({}, {'score': 8, 'verdict': 'ship it', 'viewer_retell': 'She dumps the feed, yanks the plug, and the overseer still holds power.'})
 
 
 class TestSingMouthsClosed(unittest.TestCase):
@@ -308,21 +316,40 @@ class TestCuratorCraftGates(unittest.TestCase):
     def test_missing_viewer_retell_fails(self):
         plan = ensure_scene_states(_wm_like_plan())
         plan['viewer_retell'] = ''
-        plan['creative_contract']['viewer_retell'] = ''
+        plan['creative_contract']['planner_retell'] = ''
+        plan['creative_contract'].pop('viewer_retell', None)
         with self.assertRaises(JobFailure) as cm:
             assert_narrative_qa(plan)
         self.assertIn('retell', cm.exception.message.lower())
 
+    def test_missing_independent_retell_fails(self):
+        plan = ensure_scene_states(_wm_like_plan())
+        plan['storyboard_review'] = {'score': 8, 'verdict': 'ready'}  # score ok, no independent retell
+        with self.assertRaises(JobFailure) as cm:
+            assert_narrative_qa(plan)
+        self.assertIn('independent', cm.exception.message.lower())
+
     def test_retell_mismatch_fails(self):
         plan = ensure_scene_states(_wm_like_plan())
-        plan['viewer_retell'] = 'A completely unrelated beach party with no shared spine.'
-        plan['creative_contract']['viewer_retell'] = plan['viewer_retell']
+        plan['storyboard_review'] = {
+            'score': 8, 'verdict': 'ready',
+            'viewer_retell': 'A completely unrelated beach party with no shared spine.',
+        }
         with self.assertRaises(JobFailure) as cm:
             assert_narrative_qa(plan)
         self.assertTrue(
-            any(c in cm.exception.message for c in ('retell_mismatch', 'align')),
+            any(c in cm.exception.message.lower() for c in (
+                'retell_mismatch', 'align', 'substantive', 'independent',
+                'consequence', 'keyword',
+            )),
             cm.exception.message,
         )
+
+    def test_scoreless_harmless_verdict_fails(self):
+        with self.assertRaises(JobFailure) as cm:
+            assert_storyboard_review({}, {'verdict': 'looks fine ship it'})
+        self.assertEqual(cm.exception.kind, FailureKind.STORYBOARD)
+        self.assertIn('score', cm.exception.message.lower())
 
     def test_payoff_not_designed_before_middle_fails(self):
         plan = ensure_scene_states(_wm_like_plan())
@@ -379,6 +406,8 @@ class TestCuratorCraftGates(unittest.TestCase):
     def test_performance_peak_off_accent_fails(self):
         plan = ensure_scene_states(_wm_like_plan())
         plan['creative_contract']['performance_beats'] = []
+        plan['required_accents'] = ['hook', 'drop']
+        plan['creative_contract']['required_accents'] = ['hook', 'drop']
         for sc in plan['scenes']:
             sc.pop('accent', None)
             sc.pop('musical_cue', None)
@@ -387,6 +416,14 @@ class TestCuratorCraftGates(unittest.TestCase):
         with self.assertRaises(JobFailure) as cm:
             assert_narrative_qa(plan)
         self.assertIn('accent', cm.exception.message.lower())
+
+    def test_missing_required_accents_fails(self):
+        plan = ensure_scene_states(_wm_like_plan())
+        plan.pop('required_accents', None)
+        plan['creative_contract'].pop('required_accents', None)
+        with self.assertRaises(JobFailure) as cm:
+            assert_narrative_qa(plan)
+        self.assertIn('required_accent', cm.exception.message.lower())
 
     def test_wm_like_craft_checklist_passes(self):
         plan = ensure_scene_states(_wm_like_plan())
@@ -422,7 +459,7 @@ class TestPopVideoJobContract(unittest.TestCase):
             )
             res = PopVideoJob(req).run(
                 dry_run=True, available_clips=clips,
-                storyboard_review={'score': 8, 'verdict': 'ready for camera'},
+                storyboard_review={'score': 8, 'verdict': 'ready for camera', 'viewer_retell': 'She dumps the feed, yanks the plug, and the overseer still holds power.'},
             )
             self.assertTrue(res.ok, res.error)
             self.assertEqual(res.failure_kind, '')
@@ -439,7 +476,7 @@ class TestPopVideoJobContract(unittest.TestCase):
             )
             res = PopVideoJob(req).run(
                 dry_run=True, available_clips=clips,
-                storyboard_review={'score': 8, 'verdict': 'ready'},
+                storyboard_review={'score': 8, 'verdict': 'ready', 'viewer_retell': 'She dumps the feed, yanks the plug, and the overseer still holds power.'},
             )
             self.assertFalse(res.ok)
             self.assertEqual(res.failure_kind, FailureKind.COVERAGE.value)
@@ -456,7 +493,7 @@ class TestPopVideoJobContract(unittest.TestCase):
             )
             res = PopVideoJob(req).run(
                 dry_run=True, available_clips=clips, rejected_ids=['s05_payoff.mp4.qcfail.mp4'],
-                storyboard_review={'score': 8, 'verdict': 'ready'},
+                storyboard_review={'score': 8, 'verdict': 'ready', 'viewer_retell': 'She dumps the feed, yanks the plug, and the overseer still holds power.'},
             )
             self.assertFalse(res.ok)
             self.assertEqual(res.failure_kind, FailureKind.COVERAGE.value)
@@ -505,7 +542,7 @@ class TestPopVideoJobContract(unittest.TestCase):
                     {'scene_id': 's02_sing', 'accent': 'hook', 'emotion': 'urgent',
                      'musical_cue': 'chorus'},
                 ]
-                p['storyboard_review'] = {'score': 8, 'verdict': 'ok'}
+                p['storyboard_review'] = {'score': 8, 'verdict': 'ok', 'viewer_retell': 'She dumps the feed, yanks the plug, and the overseer still holds power.'}
                 return p
 
             bad_tl = [
@@ -520,7 +557,7 @@ class TestPopVideoJobContract(unittest.TestCase):
             clips2['s02_sing'] = clips['s02_perf']
             res = PopVideoJob(req, planner=planner).run(
                 dry_run=True, available_clips=clips2, timeline_shots=bad_tl,
-                storyboard_review={'score': 8, 'verdict': 'ok'},
+                storyboard_review={'score': 8, 'verdict': 'ok', 'viewer_retell': 'She dumps the feed, yanks the plug, and the overseer still holds power.'},
             )
             self.assertFalse(res.ok, res.error)
             self.assertEqual(res.failure_kind, FailureKind.SING.value)
@@ -543,7 +580,7 @@ class TestPopVideoJobContract(unittest.TestCase):
             ]
             res = PopVideoJob(req).run(
                 dry_run=True, available_clips=clips, timeline_shots=bad_tl,
-                storyboard_review={'score': 8, 'verdict': 'ok'},
+                storyboard_review={'score': 8, 'verdict': 'ok', 'viewer_retell': 'She dumps the feed, yanks the plug, and the overseer still holds power.'},
             )
             self.assertFalse(res.ok)
             self.assertEqual(res.failure_kind, FailureKind.GFX.value)
@@ -561,7 +598,7 @@ class TestPopVideoJobContract(unittest.TestCase):
             open(req.extras['video_path'], 'wb').write(b'0' * 100)
             res = PopVideoJob(req).run(
                 dry_run=False, available_clips=clips,
-                storyboard_review={'score': 9, 'verdict': 'go'},
+                storyboard_review={'score': 9, 'verdict': 'go', 'viewer_retell': 'She dumps the feed, yanks the plug, and the overseer still holds power.'},
             )
             # dry_run=False without render_exec still passes gates; extras video_path marks finished
             d = res.to_dict()
