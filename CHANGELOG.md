@@ -2,6 +2,16 @@
 
 All notable changes are listed here. Versions follow semantic versioning and are tagged `vX.Y.Z`.
 
+## v1.3.0
+- Watch Me–class story coherence recovery on top of v1.2 hardening:
+  lean scene-state model (before/action/after, role/allegiance/prop, consequence edges),
+  structural `required_shots` climax abort (including QC-rejected required clips),
+  storyboard review hard gate before generate, mouths-closed performance default (`GV_SING=1` opt-in),
+  SING max-uses=1, art/prop bible bans (clay/cartoon/toy + plug-scale lock), ≤28 scene cap,
+  picture-first graphics lint (black-void ≤1.5s, gfx_share ≤10%), narrative QA checklist,
+  and typed `JobFailure` kinds so unattended jobs return finished MP4 **or** actionable failure.
+- Dry-run acceptance tests in `test/unit/test_story_coherence.py`. Docs: `docs/technical/pipeline-hardening.md`.
+
 ## v1.2.0
 - Pipeline hardening from the 2026-11-05 production postmortem (`grok_video/pipeline/`):
   negation-aware prompt/wardrobe gate, screen-check waivers for cast/blank terminals, scene-order timeline

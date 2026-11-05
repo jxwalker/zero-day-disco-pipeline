@@ -167,8 +167,24 @@ def review(P, day, work, lines):
     for s in P['scenes']:
         s['prompt'] = re.sub(BANNED, '', s['prompt'], flags=re.I)
     G.save_json(r, os.path.join(od, 'storyboard_review.json'))
-    P['storyboard_review'] = {'score': r.get('score'), 'verdict': r.get('verdict'), 'scene_fixes': nf, 'line_moves': nl}
-    G.log(f"storyboard: review score {r.get('score')} - {nf} scene fixes, {nl} line moves ({meta['secs']}s)")
+    score = r.get('score')
+    verdict = str(r.get('verdict') or '')
+    # Low scores must carry an explicit camera blocker so the hard gate aborts before generate.
+    try:
+        min_sc = int(os.environ.get('GV_STORYBOARD_MIN_SCORE', '7'))
+    except ValueError:
+        min_sc = 7
+    if score is not None:
+        try:
+            if float(score) < min_sc and 'must not go to camera' not in verdict.lower():
+                verdict = (verdict + ' — must not go to camera until fixed').strip(' —')
+                r['verdict'] = verdict
+        except (TypeError, ValueError):
+            pass
+    P['storyboard_review'] = {
+        'score': score, 'verdict': verdict, 'scene_fixes': nf, 'line_moves': nl,
+    }
+    G.log(f"storyboard: review score {score} - {nf} scene fixes, {nl} line moves ({meta['secs']}s)")
     return r
 
 

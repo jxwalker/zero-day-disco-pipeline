@@ -156,7 +156,7 @@ class TestServiceIntegration(unittest.TestCase):
             img = os.path.join(td, 'lead.png')
             open(img, 'wb').write(b'\x89PNG\r\n\x1a\n' + b'0' * 64)
             clips = {}
-            for sid in ('s01_setup', 's02_sing', 's03_action', 's04_twist', 's05_payoff'):
+            for sid in ('s01_setup', 's02_perf', 's03_action', 's04_twist', 's05_payoff'):
                 p = os.path.join(td, f'{sid}.mp4')
                 open(p, 'wb').write(b'0' * 2000)
                 clips[sid] = p
@@ -166,7 +166,10 @@ class TestServiceIntegration(unittest.TestCase):
                 song_idea='Luxury robots secretly powered by exhausted operators',
                 work_dir=os.path.join(td, 'work'),
             )
-            res = PopVideoJob(req).run(dry_run=True, available_clips=clips)
+            res = PopVideoJob(req).run(
+                dry_run=True, available_clips=clips,
+                storyboard_review={'score': 8, 'verdict': 'ready'},
+            )
             self.assertTrue(res.ok, res.error)
             self.assertIn('creative_contract', res.report)
             self.assertTrue(res.report['creative_contract']['ok'])
@@ -184,14 +187,17 @@ class TestServiceIntegration(unittest.TestCase):
             img = os.path.join(td, 'lead.png')
             open(img, 'wb').write(b'\x89PNG\r\n\x1a\n' + b'0' * 64)
             clips = {sid: os.path.join(td, f'{sid}.mp4') for sid in
-                     ('s01_setup', 's02_sing', 's03_action', 's04_twist', 's05_payoff')}
+                     ('s01_setup', 's02_perf', 's03_action', 's04_twist', 's05_payoff')}
             for p in clips.values():
                 open(p, 'wb').write(b'0' * 2000)
             req = PopVideoRequest(
                 job_id='cc2', image_path=img, song_idea='A sunny beach party',
                 work_dir=os.path.join(td, 'work2'),
             )
-            res = PopVideoJob(req).run(dry_run=True, available_clips=clips)
+            res = PopVideoJob(req).run(
+                dry_run=True, available_clips=clips,
+                storyboard_review={'score': 8, 'verdict': 'ready'},
+            )
             self.assertTrue(res.ok, res.error)
             self.assertEqual(len(res.report['creative_contract']['contract']['worlds']), 1)
 

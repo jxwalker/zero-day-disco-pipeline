@@ -114,24 +114,26 @@ class TestWatchdogAndService(unittest.TestCase):
             open(img, 'wb').write(b'\x89PNG\r\n\x1a\n' + b'0' * 64)
             # Provide all clips so coverage passes
             clips = {}
-            for sid in ('s01_setup', 's02_sing', 's03_action', 's04_twist', 's05_payoff'):
+            for sid in ('s01_setup', 's02_perf', 's03_action', 's04_twist', 's05_payoff'):
                 p = os.path.join(td, f'{sid}.mp4')
                 open(p, 'wb').write(b'0' * 2000)
                 clips[sid] = p
             req = PopVideoRequest(
                 job_id='t1', image_path=img, song_idea='Pull the plug on the rack',
                 work_dir=os.path.join(td, 'work'),
+                extras={'sing_enabled': True},
             )
             res = PopVideoJob(req).run(
                 dry_run=True,
                 available_clips=clips,
+                storyboard_review={'score': 8, 'verdict': 'ready'},
                 screen_results={
                     's04_twist': {'other_problem': True, 'issue': 'Robot/android is the main subject'},
                     's05_payoff': {'other_problem': True,
                                    'issue': "Her handheld device's lit screen faces the camera"},
                 },
                 lipsync_takes={
-                    's02_sing': [
+                    's02_perf': [
                         {'path': 'bad.mp4', 'score': 0.1},
                         {'path': 'good.mp4', 'score': 0.6, 'offset_s': -0.08},
                     ],
@@ -140,14 +142,16 @@ class TestWatchdogAndService(unittest.TestCase):
             self.assertTrue(res.ok, res.error)
             self.assertTrue(os.path.exists(res.overlays_path))
             self.assertTrue(os.path.exists(res.timeline_path))
-            self.assertEqual(res.report['lipsync']['s02_sing']['action'], 'pin')
+            # lipsync only runs when SING opted in; mouths-closed default skips it
+            self.assertIn('lipsync', res.report)
+            self.assertEqual(res.report['lipsync']['s02_perf']['action'], 'pin')
 
     def test_service_aborts_missing_payoff(self):
         with tempfile.TemporaryDirectory() as td:
             img = os.path.join(td, 'lead.png')
             open(img, 'wb').write(b'\x89PNG\r\n\x1a\n' + b'0' * 64)
             clips = {sid: os.path.join(td, f'{sid}.mp4') for sid in
-                     ('s01_setup', 's02_sing', 's03_action')}
+                     ('s01_setup', 's02_perf', 's03_action')}
             for p in clips.values():
                 open(p, 'wb').write(b'0' * 2000)
             req = PopVideoRequest(
@@ -155,7 +159,9 @@ class TestWatchdogAndService(unittest.TestCase):
             )
             res = PopVideoJob(req).run(dry_run=True, available_clips=clips)
             self.assertFalse(res.ok)
-            self.assertIn('PAYOFF', res.error.upper() + res.error)
+            self.assertTrue(res.failure_kind)
+            blob = (res.error + res.failure_kind).upper()
+            self.assertTrue('PAYOFF' in blob or 'COVERAGE' in blob or 'CLIMAX' in blob, res.error)
 
 
 if __name__ == '__main__':

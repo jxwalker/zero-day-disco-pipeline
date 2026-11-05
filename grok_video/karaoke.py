@@ -1237,7 +1237,7 @@ def main():
             P['ver'] = PLAN_VER; P['plan_s'] = round(time.time() - t0)
             G.save_json(P, os.path.join(work, 'plan_raw.json'))
             status['warnings'] += fact_lint(P, day)
-            # Hardening: SING only on dedicated performance shots; prompt gate rewrites (never silent lock-leak swap)
+            # Hardening: mouths-closed default; story model; storyboard hard gate; never silent lock-leak swap
             try:
                 from pipeline.plan_fix import fix_plan_singing
                 from pipeline.prompt_gate import gate_prompts
@@ -1245,9 +1245,25 @@ def main():
                 from pipeline.creative_contract import (
                     ensure_creative_contract, validate_creative_contract, apply_no_text_to_scenes,
                 )
+                from pipeline.story_model import ensure_scene_states, assert_story_model
+                from pipeline.narrative_gate import assert_storyboard_review, assert_narrative_qa
+                from pipeline.failures import JobFailure
                 P = fix_plan_singing(P, sing_share=float(os.environ.get('GV_SING_SHARE', '0') or 0))
+                P = ensure_scene_states(P)
                 P = ensure_creative_contract(P)
                 P = apply_no_text_to_scenes(P)
+                # Storyboard review below threshold / "must not go to camera" → hard-abort before generate
+                assert_storyboard_review(P)
+                srep = assert_story_model(
+                    P, lyric_line_count=len(lyric_lines(day)),
+                    allow_large=os.environ.get('GV_ALLOW_LARGE_PLAN', '0') == '1',
+                )
+                G.save_json(srep.to_dict(), os.path.join(work, 'story_model.json'))
+                status['story_model'] = {'ok': srep.ok, 'summary': srep.summary,
+                                         'required_shots': srep.required_shots}
+                nrep = assert_narrative_qa(P)
+                G.save_json(nrep.to_dict(), os.path.join(work, 'narrative_qa.json'))
+                status['narrative_qa'] = {'ok': nrep.ok, 'summary': nrep.summary}
                 crep = validate_creative_contract(
                     P, mode=os.environ.get('GV_CREATIVE_CONTRACT_MODE', 'adaptive'))
                 P['creative_contract'] = crep.contract
@@ -1267,6 +1283,14 @@ def main():
                 if gated['critical_fail']:
                     raise RuntimeError(f"prompt gate: {gated['critical_fail']} story-critical prompts failed rewrite")
                 P['plan_fp'] = plan_fingerprint(P)
+                status['performance_mode'] = P.get('performance_mode')
+            except JobFailure as e:
+                status.update(ok=False, error=str(e), failure_kind=getattr(e, 'kind', '') and e.kind.value,
+                              failure=getattr(e, 'to_dict', lambda: {})())
+                G.save_json(status, sp)
+                print(f"GROK_VIDEO_STATUS=failed code={getattr(e, 'exit_code', 8)} style=karaoke "
+                      f"kind={getattr(e.kind, 'value', e.kind)!r} reason={str(e)[:300]!r}", flush=True)
+                sys.exit(getattr(e, 'exit_code', 8))
             except ImportError as e:
                 status['warnings'].append(f'pipeline hardening import failed ({e})')
             G.save_json(P, pp)
@@ -1286,20 +1310,24 @@ def main():
         if not sync_ok: status['warnings'].append(f'word sync weak {sync} -> line-level karaoke')
         rep = sanitize(L)
         if rep: status['warnings'].append(f"timing sanity: re-spread the tail of {len(rep)} line(s): {rep}")
-        # Coverage gate: abort clearly if too few filmed clips or TWIST/PAYOFF missing (never assemble a hollow cut)
+        # Coverage gate: abort if too few clips OR required climax structural ids missing/rejected
         try:
-            from pipeline.coverage import assert_coverage, CoverageError, critical_scene_ids
+            from pipeline.coverage import assert_coverage, CoverageError
             from pipeline.timeline_policy import load_pinned_timeline
             avail_ids = [s['id'] for s in P.get('scenes', [])
                          if os.path.exists(f"{gdir}/{s['id']}.mp4") and os.path.getsize(f"{gdir}/{s['id']}.mp4") > 10000]
+            rejected = status.get('clip_rejected') or []
             if P.get('scenes') and os.environ.get('GV_COVERAGE_GATE', '1') != '0':
                 # Ratio is measured against the intended film set (stills/clips budget), not every plan row.
                 intended = (P.get('scenes') or [])[:max(a.stills, a.clips)]
-                cov = assert_coverage(intended, avail_ids, require_critical=False)
-                # Story-critical tags anywhere in the plan must have clips.
-                assert_coverage(P.get('scenes') or [], avail_ids, min_ratio=0.0, require_critical=True)
+                cov = assert_coverage(intended, avail_ids, require_critical=False, plan=P,
+                                      rejected_ids=rejected)
+                # Structural required climax/twist/payoff ids anywhere in the plan must have clips.
+                assert_coverage(P.get('scenes') or [], avail_ids, min_ratio=0.0, require_critical=True,
+                                plan=P, rejected_ids=rejected)
                 status['coverage'] = cov
-                G.log(f"karaoke: coverage {cov['pct']}% ({cov['have']}/{cov['wanted']}); critical ok")
+                G.log(f"karaoke: coverage {cov['pct']}% ({cov['have']}/{cov['wanted']}); "
+                      f"required={cov.get('required_shots')} ok")
             # Stale pin: only reuse timeline_pinned.json when plan_fp matches
             pin_path = os.path.join(work, 'timeline_pinned.json')
             pinned = load_pinned_timeline(pin_path, P)
@@ -1307,9 +1335,10 @@ def main():
                 status['warnings'].append('stale timeline_pinned.json ignored (plan_fp mismatch)')
                 G.log('karaoke: ignoring stale timeline pin (plan fingerprint mismatch)')
         except CoverageError as e:
-            status.update(ok=False, error=str(e), coverage=getattr(e, 'details', {}))
+            status.update(ok=False, error=str(e), coverage=getattr(e, 'details', {}),
+                          failure_kind='coverage')
             G.save_json(status, sp)
-            print(f"GROK_VIDEO_STATUS=failed code=8 style=karaoke reason={str(e)[:300]!r}", flush=True)
+            print(f"GROK_VIDEO_STATUS=failed code=8 style=karaoke kind='coverage' reason={str(e)[:300]!r}", flush=True)
             sys.exit(8)
         shots = timeline(P, L, dur, day, gdir)
         pl_ = {ln['i']: ln for ln in P['lines']}; inv_ = {v: k for k, v in map_lines(P, L, day).items()}
@@ -1339,6 +1368,20 @@ def main():
                     f_.write(f"| {r['n']} | {r['line']} | {r['shot'][:90].replace('|', '/')} | {'yes' if r['match'] else 'NO'} | {r['why'][:80].replace('|', '/')} |\n")
         shots, bpm_ = pace(shots, L, day, audio, dur); status['bpm'] = round(bpm_, 1)
         G.log(f'karaoke: paced {len(shots)} shots at {bpm_:.1f} BPM')
+        # Picture-first gfx + SING max-uses=1 after edit fills (no black-void story carriers / SING reuse)
+        try:
+            from pipeline.graphics_lint import assert_graphics_and_sing
+            from pipeline.failures import JobFailure
+            grep = assert_graphics_and_sing(shots, P)
+            status['gfx_lint'] = grep.to_dict()
+            G.save_json(grep.to_dict(), os.path.join(work, 'gfx_lint.json'))
+        except JobFailure as e:
+            status.update(ok=False, error=str(e), failure_kind=getattr(e.kind, 'value', str(e.kind)),
+                          failure=e.to_dict())
+            G.save_json(status, sp)
+            print(f"GROK_VIDEO_STATUS=failed code={e.exit_code} style=karaoke "
+                  f"kind={getattr(e.kind, 'value', e.kind)!r} reason={str(e)[:300]!r}", flush=True)
+            sys.exit(e.exit_code)
         end_t = shots[-1]['t0']
         # Post-production overlays are first-class (model never renders text). Default ON.
         story = []

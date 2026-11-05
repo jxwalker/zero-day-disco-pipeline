@@ -18,29 +18,41 @@ class TestPlanFixSinging(unittest.TestCase):
             'prompt': '[SING][HERO] front-facing close-up, eyes to lens, singing this line. '
                       'Top-down close-up Vex bare hand slams the stop button',
             'role': 'action',
-        })
+        }, allow_sing=True)
         self.assertTrue(sc.get('_sing_stripped'))
         self.assertNotIn('[SING]', sc['prompt'])
         self.assertFalse(singing_allowed(sc))
 
-    def test_keep_sing_on_hero_performance(self):
+    def test_keep_sing_on_hero_performance_when_opted_in(self):
         sc = {
             'id': 'sing_u12',
             'prompt': '[SING][HERO] front-facing close-up singing this LINE "pull the plug"',
             'role': 'singing', 'tags': 'SING',
         }
         self.assertTrue(is_singing_shot(sc))
-        fixed = fix_scene_singing(sc)
+        fixed = fix_scene_singing(sc, allow_sing=True)
         self.assertTrue(fixed.get('_sing'))
         self.assertIn('[SING]', fixed['prompt'])
 
-    def test_plan_ignores_sing_share_quota(self):
+    def test_story_default_strips_all_sing(self):
+        """Watch Me rule: mouths closed; sing_share must not re-inject SING."""
         plan = fix_plan_singing({
             'scenes': [
                 {'id': 'a', 'prompt': '[SING] slam the button', 'role': 'action'},
                 {'id': 'b', 'prompt': '[SING][HERO] singing this LINE "hey"', 'role': 'singing', 'tags': 'SING'},
             ]
         }, sing_share=0.35)
+        self.assertEqual(plan['performance_mode'], 'mouths_closed')
+        self.assertEqual(plan['plan_fix']['singing_shots'], [])
+        self.assertNotIn('[SING]', plan['scenes'][1]['prompt'])
+
+    def test_opt_in_keeps_dedicated_sing_ignores_quota(self):
+        plan = fix_plan_singing({
+            'scenes': [
+                {'id': 'a', 'prompt': '[SING] slam the button', 'role': 'action'},
+                {'id': 'b', 'prompt': '[SING][HERO] singing this LINE "hey"', 'role': 'singing', 'tags': 'SING'},
+            ]
+        }, sing_share=0.35, sing_enabled=True)
         self.assertIn('a', plan['plan_fix']['sing_stripped'])
         self.assertIn('b', plan['plan_fix']['singing_shots'])
 
