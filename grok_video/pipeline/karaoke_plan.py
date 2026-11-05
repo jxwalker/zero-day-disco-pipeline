@@ -1,46 +1,75 @@
 """Karaoke plan schema helpers: normalize Opus output so new plans can pass coherence gates.
 
-Never invents ``requires_next`` or independent viewer-retell. Tags intentional karaoke
-caption/title/endcard gfx so graphics lint does not treat them as black-void narrative slides.
+Never invents ``requires_next`` or independent viewer-retell. Caption infra exemption is
+provenance-only (code-built line_card / title fallback / match redraw / endcard) — never
+by template name or planner-controlled tags.
 """
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Sequence, Set
+from typing import Any, Dict, List, Optional, Sequence
 
-# Caption/title templates used as line-locked karaoke fallbacks (not narrative story carriers).
-CAPTION_GFX = frozenset({
-    'headline', 'quote', 'stamp', 'browser',  # short lyric/title cards when infra-tagged
+# Provenance values set ONLY by karaoke code paths (never trust planner tags).
+CAPTION_PROVENANCE = frozenset({
+    'line_card',
+    'title_fallback',
+    'match_redraw',
+    'template_cap_redraw',
+    'stamp_cap_redraw',
+    'fact_lint_replace',
+    'endcard',
 })
+
 # Still banned as unplated primary story carriers unless diegetic/state_change/plate.
 NARRATIVE_POOL_GFX = frozenset({
     'bignum', 'bars', 'post', 'feed', 'compare', 'story', 'card', 'rows', 'inbox', 'chat',
-    'gauge', 'countdown', 'screen',
+    'gauge', 'countdown', 'screen', 'headline', 'quote', 'stamp', 'browser',
 })
-
 
 SCENE_STATE_KEYS = ('world_before', 'action', 'world_after')
 
 
-def tag_caption_gfx(visual: dict) -> dict:
-    """Mark intentional karaoke caption/title cards so gfx lint treats them as infra."""
-    if not isinstance(visual, dict):
-        return visual
-    out = dict(visual)
-    if out.get('kind') != 'gfx':
-        return out
-    g = str(out.get('g') or '').lower()
-    if g in ('endcard', 'karaoke', 'lyrics', 'caption', 'credit', 'credits'):
-        out['infra'] = True
-        out['karaoke_caption'] = True
-        return out
-    if g in CAPTION_GFX or out.get('redrawn') or out.get('line_card'):
-        out['karaoke_caption'] = True
-        out['infra'] = True
+def mark_code_caption(visual: dict, provenance: str) -> dict:
+    """Stamp a visual as a code-built karaoke caption. ``provenance`` must be in CAPTION_PROVENANCE."""
+    if provenance not in CAPTION_PROVENANCE:
+        raise ValueError(f'invalid caption provenance {provenance!r}')
+    out = dict(visual or {})
+    out['gfx_provenance'] = provenance
+    # Convenience mirrors for older call sites; lint trusts provenance only.
+    out['line_card'] = provenance == 'line_card' or out.get('line_card')
     return out
 
 
-def _tag_pool(items: Sequence[dict]) -> List[dict]:
-    return [tag_caption_gfx(dict(v)) if isinstance(v, dict) else v for v in (items or [])]
+def tag_caption_gfx(visual: dict) -> dict:
+    """Preserve code-built caption provenance. Does NOT promote planner headline/quote by name.
+
+    Planner-authored ``infra`` / ``karaoke_caption`` flags are stripped so they cannot
+    bypass picture-first duration/share caps.
+    """
+    if not isinstance(visual, dict):
+        return visual
+    out = dict(visual)
+    if out.get('kind') != 'gfx' and out.get('g') != 'endcard':
+        # endcard may omit kind
+        if str(out.get('g') or '').lower() != 'endcard':
+            # Strip planner-controlled bypass tags
+            out.pop('infra', None)
+            out.pop('karaoke_caption', None)
+            return out
+    g = str(out.get('g') or '').lower()
+    prov = str(out.get('gfx_provenance') or '').lower()
+    # Strip planner-controlled tags always; re-apply only when provenance is code-built
+    out.pop('infra', None)
+    out.pop('karaoke_caption', None)
+    if g == 'endcard' and not prov:
+        out['gfx_provenance'] = 'endcard'
+        prov = 'endcard'
+    if prov in CAPTION_PROVENANCE:
+        out['gfx_provenance'] = prov
+        return out
+    # Unknown / planner graphic — leave untagged (subject to narrative gfx rules)
+    out.pop('gfx_provenance', None)
+    out.pop('line_card', None)
+    return out
 
 
 def extract_required_accents(plan: dict) -> List[str]:
@@ -66,8 +95,7 @@ def normalize_karaoke_plan(plan: dict, *, invent_edges: bool = False) -> dict:
     """Normalize Opus/template karaoke JSON into gate-ready shape.
 
     Raises ValueError with actionable text when required coherence fields are absent.
-    Never silently invents causal ``requires_next`` (``invent_edges`` stays False on
-    acceptance paths).
+    Never silently invents causal ``requires_next``. Does not mark planner gfx as caption infra.
     """
     if invent_edges:
         raise ValueError('normalize_karaoke_plan refuses invent_edges=True on acceptance paths')
@@ -88,7 +116,6 @@ def normalize_karaoke_plan(plan: dict, *, invent_edges: bool = False) -> dict:
     if not retell:
         missing.append('viewer_retell (planner-intended sound-off retell; not labeled independent)')
     else:
-        # Strip fake "independent" labels from planner text — independence comes from review stage
         low = retell.lower()
         if low.startswith('an independent viewer'):
             missing.append(
@@ -105,7 +132,6 @@ def normalize_karaoke_plan(plan: dict, *, invent_edges: bool = False) -> dict:
 
     scenes = [dict(s) for s in (P.get('scenes') or [])]
     if not scenes:
-        # Template plans with zero scenes are gfx-only; coherence gates for scene-state N/A
         P['scenes'] = []
     else:
         for sc in scenes:
@@ -113,7 +139,6 @@ def normalize_karaoke_plan(plan: dict, *, invent_edges: bool = False) -> dict:
             for k in SCENE_STATE_KEYS:
                 if k not in sc or sc.get(k) in (None, '', {}):
                     missing.append(f'scene {sid} missing {k}')
-            # Action / consequence scenes need authored requires_next (may be empty list only for terminal payoff)
             role = str(sc.get('role') or sc.get('structural_role') or '').lower()
             prompt = str(sc.get('prompt') or '')
             needs_edge = (
@@ -127,7 +152,6 @@ def normalize_karaoke_plan(plan: dict, *, invent_edges: bool = False) -> dict:
         P['scenes'] = scenes
 
     if P.get('required_shots') is None and scenes:
-        # Derive only from explicit structural_role — not keyword lore
         req = [
             str(s['id']) for s in scenes
             if str(s.get('structural_role') or '').lower() in {
@@ -152,20 +176,22 @@ def normalize_karaoke_plan(plan: dict, *, invent_edges: bool = False) -> dict:
             'karaoke plan incomplete for coherence gates: ' + '; '.join(missing[:12])
         )
 
-    # Tag caption gfx in all pools (intentional karaoke cards ≠ narrative black-void slides)
-    P['intro'] = _tag_pool(P.get('intro') or [])
-    P['breaks'] = _tag_pool(P.get('breaks') or [])
-    P['outro'] = _tag_pool(P.get('outro') or [])
+    # Strip planner bypass tags from pools; do NOT promote headline/quote by name.
+    def _scrub_pool(items: Sequence[dict]) -> List[dict]:
+        return [tag_caption_gfx(dict(v)) if isinstance(v, dict) else v for v in (items or [])]
+
+    P['intro'] = _scrub_pool(P.get('intro') or [])
+    P['breaks'] = _scrub_pool(P.get('breaks') or [])
+    P['outro'] = _scrub_pool(P.get('outro') or [])
     lines = []
     for ln in P.get('lines') or []:
         L = dict(ln)
-        L['v'] = _tag_pool(L.get('v') or [])
+        L['v'] = _scrub_pool(L.get('v') or [])
         lines.append(L)
     P['lines'] = lines
 
     cc = dict(P.get('creative_contract') or {})
     cc.setdefault('visual_premise', arc)
-    # Planner retell is NOT the independent review retell
     cc['planner_retell'] = retell
     if 'viewer_retell' in cc and str(cc.get('viewer_retell') or '').lower().startswith(
         'an independent viewer'
@@ -174,21 +200,10 @@ def normalize_karaoke_plan(plan: dict, *, invent_edges: bool = False) -> dict:
     cc['payoff_design'] = payoff
     cc['required_accents'] = accents
     if 'graphics_plan' not in cc:
-        # Empty preplanned lists are fine; unplanned edit cards are not
         cc['graphics_plan'] = {
             'kinetic': [], 'slam': [], 'hud': [], 'terminal': [],
             'caption': [], 'story': [], 'model_renders_text': False,
         }
-    # Collect caption gfx into graphics_plan.caption as infra
-    caps = list(cc['graphics_plan'].get('caption') or [])
-    for pool in (P.get('intro'), P.get('breaks'), P.get('outro')):
-        for v in pool or []:
-            if isinstance(v, dict) and v.get('karaoke_caption'):
-                caps.append({
-                    'g': v.get('g'), 'diegetic': False, 'infra': True,
-                    'text': str((v.get('p') or {}).get('text') or '')[:70],
-                })
-    cc['graphics_plan']['caption'] = caps[:24]
     P['creative_contract'] = cc
 
     bible = dict(P.get('art_bible') or {})
@@ -200,11 +215,7 @@ def normalize_karaoke_plan(plan: dict, *, invent_edges: bool = False) -> dict:
 
 
 def representative_opus_plan() -> dict:
-    """Fixture shaped like a valid new karaoke Opus plan (not hand-patched gate fields only).
-
-    Mirrors fields the updated SCHEMA/prompt require so planner→dry-run tests exercise
-    ``normalize_karaoke_plan`` + ``apply_coherence_gates``.
-    """
+    """Fixture shaped like a valid new karaoke Opus plan for planner→dry-run tests."""
     return {
         'planner': 'opus',
         'arc': 'Lead dumps the feed, yanks the plug, then learns who still holds power.',
@@ -288,7 +299,7 @@ def representative_opus_plan() -> dict:
              'v': [{'kind': 'scene', 'id': 's04_twist'}]},
             {'i': 4, 'shows': 'overseer gadget', 'fact': '',
              'v': [{'kind': 'scene', 'id': 's05_payoff'}]},
-            # Caption fallback sample (standard when clip missing)
+            # Planner narrative headline (NOT code-built) — must remain subject to gfx caps
             {'i': 5, 'shows': 'lyric card', 'fact': 'dump the feed',
              'v': [{'kind': 'gfx', 'g': 'headline',
                     'p': {'kicker': 'DUMP', 'text': 'Dump the feed', 'sub': 'watch this'}}]},

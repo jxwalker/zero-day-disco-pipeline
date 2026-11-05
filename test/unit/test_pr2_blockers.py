@@ -53,7 +53,9 @@ class TestBlocker1GraphicsInfraVsNarrative(unittest.TestCase):
             {'src': ('clip', 's01'), 't0': 0.0, 't1': 8.0},
             {'src': ('clip', 's02'), 't0': 8.0, 't1': 16.0},
             # Typical karaoke endcard — several seconds, no plate
-            {'src': ('gfx', 'endcard', {}), 't0': 16.0, 't1': 22.0, 'v': {'kind': 'gfx', 'g': 'endcard', 'p': {}}},
+                {'src': ('gfx', 'endcard', {'gfx_provenance': 'endcard'}),
+                 't0': 16.0, 't1': 22.0,
+                 'v': {'kind': 'gfx', 'g': 'endcard', 'p': {}, 'gfx_provenance': 'endcard'}},
         ]
         rep = lint_timeline_graphics(timeline)
         self.assertTrue(rep.ok, rep.summary)
@@ -65,8 +67,8 @@ class TestBlocker1GraphicsInfraVsNarrative(unittest.TestCase):
     def test_karaoke_caption_infra_excluded_from_share(self):
         timeline = [
             {'kind': 'clip', 'scene_id': 's01', 't0': 0, 't1': 5},
-            {'kind': 'gfx', 'g': 'karaoke', 't0': 0, 't1': 5},  # overlays runtime; infra
-            {'kind': 'gfx', 'g': 'endcard', 't0': 5, 't1': 8},
+            {'kind': 'gfx', 'g': 'karaoke', 't0': 0, 't1': 5},  # overlays runtime; infra kind
+            {'kind': 'gfx', 'g': 'endcard', 't0': 5, 't1': 8, 'gfx_provenance': 'endcard'},
         ]
         rep = lint_timeline_graphics(timeline)
         self.assertTrue(rep.ok, rep.summary)
@@ -258,7 +260,9 @@ class TestBlockerIntegrationPopVideoJobHappyPath(unittest.TestCase):
                 {'scene_id': 's03_action', 'src': clips['s03_action'], 't0': 4, 't1': 6},
                 {'scene_id': 's04_twist', 'src': clips['s04_twist'], 't0': 6, 't1': 8},
                 {'scene_id': 's05_payoff', 'src': clips['s05_payoff'], 't0': 8, 't1': 10},
-                {'src': ('gfx', 'endcard', {}), 't0': 10, 't1': 14, 'v': {'kind': 'gfx', 'g': 'endcard'}},
+                {'src': ('gfx', 'endcard', {'gfx_provenance': 'endcard'}),
+                 't0': 10, 't1': 14,
+                 'v': {'kind': 'gfx', 'g': 'endcard', 'gfx_provenance': 'endcard'}},
             ]
             res = PopVideoJob(req).run(
                 dry_run=True, available_clips=clips,

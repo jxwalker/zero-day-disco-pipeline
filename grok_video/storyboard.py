@@ -117,14 +117,20 @@ def ensure_direction(day, lines=None):
 
 REV_SCHEMA = {"type": "object", "properties": {
     "score": I, "verdict": S,
+    "viewer_retell": S,
     "scene_fixes": {"type": "array", "items": {"type": "object", "properties": {"id": S, "prompt": S, "motion": S, "why": S},
                                                 "required": ["id", "prompt", "motion", "why"]}},
     "line_scene": {"type": "array", "items": {"type": "object", "properties": {"i": I, "scene": S, "why": S}, "required": ["i", "scene", "why"]}}},
-    "required": ["score", "verdict", "scene_fixes", "line_scene"]}
+    "required": ["score", "verdict", "viewer_retell", "scene_fixes", "line_scene"]}
 
 
-def review(P, day, work, lines):
-    """Opus storyboard review of the plan before any Grok spend. Applies fixes in place; returns the review."""
+def review(P, day, work, lines, *, runner=None):
+    """Opus storyboard review of the plan before any Grok spend. Applies fixes in place; returns the review.
+
+    ``runner`` (optional) replaces ``slop_opus.run_claude`` for dry-run tests. Persists an
+    independent sound-off ``viewer_retell`` on ``P['storyboard_review']`` — never copied from
+    planner text. ``runner`` must return ``(result_dict, meta_dict)``.
+    """
     if os.environ.get('GV_STORYBOARD', '1') == '0' or not P.get('scenes'):
         return None
     import slop_opus as SO
@@ -134,41 +140,58 @@ def review(P, day, work, lines):
     for ln in P.get('lines', []):
         i = ln.get('i'); vs = ', '.join(v.get('id') if v.get('kind') == 'scene' else 'gfx:' + str(v.get('g')) for v in ln.get('v', []))
         rows.append(f"{i}: {lines[i] if isinstance(i, int) and i < len(lines) else '?'}  ->  [{vs}] shows: {ln.get('shows', '')}")
-    sc = '\n'.join(f"{s['id']}: {s['prompt']}  || motion: {s.get('motion', '')}" for s in P['scenes'])
+    sc = '\n'.join(
+        f"{s['id']}: {s['prompt']}  || motion: {s.get('motion', '')}"
+        f"  || before={s.get('world_before')} action={s.get('action')} after={s.get('world_after')}"
+        for s in P['scenes']
+    )
+    planner_retell = str(P.get('viewer_retell') or (P.get('creative_contract') or {}).get('planner_retell') or '')
     open(pf, 'w').write(
         "You are the producer reviewing a music-video storyboard before money is spent on shots. Be strict.\n" + GRAMMAR +
         "\n\nDIRECTION (treatment, lead bible, shot list):\n" + G.read(os.path.join(day, 'direction.txt'))[:9000] +
-        "\n\nSCENES (id: prompt || motion):\n" + sc + "\n\nLINE MAP (index: sung line -> visuals, shows):\n" + '\n'.join(rows) +
+        "\n\nSCENES (id: prompt || motion || world state):\n" + sc +
+        "\n\nLINE MAP (index: sung line -> visuals, shows):\n" + '\n'.join(rows) +
+        "\n\nPLANNER-INTENDED RETELL (for contrast only — do NOT copy or paraphrase this as your answer):\n"
+        + (planner_retell[:400] or '(none)') +
         "\n\nCheck: (1) every scene prompt depicts a specific line's words being acted out by the lead inside the one "
         "story, and follows the grammar (shot size, lens+stop, named light source, negative space, starts with [LEAD] "
         "when she is in it); (2) motion is timestamped 0-2s/2-4s/4-6s with ONE camera move and one action; (3) each "
         "sung line's scene really matches THAT line (sound off test) and the story reads in order; (3b) house style: verses Acid Deadpan, chorus scenes tagged [CHORUS] (Glitch Tape), cast deadpan not smiley, and EXACTLY 1-2 [PIP] mascot cameo scenes that move (FAIL and add one to a wide or a drop reaction if missing); (4) no banned "
-        "words, no laptops/phones/tablets, no robots, nobody outside 21-28.\nReturn score 1-10, a verdict, "
+        "words, no laptops/phones/tablets, no robots, nobody outside 21-28.\n"
+        "INDEPENDENT SOUND-OFF RETELL (required): write viewer_retell as ONE new sentence YOU author after "
+        "watching the storyboard with the sound off. State what CHANGED in the world and the CONSEQUENCE "
+        "(who/what now holds power, what was rejected, what was revealed). Do NOT copy the planner retell, "
+        "do NOT start with 'An independent viewer', do NOT echo the song idea alone.\n"
+        "Return score 1-10, a verdict, viewer_retell, "
         "scene_fixes = full corrected prompt+motion for every scene that is not already excellent (keep the same id; "
         "35-80 words; keep [LEAD] tokens), and line_scene = reassignments where a different EXISTING scene id fits a "
         "sung line far better (only scene ids from the list). Reply with the JSON only.")
     try:
-        r, meta = SO.run_claude(pf, od, REV_SCHEMA, 480, tools='', effort='high')
+        run = runner or SO.run_claude
+        r, meta = run(pf, od, REV_SCHEMA, 480, tools='', effort='high')
     except Exception as e:
         G.log(f"storyboard: review unavailable ({str(e)[:150]})"); return None
+    if not isinstance(r, dict):
+        G.log("storyboard: review returned non-dict"); return None
     byid = {s['id']: s for s in P['scenes']}
     nf = 0
-    for f in r.get('scene_fixes', []):
-        if f['id'] in byid and f['prompt'].strip():
+    for f in r.get('scene_fixes', []) or []:
+        if f.get('id') in byid and str(f.get('prompt') or '').strip():
             s = byid[f['id']]; s['prompt_orig'] = s['prompt']
             s['prompt'] = re.sub(BANNED, '', f['prompt'], flags=re.I).strip()
-            if f.get('motion', '').strip(): s['motion'] = f['motion'].strip()
+            if str(f.get('motion') or '').strip(): s['motion'] = f['motion'].strip()
             nf += 1
     nl = 0
     lmap = {ln.get('i'): ln for ln in P.get('lines', [])}
-    for x in r.get('line_scene', []):
-        if x['scene'] in byid and x['i'] in lmap:
+    for x in r.get('line_scene', []) or []:
+        if x.get('scene') in byid and x.get('i') in lmap:
             lmap[x['i']]['v'] = [{'kind': 'scene', 'id': x['scene']}]; nl += 1
     for s in P['scenes']:
         s['prompt'] = re.sub(BANNED, '', s['prompt'], flags=re.I)
     G.save_json(r, os.path.join(od, 'storyboard_review.json'))
     score = r.get('score')
     verdict = str(r.get('verdict') or '')
+    viewer_retell = str(r.get('viewer_retell') or '').strip()
     # Low scores must carry an explicit camera blocker so the hard gate aborts before generate.
     try:
         min_sc = int(os.environ.get('GV_STORYBOARD_MIN_SCORE', '7'))
@@ -181,10 +204,14 @@ def review(P, day, work, lines):
                 r['verdict'] = verdict
         except (TypeError, ValueError):
             pass
+    # Persist independent retell from the reviewer result — never invent / copy planner text here.
     P['storyboard_review'] = {
-        'score': score, 'verdict': verdict, 'scene_fixes': nf, 'line_moves': nl,
+        'score': score, 'verdict': verdict, 'viewer_retell': viewer_retell,
+        'scene_fixes': nf, 'line_moves': nl,
     }
-    G.log(f"storyboard: review score {score} - {nf} scene fixes, {nl} line moves ({meta['secs']}s)")
+    r['viewer_retell'] = viewer_retell
+    G.log(f"storyboard: review score {score} - {nf} scene fixes, {nl} line moves "
+          f"retell={'yes' if viewer_retell else 'MISSING'} ({(meta or {}).get('secs', '?')}s)")
     return r
 
 

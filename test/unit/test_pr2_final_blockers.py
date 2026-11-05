@@ -17,7 +17,7 @@ sys.path.insert(0, os.path.join(ROOT, 'grok_video'))
 
 from pipeline.failures import FailureKind, JobFailure
 from pipeline.graphics_lint import assert_graphics_and_sing, classify_gfx, lint_timeline_graphics
-from pipeline.karaoke_plan import normalize_karaoke_plan, representative_opus_plan, tag_caption_gfx
+from pipeline.karaoke_plan import mark_code_caption, normalize_karaoke_plan, representative_opus_plan
 from pipeline.narrative_gate import assert_narrative_qa, assert_storyboard_review, storyboard_must_abort
 from pipeline.plan_gates import apply_coherence_gates
 from pipeline.service import PopVideoJob, PopVideoRequest, _default_plan_from_idea
@@ -49,11 +49,10 @@ def _clips(td, sids):
 class TestBlocker1HeadlineCaptionInfra(unittest.TestCase):
     def test_original_2_2s_headline_repro_passes_when_caption(self):
         """Exact shape of karaoke line_card / fallback after pace (~2.2s headline)."""
-        v = tag_caption_gfx({
+        v = mark_code_caption({
             'kind': 'gfx', 'g': 'headline',
             'p': {'kicker': 'DUMP', 'text': 'Dump the feed', 'sub': 'watch this'},
-            'karaoke_caption': True, 'infra': True, 'line_card': True,
-        })
+        }, 'line_card')
         timeline = [
             {'src': ('clip', 's01'), 't0': 0.0, 't1': 4.0},
             {
@@ -61,14 +60,14 @@ class TestBlocker1HeadlineCaptionInfra(unittest.TestCase):
                 'v': v,
                 'src': ('gfx', 'headline', {
                     'kicker': 'DUMP', 'text': 'Dump the feed',
-                    'karaoke_caption': True, 'infra': True, 'line_card': True,
+                    'gfx_provenance': 'line_card',
                 }),
                 'line': 0, 'redrawn': 'scene missing/rejected',
             },
             {
                 't0': 6.2, 't1': 11.7,  # 5.5s endcard
-                'v': {'kind': 'gfx', 'g': 'endcard', 'p': {}, 'infra': True},
-                'src': ('gfx', 'endcard', {'infra': True}),
+                'v': mark_code_caption({'kind': 'gfx', 'g': 'endcard', 'p': {}}, 'endcard'),
+                'src': ('gfx', 'endcard', {'gfx_provenance': 'endcard'}),
             },
         ]
         self.assertEqual(classify_gfx(timeline[1], 'headline'), 'infra')
@@ -100,20 +99,22 @@ class TestBlocker1HeadlineCaptionInfra(unittest.TestCase):
                 {'scene_id': 's03_action', 'src': clips['s03_action'], 't0': 4, 't1': 6},
                 {'scene_id': 's04_twist', 'src': clips['s04_twist'], 't0': 6, 't1': 8},
                 {'scene_id': 's05_payoff', 'src': clips['s05_payoff'], 't0': 8, 't1': 10},
-                # Fallback headline >1.5s (caption infra)
+                # Fallback headline >1.5s (code-built line_card provenance)
                 {
                     't0': 10, 't1': 12.2,
                     'src': ('gfx', 'headline', {
-                        'text': 'Dump the feed', 'karaoke_caption': True, 'infra': True,
-                        'line_card': True,
+                        'text': 'Dump the feed', 'gfx_provenance': 'line_card',
                     }),
-                    'v': {'kind': 'gfx', 'g': 'headline', 'karaoke_caption': True, 'infra': True},
+                    'v': mark_code_caption(
+                        {'kind': 'gfx', 'g': 'headline', 'p': {'text': 'Dump the feed'}},
+                        'line_card',
+                    ),
                     'redrawn': 'match check: no clip',
                 },
                 {
                     't0': 12.2, 't1': 17.7,
-                    'src': ('gfx', 'endcard', {'infra': True}),
-                    'v': {'kind': 'gfx', 'g': 'endcard', 'infra': True},
+                    'src': ('gfx', 'endcard', {'gfx_provenance': 'endcard'}),
+                    'v': mark_code_caption({'kind': 'gfx', 'g': 'endcard', 'p': {}}, 'endcard'),
                 },
             ]
             req = PopVideoRequest(
@@ -154,9 +155,9 @@ class TestBlocker2KaraokePlannerDryRun(unittest.TestCase):
     def test_representative_opus_plan_normalize_and_dry_run(self):
         raw = representative_opus_plan()
         P = normalize_karaoke_plan(raw, invent_edges=False)
-        # Caption gfx tagged
-        self.assertTrue(P['intro'][0].get('karaoke_caption'))
-        self.assertTrue(any(v.get('karaoke_caption') for ln in P['lines'] for v in ln['v'] if v.get('kind') == 'gfx'))
+        # Planner headline pools are NOT auto-tagged as caption infra
+        self.assertNotEqual(P['intro'][0].get('gfx_provenance'), 'line_card')
+        self.assertFalse(P['intro'][0].get('infra'))
         gated = apply_coherence_gates(
             P, song_idea='Dump the feed and watch this instead',
             storyboard_review=PASS_REVIEW, require_storyboard=True,
@@ -185,13 +186,15 @@ class TestBlocker2KaraokePlannerDryRun(unittest.TestCase):
             t_end = len(sids) * 2.0
             tl.append({
                 't0': t_end, 't1': t_end + 2.2,
-                'src': ('gfx', 'headline', {'text': 'Dump', 'karaoke_caption': True, 'infra': True}),
-                'v': {'kind': 'gfx', 'g': 'headline', 'karaoke_caption': True, 'infra': True},
+                'src': ('gfx', 'headline', {'text': 'Dump', 'gfx_provenance': 'line_card'}),
+                'v': mark_code_caption(
+                    {'kind': 'gfx', 'g': 'headline', 'p': {'text': 'Dump'}}, 'line_card',
+                ),
             })
             tl.append({
                 't0': t_end + 2.2, 't1': t_end + 7.7,
-                'src': ('gfx', 'endcard', {'infra': True}),
-                'v': {'kind': 'gfx', 'g': 'endcard', 'infra': True},
+                'src': ('gfx', 'endcard', {'gfx_provenance': 'endcard'}),
+                'v': mark_code_caption({'kind': 'gfx', 'g': 'endcard', 'p': {}}, 'endcard'),
             })
             res = PopVideoJob(req, planner=planner).run(
                 dry_run=True, available_clips=clips,

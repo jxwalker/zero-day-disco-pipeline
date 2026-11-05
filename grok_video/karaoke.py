@@ -321,25 +321,33 @@ def fact_lint(P, day):
         if not b: return v
         warns.append(f"{where}: {v.get('g')} replaced ({b})")
         s = stories[0] if stories else {'idx': 1, 'text': G.read(os.path.join(day, 'title.txt'))}
-        return {
-            'kind': 'gfx', 'g': 'headline',
-            'p': {'kicker': f"STORY {s['idx']}", 'text': s['text']},
-            'karaoke_caption': True, 'infra': True, 'line_card': True,
-        }
+        from pipeline.karaoke_plan import mark_code_caption
+        return mark_code_caption(
+            {'kind': 'gfx', 'g': 'headline',
+             'p': {'kicker': f"STORY {s['idx']}", 'text': s['text']}},
+            'fact_lint_replace',
+        )
     for ln in P.get('lines', []):
         ln['v'] = [fix(v, f"line {ln['i']}") for v in ln.get('v', [])][:2]
     for k in ('intro', 'breaks', 'outro'):
         P[k] = [fix(v, k) for v in P.get(k, [])]
     import kgfx2 as kgfx
-    from pipeline.karaoke_plan import tag_caption_gfx
+    from pipeline.karaoke_plan import mark_code_caption, tag_caption_gfx
     for v in [v for ln in P['lines'] for v in ln['v']] + P['intro'] + P['breaks'] + P['outro']:
+        if not isinstance(v, dict):
+            continue
         if v.get('kind') == 'gfx' and v.get('g') not in kgfx.R:
             warns.append(f"unknown gfx {v.get('g')!r} -> headline")
-            v['g'] = 'headline'
-            v['p'] = {'text': str(v.get('p', {}).get('text') or G.read(os.path.join(day, 'title.txt')))}
-            v['karaoke_caption'] = True; v['infra'] = True; v['line_card'] = True
-        if isinstance(v, dict) and v.get('kind') == 'gfx':
-            v.update({k: True for k, val in tag_caption_gfx(v).items() if k in ('karaoke_caption', 'infra', 'line_card') and val})
+            repl = mark_code_caption(
+                {'kind': 'gfx', 'g': 'headline',
+                 'p': {'text': str(v.get('p', {}).get('text') or G.read(os.path.join(day, 'title.txt')))}},
+                'fact_lint_replace',
+            )
+            v.clear(); v.update(repl)
+        elif v.get('kind') == 'gfx':
+            # Scrub planner bypass tags; keep only authentic provenance
+            scrubbed = tag_caption_gfx(v)
+            v.clear(); v.update(scrubbed)
     return warns
 
 
@@ -619,40 +627,31 @@ def wcut(s, n):
     return (s[:n].rsplit(' ', 1)[0] if ' ' in s[:n] else s[:n]).rstrip(' ,;:-')
 
 
-def line_card(text, fact, used, handle=''):
-    """A code-rendered graphic that illustrates THIS line (its words + the story fact behind it); used when the planned
-    visual is missing/rejected/over the template cap. Picks the first template variant still under the cap.
+def line_card(text, fact, used, handle='', *, provenance='line_card'):
+    """Code-built graphic for THIS sung line when planned visual is missing/rejected/over cap.
 
-    Marked ``karaoke_caption`` / ``infra`` so graphics lint treats it as intentional caption
-    infrastructure (not a banned black-void narrative slide), including holds >1.5s.
+    Stamps ``gfx_provenance`` (code path only) so graphics lint can exempt it — planner
+    cannot forge this by naming a template ``headline`` or setting ``infra`` tags.
     """
+    from pipeline.karaoke_plan import mark_code_caption
     key = max(re.findall(r"[A-Za-z0-9'-]+", text) or ['FIX'], key=len).upper()[:14]
     opts = [('headline', {'kicker': key, 'text': text, 'sub': wcut(fact, 80)}),
             ('quote', {'text': text, 'by': ('@' + handle) if handle else wcut(fact, 60)}),
             ('browser', {'url': 'news', 'site': 'TODAY', 'headline': text, 'lede': wcut(fact or text, 120), 'highlight': wcut(fact or text, 30)})]
-    # no phone 'screen' fallback
     for g, pp in opts:
         if used.get(g, 0) < MAX_PER_TEMPLATE:
-            return {
-                'kind': 'gfx', 'g': g, 'p': pp,
-                'karaoke_caption': True, 'infra': True, 'line_card': True,
-            }
-    return {
-        'kind': 'gfx', 'g': 'headline', 'p': opts[0][1],
-        'karaoke_caption': True, 'infra': True, 'line_card': True,
-    }
+            return mark_code_caption({'kind': 'gfx', 'g': g, 'p': pp}, provenance)
+    return mark_code_caption({'kind': 'gfx', 'g': 'headline', 'p': opts[0][1]}, provenance)
 
 
 def _gfx_src(v):
-    """Build timeline src tuple preserving karaoke caption / infra flags for gfx lint."""
+    """Build timeline src tuple; preserve code-built ``gfx_provenance`` only."""
     from pipeline.karaoke_plan import tag_caption_gfx
     vv = tag_caption_gfx(dict(v or {}))
     meta = dict(vv.get('p') or {})
-    if vv.get('karaoke_caption') or vv.get('infra') or vv.get('line_card'):
-        meta['karaoke_caption'] = True
-        meta['infra'] = True
-    if vv.get('line_card'):
-        meta['line_card'] = True
+    prov = vv.get('gfx_provenance')
+    if prov:
+        meta['gfx_provenance'] = prov
     return ('gfx', vv.get('g'), meta)
 
 
@@ -665,11 +664,11 @@ def timeline(P, L, dur, day, gdir, bad_scenes=()):
     timed = [ln for ln in L if ln.get('words')]
     pools = {k: list(P.get(k) or []) or list(P.get('breaks') or []) for k in ('intro', 'breaks', 'outro')}
     title = G.read(os.path.join(day, 'title.txt')).strip()
-    fallback = [{
-        'kind': 'gfx', 'g': 'headline',
-        'p': {'kicker': 'TODAY', 'text': title},
-        'karaoke_caption': True, 'infra': True, 'line_card': True,
-    }]
+    from pipeline.karaoke_plan import mark_code_caption
+    fallback = [mark_code_caption(
+        {'kind': 'gfx', 'g': 'headline', 'p': {'kicker': 'TODAY', 'text': title}},
+        'title_fallback',
+    )]
     ctr = {'intro': 0, 'breaks': 0, 'outro': 0}
     def take(k):
         p = pools[k] or fallback; v = p[ctr[k] % len(p)]; ctr[k] += 1; return v
@@ -727,10 +726,16 @@ def timeline(P, L, dur, day, gdir, bad_scenes=()):
         if v.get('kind') == 'gfx':
             g = 'terminal' if v.get('g') == 'term' else v.get('g')
             if used.get(g, 0) >= (MAX_PER_TEMPLATE * 3 if g == 'terminal' else MAX_PER_TEMPLATE):   # story terminals wanted
-                s_['v'] = v = line_card(txt, spec.get('fact', ''), used); s_['redrawn'] = f'template {g} over cap'
+                s_['v'] = v = line_card(txt, spec.get('fact', ''), used, provenance='template_cap_redraw')
+                s_['redrawn'] = f'template {g} over cap'
                 g = v['g']
             used[g] = used.get(g, 0) + 1
-    shots.append({'t0': end_t, 't1': dur, 'v': {'kind': 'gfx', 'g': 'endcard', 'p': {}}, 'line': None})
+    from pipeline.karaoke_plan import mark_code_caption
+    shots.append({
+        't0': end_t, 't1': dur,
+        'v': mark_code_caption({'kind': 'gfx', 'g': 'endcard', 'p': {}}, 'endcard'),
+        'line': None,
+    })
     seen = {}
     for s in shots:
         v = s['v']
@@ -757,12 +762,9 @@ def timeline(P, L, dur, day, gdir, bad_scenes=()):
                 if g == 'terminal': p_.pop('stamp', None)
                 else:
                     li = s['line']; spec = pl.get(inv.get(li), {}) if li is not None else {}
-                    v = line_card(L[li]['text'] if li is not None else title, spec.get('fact', ''), used)
+                    v = line_card(L[li]['text'] if li is not None else title, spec.get('fact', ''), used,
+                                  provenance='stamp_cap_redraw')
                     s['v'] = v; s['src'] = _gfx_src(v); s['redrawn'] = 'stamp cap'
-    # Endcard is intentional infra (may exceed 1.5s)
-    if shots and (shots[-1].get('v') or {}).get('g') == 'endcard':
-        shots[-1]['v'] = dict(shots[-1]['v'], infra=True, karaoke_caption=True)
-        shots[-1]['src'] = _gfx_src(shots[-1]['v'])
     return shots
 
 
@@ -1489,7 +1491,8 @@ def main():
             for n_ in bad_n:
                 s_ = shots[n_]; li = s_['line']; spec = pl_.get(inv_.get(li), {})
                 if s_['src'][0] == 'gfx': used[s_['src'][1]] -= 1
-                v = line_card(L[li]['text'], spec.get('fact', ''), used); used[v['g']] = used.get(v['g'], 0) + 1
+                v = line_card(L[li]['text'], spec.get('fact', ''), used, provenance='match_redraw')
+                used[v['g']] = used.get(v['g'], 0) + 1
                 s_['v'] = v; s_['src'] = _gfx_src(v); s_['redrawn'] = 'match check: ' + next(r['why'] for r in tab if r['n'] == n_)[:120]
             G.log(f"karaoke: match check: {len(tab) - len(bad_n)}/{len(tab)} matched; redrew {len(bad_n)} for their own line")
             if bad_n:

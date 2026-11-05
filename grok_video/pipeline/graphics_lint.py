@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from .failures import FailureKind, JobFailure
+from .karaoke_plan import CAPTION_PROVENANCE
 from .plan_fix import is_singing_shot
 
 # Max continuous black-void *narrative* gfx (seconds)
@@ -26,11 +27,6 @@ SING_MAX_USES = int(os.environ.get('GV_SING_MAX_USES', '1'))
 INFRA_GFX_KINDS = frozenset({
     'endcard', 'karaoke', 'lyrics', 'caption', 'ass', 'lower_third',
     'credit', 'credits', 'title_safe',
-})
-
-# Karaoke line/title caption templates — infra ONLY when tagged karaoke_caption/infra/line_card.
-CAPTION_TEMPLATE_KINDS = frozenset({
-    'headline', 'quote', 'stamp', 'browser',
 })
 
 # Short punchlines allowed without a plate if ≤ MAX_BLACK_GFX_S (still picture-first preferred).
@@ -108,7 +104,7 @@ def _duration(shot: dict) -> float:
 
 
 def _meta_blob(shot: dict) -> dict:
-    """Merge nested karaoke src/v/meta flags used to mark caption infra."""
+    """Merge nested karaoke src/v/meta used for provenance + plate detection."""
     meta: Dict[str, Any] = {}
     src = shot.get('src')
     if isinstance(src, (list, tuple)) and len(src) >= 3 and isinstance(src[2], dict):
@@ -118,13 +114,12 @@ def _meta_blob(shot: dict) -> dict:
     v = shot.get('v') if isinstance(shot.get('v'), dict) else {}
     if isinstance(v.get('p'), dict):
         meta.update(v['p'])
-    for k in ('infra', 'karaoke_caption', 'line_card', 'plate', 'plate_src', 'over_plate',
+    for k in ('gfx_provenance', 'plate', 'plate_src', 'over_plate',
               'diegetic', 'black_void', 'on_black', 'bg', 'primary_story', 'story_card'):
         if k in shot and shot[k] is not None:
             meta[k] = shot[k]
-    if v.get('infra') or v.get('karaoke_caption') or v.get('line_card'):
-        meta['infra'] = True
-        meta['karaoke_caption'] = True
+    if v.get('gfx_provenance'):
+        meta['gfx_provenance'] = v['gfx_provenance']
     return meta
 
 
@@ -143,16 +138,17 @@ def _has_plate(shot: dict) -> bool:
 
 
 def _is_karaoke_caption(shot: dict, gname: str = '') -> bool:
-    """True for intentional karaoke/caption/title/endcard cards."""
+    """True only for code-built karaoke captions (provenance) or fixed infra kinds.
+
+    Planner-controlled ``infra`` / ``karaoke_caption`` / ``line_card`` tags are ignored.
+    Template name alone (headline/quote/…) does not exempt.
+    """
     name = (gname or _gfx_name(shot)).lower()
     if name in INFRA_GFX_KINDS:
         return True
     meta = _meta_blob(shot)
-    if meta.get('infra') or meta.get('karaoke_caption') or meta.get('line_card'):
-        return True
-    if shot.get('infra') or shot.get('karaoke_caption') or shot.get('line_card') or shot.get('karaoke_infra'):
-        return True
-    return False
+    prov = str(meta.get('gfx_provenance') or shot.get('gfx_provenance') or '').lower()
+    return prov in CAPTION_PROVENANCE
 
 
 def classify_gfx(shot: dict, gname: str = '') -> str:
@@ -446,15 +442,12 @@ def assert_plan_graphics(plan: dict) -> GraphicsLintReport:
 
 
 def overlay_requires_plate(overlay: dict) -> bool:
-    """Long black-void *narrative* overlays need a plate; infra/captions do not."""
+    """Long black-void *narrative* overlays need a plate; code-built captions do not."""
     kind = str(overlay.get('g') or overlay.get('kind') or '').lower()
     if kind in INFRA_GFX_KINDS or kind in PUNCHLINE_GFX_KINDS:
         return False
-    if overlay.get('infra') or overlay.get('karaoke_caption') or overlay.get('line_card'):
-        return False
-    if kind in CAPTION_TEMPLATE_KINDS and (
-        overlay.get('infra') or overlay.get('karaoke_caption')
-    ):
+    prov = str(overlay.get('gfx_provenance') or '').lower()
+    if prov in CAPTION_PROVENANCE:
         return False
     if overlay.get('composite') is True or overlay.get('over_plate') or overlay.get('diegetic'):
         return False
