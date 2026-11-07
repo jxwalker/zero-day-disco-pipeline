@@ -2,6 +2,17 @@
 
 All notable changes are listed here. Versions follow semantic versioning and are tagged `vX.Y.Z`.
 
+## v1.3.2
+- Daily karaoke assembly recovery (Watch Me v10f path): `--skip-gen` no longer runs
+  pre-gen coherence gates on approved media; new `--from-timeline` rebuilds from
+  preserved `timeline.json` + clips + `audio.mp3` into a separate `--out` dir
+  (refuses overwriting masters; recovery sidecars only under `--out` dirname).
+  `bg_*.mp4` remux is opt-in (`GV_RECOVERY_REMUX=1`) — presence ≠ v10f provenance.
+  Truncated gfx payloads fail closed (no silent plan hydrate; inventories can differ).
+  ASS path is an ffmpeg overlay **re-encode**, not a bit-exact stream remux.
+  Labelled local assembly tests in `test/unit/test_daily_assembly_recovery.py`.
+  Software tests do not prove footage is watchable.
+
 ## v1.3.1
 - PR #2 release-blocker follow-up: karaoke caption/title/endcard gfx tagged as infra
   (2.2s headline fallback + endcard pass; bare narrative headline still fails);
