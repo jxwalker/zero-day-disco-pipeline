@@ -1590,7 +1590,7 @@ def main():
                 end_t = shots[-1]['t0'] if shots else 0.0
             except RecoveryError as e:
                 status.update(ok=False, error=str(e), failure_kind='recovery')
-                G.save_json(status, sp)
+                G.save_json(status, os.path.join(work, 'status_recovery.json'))
                 print(f"GROK_VIDEO_STATUS=failed code=3 style=karaoke kind='recovery' reason={str(e)[:300]!r}", flush=True)
                 sys.exit(3)
         else:
