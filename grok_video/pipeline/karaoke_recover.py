@@ -111,20 +111,41 @@ def timeline_record(shots: Sequence[dict], *, plan_fp: str = '',
 
 
 def _resolve_clip_path(ref: Any, gdir: str) -> str:
+    """Map timeline clip refs onto ``gdir`` (attachment-safe).
+
+    Prefer basename under ``gdir`` so box-absolute paths in an attached
+    timeline.json still resolve after staging clips into recovery/grok/.
+    Absolute paths are accepted only when they already live under ``gdir``,
+    or when ``GV_RECOVERY_ALLOW_ABS=1`` (local box reassembly of untouched work).
+    """
     path = str(ref or '')
-    if path and os.path.exists(path):
-        return path
+    gdir_abs = os.path.abspath(gdir)
     base = os.path.basename(path) if path else ''
     if base:
-        cand = os.path.join(gdir, base)
+        cand = os.path.join(gdir_abs, base)
         if os.path.exists(cand):
             return cand
     # bare scene id → grok/<id>.mp4
-    if path and not path.endswith('.mp4'):
-        cand = os.path.join(gdir, f'{path}.mp4')
+    if path and not path.endswith(('.mp4', '.png', '.jpg', '.jpeg', '.webp')):
+        cand = os.path.join(gdir_abs, f'{path}.mp4')
         if os.path.exists(cand):
             return cand
+    if path and os.path.isabs(path) and os.path.exists(path):
+        ap = os.path.abspath(path)
+        if ap == gdir_abs or ap.startswith(gdir_abs + os.sep):
+            return ap
+        if os.environ.get('GV_RECOVERY_ALLOW_ABS', '0') == '1':
+            return ap
+        raise RecoveryError(
+            f'clip path {path!r} is outside recovery grok dir {gdir_abs}; '
+            f'stage the file as {os.path.join(gdir_abs, base)} or set GV_RECOVERY_ALLOW_ABS=1'
+        )
     raise RecoveryError(f'clip not found for timeline src {ref!r} under {gdir}')
+
+
+def remux_allowed() -> bool:
+    """Stale ``bg_*.mp4`` must not be treated as v10f without an explicit opt-in."""
+    return os.environ.get('GV_RECOVERY_REMUX', '0') == '1'
 
 
 def hydrate_shots(
@@ -205,8 +226,18 @@ def hydrate_shots(
                 shot['src'] = gfx_src_fn(shot['v'])
                 report['hydrated_gfx'] += 1
             else:
+                # Watch Me v10f: timeline gfx is truncated AND plan line inventory can disagree
+                # (e.g. timeline terminal vs plan bignum). Never invent payloads from plan.
                 report['truncated_src'] += 1
-                report['hydrated_gfx'] += 1
+                allow = os.environ.get('GV_RECOVERY_HYDRATE_GFX', '0') == '1'
+                if not allow:
+                    raise RecoveryError(
+                        f'shot {i}: truncated gfx {g!r} (no payload/v); refuse silent plan hydrate '
+                        f'(timeline vs plan inventories may differ). Provide full src in timeline '
+                        f'or set GV_RECOVERY_HYDRATE_GFX=1 knowing gfx will not match v10f.'
+                    )
+                if line_card_fn is None or gfx_src_fn is None:
+                    raise RecoveryError(f'shot {i}: truncated gfx {g!r}; missing hydrate callables')
                 li = shot.get('line')
                 txt = title
                 fact = ''
@@ -214,21 +245,15 @@ def hydrate_shots(
                     txt = L[int(li)].get('text') or title
                 if isinstance(li, int) and li in pl:
                     fact = (pl[li] or {}).get('fact') or ''
-                if line_card_fn is None or gfx_src_fn is None:
-                    raise RecoveryError(
-                        f'shot {i}: truncated gfx {g!r}; need full timeline src or '
-                        f'line_card_fn+gfx_src_fn to hydrate'
-                    )
                 v = line_card_fn(txt, fact, {}, provenance='recovery_hydrate')
                 if g:
                     v = dict(v)
                     v['g'] = g
                 shot['v'] = v
                 shot['src'] = gfx_src_fn(v)
-                prev = shot.get('redrawn') or ''
-                shot['redrawn'] = (prev + ';gfx_hydrated_from_truncated_timeline').lstrip(';')
+                report['hydrated_gfx'] += 1
                 report['warnings'].append(
-                    f'shot {i}: hydrated gfx {g!r} from line/plan (not bit-identical)'
+                    f'shot {i}: OPT-IN hydrated gfx {g!r} from line/plan — NOT faithful to v10f'
                 )
             report['gfx'] += 1
         else:
@@ -253,8 +278,17 @@ def remux_bg_ass_audio(
     dur: float,
     fps: int = 30,
 ) -> str:
-    """Fast remux path when a preserved concat background already exists."""
+    """Fast remux path when a *provenanced* concat background already exists.
+
+    Callers must set ``GV_RECOVERY_REMUX=1`` after confirming ``bg`` is the v10f
+    (or other approved) concat — presence of ``bg_1080x1920.mp4`` alone is not proof.
+    """
     import subprocess
+    if not remux_allowed():
+        raise RecoveryError(
+            'refusing auto-remux of bg without provenance; set GV_RECOVERY_REMUX=1 '
+            'only after confirming bg_1080x1920.mp4 is the approved cut concat'
+        )
     if not (os.path.exists(bg) and os.path.exists(ass) and os.path.exists(audio)):
         raise RecoveryError('remux requires bg mp4 + lyrics ASS + audio.mp3')
     os.makedirs(os.path.dirname(os.path.abspath(out)) or '.', exist_ok=True)

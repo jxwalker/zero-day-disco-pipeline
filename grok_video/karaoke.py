@@ -1289,38 +1289,49 @@ def main():
     deadline = t_start + a.time_limit * 60
     status = {'style': 'karaoke', 'day': day, 'out': out, 'started': time.strftime('%Y-%m-%d %H:%M:%S %Z'), 'warnings': []}
     sp = os.path.join(work, 'status.json')
+    # Recovery writes ONLY under the --out directory (never mutate approved work_karaoke metadata).
+    rec_dir = os.path.dirname(out) if a.from_timeline else work
+    if a.from_timeline:
+        os.makedirs(rec_dir, exist_ok=True)
+    sp_rec = os.path.join(rec_dir, 'status_recovery.json')
     import grok_video as GV
     try:
         if a.from_timeline:
-            from pipeline.karaoke_recover import assert_safe_recovery_out, RecoveryError
+            from pipeline.karaoke_recover import assert_safe_recovery_out, RecoveryError, remux_allowed
             try:
                 assert_safe_recovery_out(out, force=os.environ.get('GV_RECOVERY_OVERWRITE', '0') == '1')
             except RecoveryError as e:
                 status.update(ok=False, error=str(e), failure_kind='recovery')
-                G.save_json(status, sp)
+                G.save_json(status, sp_rec)
                 print(f"GROK_VIDEO_STATUS=failed code=3 style=karaoke kind='recovery' reason={str(e)[:300]!r}", flush=True)
                 sys.exit(3)
         audio = G.audio_path(day); dur = G.duration(audio)
         for f in ('lyrics.txt', 'stories.md'):
             if not os.path.exists(os.path.join(day, f)): raise RuntimeError(f'missing {f}')
-        # Fastest safe recovery: remux preserved bg + ASS onto Motown audio.mp3 before any align/plan work.
+        # Opt-in remux only: presence of bg_*.mp4 is NOT proof it is the approved v10f concat.
         if a.from_timeline:
             bg0 = os.path.join(work, 'bg_1080x1920.mp4')
             ass0 = os.path.join(work, 'lyrics_1080x1920.ass')
             band0 = os.path.join(work, 'band_1080x1920.png')
-            if os.path.exists(bg0) and os.path.exists(ass0):
+            if os.path.exists(bg0) and os.path.exists(ass0) and remux_allowed():
                 from pipeline.karaoke_recover import remux_bg_ass_audio
-                G.log('karaoke: --from-timeline early remux (bg + ASS + audio); no generate/align')
+                G.log('karaoke: --from-timeline GV_RECOVERY_REMUX=1 remux (bg + ASS + audio); no generate/align')
                 remux_bg_ass_audio(
                     bg=bg0, band=band0 if os.path.exists(band0) else None,
                     ass=ass0, audio=audio, out=out, dur=dur, fps=FPS,
                 )
                 status.update(ok=True, recovery='remux_bg_ass', out=out, assembly_only=True,
-                              elapsed_s=round(time.time() - t_start))
-                G.save_json(status, os.path.join(work, 'status_recovery.json'))
+                              elapsed_s=round(time.time() - t_start),
+                              note='bg remux opted in via GV_RECOVERY_REMUX=1')
+                G.save_json(status, sp_rec)
                 print(f"GROK_VIDEO_STATUS=ok code=0 style=karaoke recovery=remux_bg_ass out={out} "
                       f"elapsed={status['elapsed_s']}s", flush=True)
                 sys.exit(0)
+            if os.path.exists(bg0) and not remux_allowed():
+                status['warnings'].append(
+                    'bg_1080x1920.mp4 present but ignored (no GV_RECOVERY_REMUX=1 provenance); '
+                    'rebuilding from timeline.json + clips'
+                )
         if not a.skip_gen:
             ok, how, msg = GV.grok_auth_ok()
             if not ok:
@@ -1348,6 +1359,13 @@ def main():
                         )
                         G.log(f'karaoke: reusing preserved timings {tp} ({len(L0)} lines)')
                         return
+                if a.from_timeline:
+                    # Do not run demucs/whisper into approved work_karaoke during recovery.
+                    tres['err'] = (
+                        'missing preserved timings.json under work/kalign|align|timings; '
+                        'attach timings or place them before --from-timeline (no align mutation)'
+                    )
+                    return
             try:
                 L, rep, vm = align_karaoke(day, work, status)
                 tres.update(L=L, rep=rep, vm=vm)
@@ -1590,7 +1608,7 @@ def main():
                 end_t = shots[-1]['t0'] if shots else 0.0
             except RecoveryError as e:
                 status.update(ok=False, error=str(e), failure_kind='recovery')
-                G.save_json(status, os.path.join(work, 'status_recovery.json'))
+                G.save_json(status, sp_rec)
                 print(f"GROK_VIDEO_STATUS=failed code=3 style=karaoke kind='recovery' reason={str(e)[:300]!r}", flush=True)
                 sys.exit(3)
         else:
@@ -1670,43 +1688,59 @@ def main():
                     if os.path.exists(os.path.join(gdir, f"{v['id']}.mp4")): endp['bg_clip'] = os.path.join(gdir, f"{v['id']}.mp4")
                     break
         # Persist timeline with full src so --from-timeline can rebuild later.
-        # Recovery writes timeline_recovery.json and never overwrites the approved timeline.json.
+        # Recovery writes under rec_dir (--out dirname) only — never approved timeline.json.
         from pipeline.coverage import plan_fingerprint as _pfp
         from pipeline.karaoke_recover import timeline_record as _tl_rec
         tl_doc = _tl_rec(shots, plan_fp=P.get('plan_fp') or _pfp(P), story=story, overlays=len(overlay_texts))
         if a.from_timeline:
-            G.save_json(tl_doc, os.path.join(work, 'timeline_recovery.json'))
+            G.save_json(tl_doc, os.path.join(rec_dir, 'timeline_recovery.json'))
         else:
             G.save_json(tl_doc, os.path.join(work, 'timeline.json'))
         sizes = [(1080, 1920)] + ([] if a.no_16x9 else [(1920, 1080)])
         jobs = []
         for W, H in sizes:
             tag = f'{W}x{H}'
-            sd = os.path.join(work, f"seg_recovery_{tag}" if a.from_timeline else f'seg_{tag}')
+            sd = os.path.join(rec_dir if a.from_timeline else work,
+                              f"seg_recovery_{tag}" if a.from_timeline else f'seg_{tag}')
             os.makedirs(sd, exist_ok=True)
             jobs += [(s, W, H, os.path.join(sd, f'{i:03d}.mp4'), endp, seg_design(DES, s, L, day), i) for i, s in enumerate(shots)]
         rt = time.time()
-        fitlog = os.path.join(work, 'fit_log.jsonl'); open(fitlog, 'w').close(); os.environ['KGFX_FITLOG'] = fitlog  
+        fitlog = os.path.join(rec_dir if a.from_timeline else work,
+                              'fit_log_recovery.jsonl' if a.from_timeline else 'fit_log.jsonl')
+        open(fitlog, 'w').close(); os.environ['KGFX_FITLOG'] = fitlog
         with Pool(min(8, os.cpu_count() or 4)) as pool:
             segs = pool.map(render_seg, jobs, chunksize=1)
         os.environ.pop('KGFX_FITLOG', None)   # margin_check's synthetic truncation cases must not count
         results = {}
         texts = all_texts(shots, story, endp) + [ln['text'] for ln in L]
         seg_prefix = 'seg_recovery_' if a.from_timeline else 'seg_'
+        scratch = rec_dir if a.from_timeline else work
         for W, H in sizes:
-            tag = f'{W}x{H}'; sd = os.path.join(work, f'{seg_prefix}{tag}')
+            tag = f'{W}x{H}'; sd = os.path.join(scratch, f'{seg_prefix}{tag}')
             lst = os.path.join(sd, 'list.txt')
             open(lst, 'w').write(''.join(f"file '{s}'\n" for s in segs if f'/{seg_prefix}{tag}/' in s))
             bg_name = f'bg_recovery_{tag}.mp4' if a.from_timeline else f'bg_{tag}.mp4'
-            bg = os.path.join(work, bg_name)
+            bg = os.path.join(scratch, bg_name)
             subprocess.run(['ffmpeg', '-v', 'error', '-y', '-f', 'concat', '-safe', '0', '-i', lst, '-c', 'copy', bg], check=True)
-            # Prefer preserved ASS on recovery when present (keeps approved lyric burn-in).
-            assf = os.path.join(work, f'lyrics_{tag}.ass')
-            bandf = os.path.join(work, f'band_{tag}.png')
-            if a.from_timeline and os.path.exists(assf) and os.path.exists(bandf):
-                G.log(f'karaoke: recovery reusing preserved {os.path.basename(assf)} + band')
-                ll = status.get('line_level_lines')
+            # ASS+band: read preserved from work; any rebuild writes only under rec_dir.
+            # Note: final step is an ffmpeg overlay *re-encode* (not bit-exact stream remux).
+            src_ass = os.path.join(work, f'lyrics_{tag}.ass')
+            src_band = os.path.join(work, f'band_{tag}.png')
+            if a.from_timeline:
+                assf = os.path.join(rec_dir, f'lyrics_{tag}.ass')
+                bandf = os.path.join(rec_dir, f'band_{tag}.png')
+                if os.path.exists(src_ass) and os.path.exists(src_band):
+                    if not os.path.exists(assf):
+                        shutil.copy2(src_ass, assf)
+                    if not os.path.exists(bandf):
+                        shutil.copy2(src_band, bandf)
+                    G.log(f'karaoke: recovery copied preserved ASS/band into {rec_dir} (overlay re-encode)')
+                    ll = status.get('line_level_lines')
+                else:
+                    import klyrics
+                    ll = klyrics.build(assf, L, W, H, dur, story, sync_ok, DES, DZ.theme(DES), line_ok); band_png(W, H, bandf, DES)
             else:
+                assf, bandf = src_ass, src_band
                 import klyrics
                 ll = klyrics.build(assf, L, W, H, dur, story, sync_ok, DES, DZ.theme(DES), line_ok); band_png(W, H, bandf, DES)
             status['line_level_lines'] = ll
@@ -1736,19 +1770,24 @@ def main():
         else:
             chat = None; a.no_16x9 = True
         status['render_s'] = round(time.time() - rt)
-        vr = GV.verify(out, audio, L, {}, os.path.join(work, 'verify_frames'))
-        cs = os.path.join(work, 'contact_sheet.jpg')
+        vr = GV.verify(out, audio, L, {}, os.path.join(scratch, 'verify_frames_recovery' if a.from_timeline else 'verify_frames'))
+        cs = os.path.join(scratch, 'contact_sheet_recovery.jpg' if a.from_timeline else 'contact_sheet.jpg')
         subprocess.run(['ffmpeg', '-v', 'error', '-y', '-i', out, '-vf', f"fps=16/{dur:.1f},scale=270:-2,tile=8x2", '-frames:v', '1', cs])
         bad = spelling(texts, day)
-        try:
-            import margin_check as MC
-            P['_title'] = endp['title']
-            mc = MC.run(work, P, [x['text'] for x in (G.story_list(day) or [])] + [c['text'] for c in story], [ln['text'] for ln in L], DZ.theme(DES), dur)
-            status['margin_ok'] = mc['ok']
-            status['margin_fail'] = [f"{r['g']}/{r['case']}/{r['size']}" for r in mc['gfx'] if not r['ok']] + [f"lyrics {k}: {a['n_fail']} frames" for k, a in mc['ass'].items() if a['n_fail']]
-            if not mc['ok']: status['warnings'].append(f"margin check failed: {status['margin_fail']}")
-        except Exception as e:
-            status['warnings'].append(f'margin check error: {e!r}')
+        # margin_check writes beside ASS / into work — skip on recovery to keep approved work immutable
+        if a.from_timeline:
+            status['margin_ok'] = None
+            status['warnings'].append('margin_check skipped on --from-timeline (would mutate work ASS siblings)')
+        else:
+            try:
+                import margin_check as MC
+                P['_title'] = endp['title']
+                mc = MC.run(work, P, [x['text'] for x in (G.story_list(day) or [])] + [c['text'] for c in story], [ln['text'] for ln in L], DZ.theme(DES), dur)
+                status['margin_ok'] = mc['ok']
+                status['margin_fail'] = [f"{r['g']}/{r['case']}/{r['size']}" for r in mc['gfx'] if not r['ok']] + [f"lyrics {k}: {a['n_fail']} frames" for k, a in mc['ass'].items() if a['n_fail']]
+                if not mc['ok']: status['warnings'].append(f"margin check failed: {status['margin_fail']}")
+            except Exception as e:
+                status['warnings'].append(f'margin check error: {e!r}')
         # fit failures and truncated words fail the build
         fit_fail, trunc = fit_check(fitlog, texts, day)
         status.update(fit_fail=fit_fail, truncated_words=trunc, fit_ok=not fit_fail and not trunc)
@@ -1778,7 +1817,7 @@ def main():
         if not a.from_timeline:
             try: DZ.record(day, DES, tl)
             except Exception as e: status['warnings'].append(f'design history not saved: {e!r}')
-        G.save_json(status, os.path.join(work, 'status_recovery.json') if a.from_timeline else sp)
+        G.save_json(status, sp_rec if a.from_timeline else sp)
         if not vr['ok']: raise RuntimeError(f"verification failed {vr['checks']}")
         print(f"GROK_VIDEO_STATUS=ok code=0 style=karaoke planner={P.get('planner')} out={out} chat={chat} wide={status['wide']} "
               f"elapsed={status['elapsed_s']}s shots={len(shots)} avg_shot={status['avg_shot']}s scenes={status['scenes']} "
@@ -1792,14 +1831,14 @@ def main():
         why = f'{type(e).__name__}: {e}'
         G.log('karaoke error:\n' + traceback.format_exc()[-2000:])
         status.update(ok=False, error=why, elapsed_s=round(time.time() - t_start))
-        G.save_json(status, os.path.join(work, 'status_recovery.json') if a.from_timeline else sp)
+        G.save_json(status, sp_rec if a.from_timeline else sp)
         for f in (out, chat, wide):
             if f and os.path.exists(f) and os.path.getmtime(f) >= t_start:
                 os.replace(f, os.path.splitext(f)[0] + '.failed.mp4')
         # a verification-only failure means all paid media already exists in work_karaoke. Falling back to the
         # Claudia/cine-real chain then burns 50+ min, hits the routine's time limit and loses post/sources. Stop here instead;
         # fix the check and re-render with: karaoke.py DAY --skip-gen --no-fallback  (no Grok spend).
-        if why.startswith('RuntimeError: verification failed'):
+        if why.startswith('RuntimeError: verification failed') and not a.from_timeline:
             G.save_json(dict(stage='media_done_verify_failed', error=why[:500], resume=f'karaoke.py {day} --skip-gen --no-fallback'),
                         os.path.join(day, 'VIDEO_CHECKPOINT.json'))
             print(f"GROK_VIDEO_STATUS=failed code=4 style=karaoke resumable=1 reason={why[:300]!r}", flush=True); sys.exit(4)

@@ -102,6 +102,11 @@ class TestHydrateAndAssembleLabelled(unittest.TestCase):
             self.assertEqual(shots[0]['src'][0], 'clip')
             self.assertEqual(shots[0]['src'][2], 0.0)
 
+            # Truncated gfx without payload must fail closed (Watch Me plan≠timeline).
+            bad_tl = {'shots': [{'t0': 0.0, 't1': 1.0, 'src': ['gfx', 'headline'], 'line': 0}]}
+            with self.assertRaises(RecoveryError):
+                hydrate_shots(bad_tl, gdir=gdir, title='Label Test')
+
             # Assembly proof with labelled clips only (no kgfx/fonts): trim to shot windows + concat.
             sd = os.path.join(td, 'seg'); os.makedirs(sd)
             segs = []
@@ -140,7 +145,13 @@ class TestHydrateAndAssembleLabelled(unittest.TestCase):
                 'Dialogue: 0,0:00:00.00,0:00:03.00,Default,,0,0,0,,LABEL_LYRIC\n'
             )
             out = os.path.join(td, 'recovery', 'LABEL_RECOVERY.mp4')
-            remux_bg_ass_audio(bg=bg, band=None, ass=ass, audio=audio, out=out, dur=3.0)
+            with self.assertRaises(RecoveryError):
+                remux_bg_ass_audio(bg=bg, band=None, ass=ass, audio=audio, out=out, dur=3.0)
+            os.environ['GV_RECOVERY_REMUX'] = '1'
+            try:
+                remux_bg_ass_audio(bg=bg, band=None, ass=ass, audio=audio, out=out, dur=3.0)
+            finally:
+                os.environ.pop('GV_RECOVERY_REMUX', None)
             self.assertTrue(os.path.exists(out))
             self.assertGreater(os.path.getsize(out), 1000)
 
