@@ -1,6 +1,8 @@
 """karaoke mode: the daily video in the karaoke v3 format (default). See README.md "karaoke".
-usage: karaoke.py DAY_DIR [--out FILE] [--work DIR] [--skip-gen] [--replan] [--no-fallback] [--stills N] [--clips N]
-                  [--time-limit MIN] [--max-pct P] [--no-16x9]  (+ any grok_video.py args, passed to the fallback)
+usage: karaoke.py DAY_DIR [--out FILE] [--work DIR] [--skip-gen] [--from-timeline] [--replan] [--no-fallback]
+                  [--stills N] [--clips N] [--time-limit MIN] [--max-pct P] [--no-16x9]
+                  (+ any grok_video.py args, passed to the fallback)
+  --from-timeline  rebuild from work/timeline.json + clips + song into --out (no generate; no master overwrite)
 Writes <day>/video_karaoke.mp4 (1080x1920, posted), video_karaoke_chat.mp4 (<25 MB), video_karaoke_16x9.mp4.
 On any failure (not exit 6 instrumental / 7 auth) it runs grok_video.py (the Claudia/slopcore chain) with the same args.
 Last stdout line: GROK_VIDEO_STATUS=... out=<mp4> chat=<mp4> (same contract as grok_video.py)."""
@@ -1267,12 +1269,18 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('day'); ap.add_argument('--out'); ap.add_argument('--work')
     ap.add_argument('--skip-gen', action='store_true'); ap.add_argument('--replan', action='store_true')
+    ap.add_argument('--from-timeline', action='store_true',
+                    help='rebuild from preserved timeline.json + clips + audio into --out (no generate)')
     ap.add_argument('--no-fallback', action='store_true'); ap.add_argument('--no-16x9', action='store_true')
     ap.add_argument('--stills', type=int, default=int(os.environ.get('GV_KARAOKE_STILLS', 14)))
     ap.add_argument('--clips', type=int, default=int(os.environ.get('GV_KARAOKE_CLIPS', 14)))   # no stills -> every scene is a clip
     ap.add_argument('--time-limit', type=float, default=float(os.environ.get('GV_KARAOKE_LIMIT_MIN', 40)))
     ap.add_argument('--whisper-model', default='medium')
     a, passthru = ap.parse_known_args()
+    if a.from_timeline:
+        a.skip_gen = True
+        a.no_fallback = True
+        a.no_16x9 = True  # recovery writes the vertical --out only
     t_start = time.time(); day = os.path.abspath(a.day)
     out = os.path.abspath(a.out or os.path.join(day, 'video_karaoke.mp4'))
     base_ = os.path.splitext(out)[0]; chat, wide = base_ + '_chat.mp4', base_ + '_16x9.mp4'
@@ -1283,9 +1291,36 @@ def main():
     sp = os.path.join(work, 'status.json')
     import grok_video as GV
     try:
+        if a.from_timeline:
+            from pipeline.karaoke_recover import assert_safe_recovery_out, RecoveryError
+            try:
+                assert_safe_recovery_out(out, force=os.environ.get('GV_RECOVERY_OVERWRITE', '0') == '1')
+            except RecoveryError as e:
+                status.update(ok=False, error=str(e), failure_kind='recovery')
+                G.save_json(status, sp)
+                print(f"GROK_VIDEO_STATUS=failed code=3 style=karaoke kind='recovery' reason={str(e)[:300]!r}", flush=True)
+                sys.exit(3)
         audio = G.audio_path(day); dur = G.duration(audio)
         for f in ('lyrics.txt', 'stories.md'):
             if not os.path.exists(os.path.join(day, f)): raise RuntimeError(f'missing {f}')
+        # Fastest safe recovery: remux preserved bg + ASS onto Motown audio.mp3 before any align/plan work.
+        if a.from_timeline:
+            bg0 = os.path.join(work, 'bg_1080x1920.mp4')
+            ass0 = os.path.join(work, 'lyrics_1080x1920.ass')
+            band0 = os.path.join(work, 'band_1080x1920.png')
+            if os.path.exists(bg0) and os.path.exists(ass0):
+                from pipeline.karaoke_recover import remux_bg_ass_audio
+                G.log('karaoke: --from-timeline early remux (bg + ASS + audio); no generate/align')
+                remux_bg_ass_audio(
+                    bg=bg0, band=band0 if os.path.exists(band0) else None,
+                    ass=ass0, audio=audio, out=out, dur=dur, fps=FPS,
+                )
+                status.update(ok=True, recovery='remux_bg_ass', out=out, assembly_only=True,
+                              elapsed_s=round(time.time() - t_start))
+                G.save_json(status, os.path.join(work, 'status_recovery.json'))
+                print(f"GROK_VIDEO_STATUS=ok code=0 style=karaoke recovery=remux_bg_ass out={out} "
+                      f"elapsed={status['elapsed_s']}s", flush=True)
+                sys.exit(0)
         if not a.skip_gen:
             ok, how, msg = GV.grok_auth_ok()
             if not ok:
@@ -1298,6 +1333,21 @@ def main():
             status['usage_before'] = None
         tres = {}
         def tj():
+            # Recovery / skip-gen: prefer preserved timings (no demucs/whisper spend or drift).
+            if a.skip_gen or a.from_timeline:
+                from pipeline.karaoke_recover import find_timings
+                tp = find_timings(work)
+                if tp:
+                    L0 = G.load_json(tp)
+                    if isinstance(L0, list) and L0:
+                        tres.update(
+                            L=L0,
+                            rep={'method': f'preserved:{os.path.relpath(tp, work)}', 'mean_score': 1.0,
+                                 'suspect_lines': [], 'expected_lines': len(L0)},
+                            vm=G.load_json(os.path.join(os.path.dirname(tp), 'vocal_check.json'), {}) or {},
+                        )
+                        G.log(f'karaoke: reusing preserved timings {tp} ({len(L0)} lines)')
+                        return
             try:
                 L, rep, vm = align_karaoke(day, work, status)
                 tres.update(L=L, rep=rep, vm=vm)
@@ -1323,13 +1373,37 @@ def main():
                 except Exception as e2:
                     if 'L' not in tres: tres['err'] = repr(e2)
         th = threading.Thread(target=tj, daemon=True); th.start()
+        from pipeline.karaoke_recover import find_plan as _find_plan
         pp = os.path.join(work, 'plan.json')
-        resumed = False
-        P = G.load_json(pp) if os.path.exists(pp) and not a.replan else None
-        if P and P.get('ver') == PLAN_VER:
-            resumed = True
-            G.log('karaoke: resuming existing plan.json — coherence gates still required (no bypass)')
+        if a.replan:
+            plan_path = None
+        elif a.skip_gen or a.from_timeline:
+            plan_path = _find_plan(work)
+        elif os.path.exists(pp):
+            plan_path = pp
         else:
+            plan_path = None
+        resumed = False
+        # --skip-gen / --from-timeline = reassemble existing approved media. Pre-gen coherence
+        # gates must NOT block that path (Watch Me–era plans lack arc/retell/requires_next).
+        # Edit-time coverage + gfx lint still run after timeline unless --from-timeline.
+        assembly_only = bool(a.skip_gen or a.from_timeline) and not a.replan
+        P = G.load_json(plan_path) if plan_path else None
+        if P and (P.get('ver') == PLAN_VER or assembly_only):
+            resumed = True
+            if assembly_only:
+                G.log(f'karaoke: assembly-only; resuming {plan_path} without pre-gen coherence gates')
+            else:
+                G.log('karaoke: resuming existing plan.json — coherence gates still required (no bypass)')
+        else:
+            if assembly_only:
+                from pipeline.failures import JobFailure, FailureKind
+                raise JobFailure(
+                    kind=FailureKind.PLAN,
+                    message='--skip-gen/--from-timeline requires an existing plan.json (or plan.json.bak-v10f)',
+                    stage='plan',
+                    hint='Provide work/plan.json + grok/*.mp4 from an approved cut, or drop --skip-gen to plan (needs Opus).',
+                )
             t0 = time.time()
             try:
                 import storyboard as SB                    # treatment + lead bible + shot list
@@ -1369,69 +1443,79 @@ def main():
             P['ver'] = PLAN_VER; P['plan_s'] = round(time.time() - t0)
             G.save_json(P, os.path.join(work, 'plan_raw.json'))
             status['warnings'] += fact_lint(P, day)
-        # Coherence gates on BOTH fresh plans and resume — never skip via existing plan.json
-        try:
-            from pipeline.plan_gates import apply_coherence_gates
-            from pipeline.failures import JobFailure, FailureKind
-            from pipeline.karaoke_plan import normalize_karaoke_plan
-            # Resume / fresh: validate karaoke coherence fields without inventing edges
+        status['assembly_only'] = assembly_only
+        status['resumed_plan'] = resumed
+        if not assembly_only:
+            # Pre-gen coherence gates only when planning / generating (not reassembly).
             try:
-                if P.get('planner') in ('opus', 'template', None) or P.get('ver') == PLAN_VER:
-                    P = normalize_karaoke_plan(P, invent_edges=False)
-            except ValueError as ve:
-                raise JobFailure(
-                    kind=FailureKind.PLAN,
-                    message=str(ve),
-                    stage='plan',
-                    hint=(
-                        'Update the karaoke plan (arc, viewer_retell, payoff_design, '
-                        'scene before/after/requires_next, required_accents). '
-                        'Do not auto-fake causal fields; replan if an old plan lacks them.'
-                    ),
-                ) from ve
-            gated = apply_coherence_gates(
-                P,
-                lyric_line_count=len(lyric_lines(day)),
-                storyboard_review=P.get('storyboard_review'),
-                require_storyboard=True,
-                allow_large=os.environ.get('GV_ALLOW_LARGE_PLAN', '0') == '1',
-            )
-            P = gated['plan']
-            status['coherence_gates'] = {k: (v if not isinstance(v, dict) else {
-                kk: v[kk] for kk in v if kk in ('ok', 'summary', 'score', 'verdict', 'performance_mode')
-            }) for k, v in gated['reports'].items()}
-            status['story_model'] = gated['reports'].get('story_model')
-            status['narrative_qa'] = gated['reports'].get('narrative_qa')
-            status['creative_contract'] = gated['reports'].get('creative_contract')
-            status['performance_mode'] = P.get('performance_mode')
-            status['resumed_plan'] = resumed
-            G.save_json(gated['reports'].get('story_model') or {}, os.path.join(work, 'story_model.json'))
-            G.save_json(gated['reports'].get('narrative_qa') or {}, os.path.join(work, 'narrative_qa.json'))
-            G.save_json(gated['reports'].get('creative_contract') or {}, os.path.join(work, 'creative_contract.json'))
-            crep = gated['reports'].get('creative_contract') or {}
-            if not crep.get('ok', True):
-                if os.environ.get('GV_CREATIVE_CONTRACT_ABORT', '0') == '1':
-                    from pipeline.failures import FailureKind
+                from pipeline.plan_gates import apply_coherence_gates
+                from pipeline.failures import JobFailure, FailureKind
+                from pipeline.karaoke_plan import normalize_karaoke_plan
+                try:
+                    if P.get('planner') in ('opus', 'template', None) or P.get('ver') == PLAN_VER:
+                        P = normalize_karaoke_plan(P, invent_edges=False)
+                except ValueError as ve:
                     raise JobFailure(
-                        kind=FailureKind.NARRATIVE,
-                        message=f"creative contract failed: {crep.get('summary')}",
-                        stage='creative_contract',
-                    )
-                status['warnings'].append(f"creative contract: {crep.get('summary')}")
-        except JobFailure as e:
-            status.update(
-                ok=False, error=str(e),
-                failure_kind=getattr(getattr(e, 'kind', None), 'value', str(getattr(e, 'kind', ''))),
-                failure=e.to_dict() if hasattr(e, 'to_dict') else {},
+                        kind=FailureKind.PLAN,
+                        message=str(ve),
+                        stage='plan',
+                        hint=(
+                            'Update the karaoke plan (arc, viewer_retell, payoff_design, '
+                            'scene before/after/requires_next, required_accents). '
+                            'Do not auto-fake causal fields; replan if an old plan lacks them. '
+                            'To reassemble existing media without replan: karaoke.py DAY --skip-gen.'
+                        ),
+                    ) from ve
+                gated = apply_coherence_gates(
+                    P,
+                    lyric_line_count=len(lyric_lines(day)),
+                    storyboard_review=P.get('storyboard_review'),
+                    require_storyboard=True,
+                    allow_large=os.environ.get('GV_ALLOW_LARGE_PLAN', '0') == '1',
+                )
+                P = gated['plan']
+                status['coherence_gates'] = {k: (v if not isinstance(v, dict) else {
+                    kk: v[kk] for kk in v if kk in ('ok', 'summary', 'score', 'verdict', 'performance_mode')
+                }) for k, v in gated['reports'].items()}
+                status['story_model'] = gated['reports'].get('story_model')
+                status['narrative_qa'] = gated['reports'].get('narrative_qa')
+                status['creative_contract'] = gated['reports'].get('creative_contract')
+                status['performance_mode'] = P.get('performance_mode')
+                G.save_json(gated['reports'].get('story_model') or {}, os.path.join(work, 'story_model.json'))
+                G.save_json(gated['reports'].get('narrative_qa') or {}, os.path.join(work, 'narrative_qa.json'))
+                G.save_json(gated['reports'].get('creative_contract') or {}, os.path.join(work, 'creative_contract.json'))
+                crep = gated['reports'].get('creative_contract') or {}
+                if not crep.get('ok', True):
+                    if os.environ.get('GV_CREATIVE_CONTRACT_ABORT', '0') == '1':
+                        from pipeline.failures import FailureKind
+                        raise JobFailure(
+                            kind=FailureKind.NARRATIVE,
+                            message=f"creative contract failed: {crep.get('summary')}",
+                            stage='creative_contract',
+                        )
+                    status['warnings'].append(f"creative contract: {crep.get('summary')}")
+            except JobFailure as e:
+                status.update(
+                    ok=False, error=str(e),
+                    failure_kind=getattr(getattr(e, 'kind', None), 'value', str(getattr(e, 'kind', ''))),
+                    failure=e.to_dict() if hasattr(e, 'to_dict') else {},
+                )
+                G.save_json(status, sp)
+                print(f"GROK_VIDEO_STATUS=failed code={getattr(e, 'exit_code', 8)} style=karaoke "
+                      f"kind={getattr(getattr(e, 'kind', None), 'value', '')!r} "
+                      f"reason={str(e)[:300]!r}", flush=True)
+                sys.exit(getattr(e, 'exit_code', 8))
+            except ImportError as e:
+                status['warnings'].append(f'pipeline hardening import failed ({e})')
+        else:
+            status['warnings'].append(
+                'assembly-only (--skip-gen): pre-gen coherence gates skipped; '
+                'coverage + gfx lint still enforce edit-time safety'
             )
-            G.save_json(status, sp)
-            print(f"GROK_VIDEO_STATUS=failed code={getattr(e, 'exit_code', 8)} style=karaoke "
-                  f"kind={getattr(getattr(e, 'kind', None), 'value', '')!r} "
-                  f"reason={str(e)[:300]!r}", flush=True)
-            sys.exit(getattr(e, 'exit_code', 8))
-        except ImportError as e:
-            status['warnings'].append(f'pipeline hardening import failed ({e})')
-        G.save_json(P, pp)
+            status['performance_mode'] = P.get('performance_mode') or 'mouths_closed'
+        # Never clobber an approved bak-only plan during recovery; live plan.json updates only on generate path.
+        if not a.from_timeline:
+            G.save_json(P, pp)
         import design as DZ
         DES = DZ.resolve(day, P.get('design'), force_palette=direction(day)['palette']); status['design'] = DES
         G.log(f"karaoke: design {DES}")
@@ -1449,97 +1533,128 @@ def main():
         rep = sanitize(L)
         if rep: status['warnings'].append(f"timing sanity: re-spread the tail of {len(rep)} line(s): {rep}")
         # Coverage gate: abort if too few clips OR required climax structural ids missing/rejected
-        try:
-            from pipeline.coverage import assert_coverage, CoverageError
-            from pipeline.timeline_policy import load_pinned_timeline
-            avail_ids = [s['id'] for s in P.get('scenes', [])
-                         if os.path.exists(f"{gdir}/{s['id']}.mp4") and os.path.getsize(f"{gdir}/{s['id']}.mp4") > 10000]
-            rejected = status.get('clip_rejected') or []
-            if P.get('scenes') and os.environ.get('GV_COVERAGE_GATE', '1') != '0':
-                # Ratio is measured against the intended film set (stills/clips budget), not every plan row.
-                intended = (P.get('scenes') or [])[:max(a.stills, a.clips)]
-                cov = assert_coverage(intended, avail_ids, require_critical=False, plan=P,
-                                      rejected_ids=rejected)
-                # Structural required climax/twist/payoff ids anywhere in the plan must have clips.
-                assert_coverage(P.get('scenes') or [], avail_ids, min_ratio=0.0, require_critical=True,
-                                plan=P, rejected_ids=rejected)
-                status['coverage'] = cov
-                G.log(f"karaoke: coverage {cov['pct']}% ({cov['have']}/{cov['wanted']}); "
-                      f"required={cov.get('required_shots')} ok")
-            # Stale pin: only reuse timeline_pinned.json when plan_fp matches
-            pin_path = os.path.join(work, 'timeline_pinned.json')
-            pinned = load_pinned_timeline(pin_path, P)
-            if pinned is None and os.path.exists(pin_path):
-                status['warnings'].append('stale timeline_pinned.json ignored (plan_fp mismatch)')
-                G.log('karaoke: ignoring stale timeline pin (plan fingerprint mismatch)')
-        except CoverageError as e:
-            status.update(ok=False, error=str(e), coverage=getattr(e, 'details', {}),
-                          failure_kind='coverage')
-            G.save_json(status, sp)
-            print(f"GROK_VIDEO_STATUS=failed code=8 style=karaoke kind='coverage' reason={str(e)[:300]!r}", flush=True)
-            sys.exit(8)
-        shots = timeline(P, L, dur, day, gdir)
-        pl_ = {ln['i']: ln for ln in P['lines']}; inv_ = {v: k for k, v in map_lines(P, L, day).items()}
-        tab = match_check(shots, L, P, work, gdir, status)
-        if tab:
-            used = {}
-            for s_ in shots:
-                if s_['src'][0] == 'gfx': used[s_['src'][1]] = used.get(s_['src'][1], 0) + 1
-            bad_n = [r['n'] for r in tab if not r['match']]
-            _keep = set(filter(None, os.environ.get('GV_MATCH_KEEP', '').split(',')))   # hand-verified clips are never redrawn
-            bad_n = [n_ for n_ in bad_n if not ((shots[n_]['src'][0] == 'clip' and os.path.splitext(os.path.basename(str(shots[n_]['src'][1])))[0] in _keep) or (shots[n_]['src'][0] == 'gfx' and shots[n_]['src'][1] in _keep))]
-            for n_ in bad_n:
-                s_ = shots[n_]; li = s_['line']; spec = pl_.get(inv_.get(li), {})
-                if s_['src'][0] == 'gfx': used[s_['src'][1]] -= 1
-                v = line_card(L[li]['text'], spec.get('fact', ''), used, provenance='match_redraw')
-                used[v['g']] = used.get(v['g'], 0) + 1
-                s_['v'] = v; s_['src'] = _gfx_src(v); s_['redrawn'] = 'match check: ' + next(r['why'] for r in tab if r['n'] == n_)[:120]
-            G.log(f"karaoke: match check: {len(tab) - len(bad_n)}/{len(tab)} matched; redrew {len(bad_n)} for their own line")
-            if bad_n:
-                tab2 = match_check(shots, L, P, work, gdir, status) or tab
-            else:
-                tab2 = tab
-            G.save_json(tab2, os.path.join(work, 'match_table.json'))
-            status['match'] = {'first_pass': f"{len(tab) - len(bad_n)}/{len(tab)}", 'final': f"{sum(r['match'] for r in tab2)}/{len(tab2)}"}
-            with open(os.path.join(work, 'match_table.md'), 'w') as f_:
-                f_.write('| shot | line | shot shown | match | note |\n|---|---|---|---|---|\n')
-                for r in tab2:
-                    f_.write(f"| {r['n']} | {r['line']} | {r['shot'][:90].replace('|', '/')} | {'yes' if r['match'] else 'NO'} | {r['why'][:80].replace('|', '/')} |\n")
-        shots, bpm_ = pace(shots, L, day, audio, dur); status['bpm'] = round(bpm_, 1)
-        G.log(f'karaoke: paced {len(shots)} shots at {bpm_:.1f} BPM')
-        # Picture-first gfx + SING max-uses=1 after edit fills (no black-void story carriers / SING reuse)
-        try:
-            from pipeline.graphics_lint import assert_graphics_and_sing
-            from pipeline.failures import JobFailure
-            grep = assert_graphics_and_sing(shots, P)
-            status['gfx_lint'] = grep.to_dict()
-            G.save_json(grep.to_dict(), os.path.join(work, 'gfx_lint.json'))
-        except JobFailure as e:
-            status.update(ok=False, error=str(e), failure_kind=getattr(e.kind, 'value', str(e.kind)),
-                          failure=e.to_dict())
-            G.save_json(status, sp)
-            print(f"GROK_VIDEO_STATUS=failed code={e.exit_code} style=karaoke "
-                  f"kind={getattr(e.kind, 'value', e.kind)!r} reason={str(e)[:300]!r}", flush=True)
-            sys.exit(e.exit_code)
-        end_t = shots[-1]['t0']
-        # Post-production overlays are first-class (model never renders text). Default ON.
+        # --from-timeline trusts the preserved cut; skip hard coverage (clips already chosen).
+        if not a.from_timeline:
+            try:
+                from pipeline.coverage import assert_coverage, CoverageError
+                from pipeline.timeline_policy import load_pinned_timeline
+                avail_ids = [s['id'] for s in P.get('scenes', [])
+                             if os.path.exists(f"{gdir}/{s['id']}.mp4") and os.path.getsize(f"{gdir}/{s['id']}.mp4") > 10000]
+                rejected = status.get('clip_rejected') or []
+                if P.get('scenes') and os.environ.get('GV_COVERAGE_GATE', '1') != '0':
+                    # Ratio is measured against the intended film set (stills/clips budget), not every plan row.
+                    intended = (P.get('scenes') or [])[:max(a.stills, a.clips)]
+                    cov = assert_coverage(intended, avail_ids, require_critical=False, plan=P,
+                                          rejected_ids=rejected)
+                    # Structural required climax/twist/payoff ids anywhere in the plan must have clips.
+                    assert_coverage(P.get('scenes') or [], avail_ids, min_ratio=0.0, require_critical=True,
+                                    plan=P, rejected_ids=rejected)
+                    status['coverage'] = cov
+                    G.log(f"karaoke: coverage {cov['pct']}% ({cov['have']}/{cov['wanted']}); "
+                          f"required={cov.get('required_shots')} ok")
+                # Stale pin: only reuse timeline_pinned.json when plan_fp matches
+                pin_path = os.path.join(work, 'timeline_pinned.json')
+                pinned = load_pinned_timeline(pin_path, P)
+                if pinned is None and os.path.exists(pin_path):
+                    status['warnings'].append('stale timeline_pinned.json ignored (plan_fp mismatch)')
+                    G.log('karaoke: ignoring stale timeline pin (plan fingerprint mismatch)')
+            except CoverageError as e:
+                status.update(ok=False, error=str(e), coverage=getattr(e, 'details', {}),
+                              failure_kind='coverage')
+                G.save_json(status, sp)
+                print(f"GROK_VIDEO_STATUS=failed code=8 style=karaoke kind='coverage' reason={str(e)[:300]!r}", flush=True)
+                sys.exit(8)
         story = []
         overlay_texts = []
-        if os.environ.get('GV_NEWS_TEXT', '1') != '0' and os.environ.get('GV_NO_GFX', '0') != '1':
-            story = story_events(P, L, day, dur, end_t)
+        if a.from_timeline:
+            from pipeline.karaoke_recover import (
+                load_preserved_timeline, hydrate_shots, RecoveryError,
+            )
+            tl_path = os.path.join(work, 'timeline.json')
             try:
-                from pipeline.overlays import build_overlay_texts, overlays_to_json
-                overlay_texts = overlays_to_json(build_overlay_texts(P, [
-                    {'i': i, 'start': ln.get('start', 0.0), 'end': ln.get('end', 0.0)}
-                    for i, ln in enumerate(L) if ln.get('start') is not None
-                ]))
-                G.save_json(overlay_texts, os.path.join(work, 'overlay_texts.json'))
-                if os.environ.get('GV_TERM_COMPOSITE', '1') != '0' and any(o.get('g') == 'terminal' for o in overlay_texts):
-                    status['term_composite'] = True
-            except Exception as e:
-                status['warnings'].append(f'overlay build failed ({str(e)[:120]})')
+                tl = load_preserved_timeline(tl_path)
+                shots, href = hydrate_shots(
+                    tl, gdir=gdir, plan=P, L=L,
+                    title=G.read(os.path.join(day, 'title.txt')).strip(),
+                    line_card_fn=line_card, gfx_src_fn=_gfx_src,
+                )
+                status['recovery_hydrate'] = href
+                status['warnings'] += href.get('warnings') or []
+                if not href.get('ok'):
+                    raise RecoveryError('timeline hydrate failed: ' + '; '.join(href.get('missing_clips') or ['unknown']))
+                G.log(f"karaoke: --from-timeline hydrated {href['n_shots']} shots "
+                      f"(clips={href['clips']} gfx={href['gfx']} truncated_src={href['truncated_src']})")
+                story = tl.get('story') or []
+                bpm_ = 0.0
+                status['bpm'] = 0.0
+                end_t = shots[-1]['t0'] if shots else 0.0
+            except RecoveryError as e:
+                status.update(ok=False, error=str(e), failure_kind='recovery')
+                G.save_json(status, sp)
+                print(f"GROK_VIDEO_STATUS=failed code=3 style=karaoke kind='recovery' reason={str(e)[:300]!r}", flush=True)
+                sys.exit(3)
         else:
-            G.save_json([], os.path.join(work, 'overlay_texts.json'))
+            shots = timeline(P, L, dur, day, gdir)
+            pl_ = {ln['i']: ln for ln in P['lines']}; inv_ = {v: k for k, v in map_lines(P, L, day).items()}
+            # match_check calls Claude — skip on --skip-gen to avoid paid spend / soft-fail noise
+            tab = None if assembly_only else match_check(shots, L, P, work, gdir, status)
+            if tab:
+                used = {}
+                for s_ in shots:
+                    if s_['src'][0] == 'gfx': used[s_['src'][1]] = used.get(s_['src'][1], 0) + 1
+                bad_n = [r['n'] for r in tab if not r['match']]
+                _keep = set(filter(None, os.environ.get('GV_MATCH_KEEP', '').split(',')))   # hand-verified clips are never redrawn
+                bad_n = [n_ for n_ in bad_n if not ((shots[n_]['src'][0] == 'clip' and os.path.splitext(os.path.basename(str(shots[n_]['src'][1])))[0] in _keep) or (shots[n_]['src'][0] == 'gfx' and shots[n_]['src'][1] in _keep))]
+                for n_ in bad_n:
+                    s_ = shots[n_]; li = s_['line']; spec = pl_.get(inv_.get(li), {})
+                    if s_['src'][0] == 'gfx': used[s_['src'][1]] -= 1
+                    v = line_card(L[li]['text'], spec.get('fact', ''), used, provenance='match_redraw')
+                    used[v['g']] = used.get(v['g'], 0) + 1
+                    s_['v'] = v; s_['src'] = _gfx_src(v); s_['redrawn'] = 'match check: ' + next(r['why'] for r in tab if r['n'] == n_)[:120]
+                G.log(f"karaoke: match check: {len(tab) - len(bad_n)}/{len(tab)} matched; redrew {len(bad_n)} for their own line")
+                if bad_n:
+                    tab2 = match_check(shots, L, P, work, gdir, status) or tab
+                else:
+                    tab2 = tab
+                G.save_json(tab2, os.path.join(work, 'match_table.json'))
+                status['match'] = {'first_pass': f"{len(tab) - len(bad_n)}/{len(tab)}", 'final': f"{sum(r['match'] for r in tab2)}/{len(tab2)}"}
+                with open(os.path.join(work, 'match_table.md'), 'w') as f_:
+                    f_.write('| shot | line | shot shown | match | note |\n|---|---|---|---|---|\n')
+                    for r in tab2:
+                        f_.write(f"| {r['n']} | {r['line']} | {r['shot'][:90].replace('|', '/')} | {'yes' if r['match'] else 'NO'} | {r['why'][:80].replace('|', '/')} |\n")
+            shots, bpm_ = pace(shots, L, day, audio, dur); status['bpm'] = round(bpm_, 1)
+            G.log(f'karaoke: paced {len(shots)} shots at {bpm_:.1f} BPM')
+            # Picture-first gfx + SING max-uses=1 after edit fills (no black-void story carriers / SING reuse)
+            try:
+                from pipeline.graphics_lint import assert_graphics_and_sing
+                from pipeline.failures import JobFailure
+                grep = assert_graphics_and_sing(shots, P)
+                status['gfx_lint'] = grep.to_dict()
+                G.save_json(grep.to_dict(), os.path.join(work, 'gfx_lint.json'))
+            except JobFailure as e:
+                status.update(ok=False, error=str(e), failure_kind=getattr(e.kind, 'value', str(e.kind)),
+                              failure=e.to_dict())
+                G.save_json(status, sp)
+                print(f"GROK_VIDEO_STATUS=failed code={e.exit_code} style=karaoke "
+                      f"kind={getattr(e.kind, 'value', e.kind)!r} reason={str(e)[:300]!r}", flush=True)
+                sys.exit(e.exit_code)
+            end_t = shots[-1]['t0']
+            # Post-production overlays are first-class (model never renders text). Default ON.
+            if os.environ.get('GV_NEWS_TEXT', '1') != '0' and os.environ.get('GV_NO_GFX', '0') != '1':
+                story = story_events(P, L, day, dur, end_t)
+                try:
+                    from pipeline.overlays import build_overlay_texts, overlays_to_json
+                    overlay_texts = overlays_to_json(build_overlay_texts(P, [
+                        {'i': i, 'start': ln.get('start', 0.0), 'end': ln.get('end', 0.0)}
+                        for i, ln in enumerate(L) if ln.get('start') is not None
+                    ]))
+                    G.save_json(overlay_texts, os.path.join(work, 'overlay_texts.json'))
+                    if os.environ.get('GV_TERM_COMPOSITE', '1') != '0' and any(o.get('g') == 'terminal' for o in overlay_texts):
+                        status['term_composite'] = True
+                except Exception as e:
+                    status['warnings'].append(f'overlay build failed ({str(e)[:120]})')
+            else:
+                G.save_json([], os.path.join(work, 'overlay_texts.json'))
         stills = sorted(f for f in os.listdir(gdir) if f.endswith('.png'))
         endp = {'title': G.read(os.path.join(day, 'title.txt')).strip(), 'credit': (P.get('credit') or '')[:80],
                 'sub': 'Grok Bot · ' + time.strftime('%-d %b %Y', time.strptime(os.path.basename(day)[:10], '%Y-%m-%d')) if re.match(r'\d{4}-\d\d-\d\d', os.path.basename(day)) else '',
@@ -1554,15 +1669,21 @@ def main():
                     if os.environ.get('GV_ENDCARD_PHOTO') != '1': endp['bg'] = None; break
                     if os.path.exists(os.path.join(gdir, f"{v['id']}.mp4")): endp['bg_clip'] = os.path.join(gdir, f"{v['id']}.mp4")
                     break
-        # Persist timeline with plan_fp so later pins cannot outlive a re-plan
+        # Persist timeline with full src so --from-timeline can rebuild later.
+        # Recovery writes timeline_recovery.json and never overwrites the approved timeline.json.
         from pipeline.coverage import plan_fingerprint as _pfp
-        G.save_json({'plan_fp': P.get('plan_fp') or _pfp(P),
-                     'shots': [{'t0': round(s['t0'], 2), 't1': round(s['t1'], 2), 'src': [s['src'][0], s['src'][1]], 'line': s.get('line'), 'redrawn': s.get('redrawn')} for s in shots],
-                     'story': story, 'overlays': len(overlay_texts)}, os.path.join(work, 'timeline.json'))
+        from pipeline.karaoke_recover import timeline_record as _tl_rec
+        tl_doc = _tl_rec(shots, plan_fp=P.get('plan_fp') or _pfp(P), story=story, overlays=len(overlay_texts))
+        if a.from_timeline:
+            G.save_json(tl_doc, os.path.join(work, 'timeline_recovery.json'))
+        else:
+            G.save_json(tl_doc, os.path.join(work, 'timeline.json'))
         sizes = [(1080, 1920)] + ([] if a.no_16x9 else [(1920, 1080)])
         jobs = []
         for W, H in sizes:
-            sd = os.path.join(work, f'seg_{W}x{H}'); os.makedirs(sd, exist_ok=True)
+            tag = f'{W}x{H}'
+            sd = os.path.join(work, f"seg_recovery_{tag}" if a.from_timeline else f'seg_{tag}')
+            os.makedirs(sd, exist_ok=True)
             jobs += [(s, W, H, os.path.join(sd, f'{i:03d}.mp4'), endp, seg_design(DES, s, L, day), i) for i, s in enumerate(shots)]
         rt = time.time()
         fitlog = os.path.join(work, 'fit_log.jsonl'); open(fitlog, 'w').close(); os.environ['KGFX_FITLOG'] = fitlog  
@@ -1571,35 +1692,49 @@ def main():
         os.environ.pop('KGFX_FITLOG', None)   # margin_check's synthetic truncation cases must not count
         results = {}
         texts = all_texts(shots, story, endp) + [ln['text'] for ln in L]
+        seg_prefix = 'seg_recovery_' if a.from_timeline else 'seg_'
         for W, H in sizes:
-            tag = f'{W}x{H}'; sd = os.path.join(work, f'seg_{tag}')
+            tag = f'{W}x{H}'; sd = os.path.join(work, f'{seg_prefix}{tag}')
             lst = os.path.join(sd, 'list.txt')
-            open(lst, 'w').write(''.join(f"file '{s}'\n" for s in segs if f'/seg_{tag}/' in s))
-            bg = os.path.join(work, f'bg_{tag}.mp4')
+            open(lst, 'w').write(''.join(f"file '{s}'\n" for s in segs if f'/{seg_prefix}{tag}/' in s))
+            bg_name = f'bg_recovery_{tag}.mp4' if a.from_timeline else f'bg_{tag}.mp4'
+            bg = os.path.join(work, bg_name)
             subprocess.run(['ffmpeg', '-v', 'error', '-y', '-f', 'concat', '-safe', '0', '-i', lst, '-c', 'copy', bg], check=True)
-            assf = os.path.join(work, f'lyrics_{tag}.ass'); bandf = os.path.join(work, f'band_{tag}.png')
-            import klyrics
-            ll = klyrics.build(assf, L, W, H, dur, story, sync_ok, DES, DZ.theme(DES), line_ok); band_png(W, H, bandf, DES)
+            # Prefer preserved ASS on recovery when present (keeps approved lyric burn-in).
+            assf = os.path.join(work, f'lyrics_{tag}.ass')
+            bandf = os.path.join(work, f'band_{tag}.png')
+            if a.from_timeline and os.path.exists(assf) and os.path.exists(bandf):
+                G.log(f'karaoke: recovery reusing preserved {os.path.basename(assf)} + band')
+                ll = status.get('line_level_lines')
+            else:
+                import klyrics
+                ll = klyrics.build(assf, L, W, H, dur, story, sync_ok, DES, DZ.theme(DES), line_ok); band_png(W, H, bandf, DES)
             status['line_level_lines'] = ll
             dst = out if H > W else wide
+            if a.from_timeline and H < W:
+                # recovery focuses on vertical master; skip writing a 16x9 beside protected names unless --out dir
+                continue
             tmp = dst + '.part.mp4'
             subprocess.run(['ffmpeg', '-v', 'error', '-y', '-i', bg, '-i', bandf, '-i', audio, '-filter_complex',
                             f"[0:v][1:v]overlay=0:0,ass='{assf}',scale=in_range=auto:out_range=tv,format=yuv420p[v]",  # jpeg-range sources gave yuvj420p
                             '-map', '[v]', '-map', '2:a', '-c:v', 'libx264', '-preset', 'medium', '-crf', '20', '-pix_fmt', 'yuv420p', '-color_range', 'tv',
                             '-profile:v', 'high', '-r', str(FPS), '-c:a', 'aac', '-b:a', '192k', '-t', f'{dur:.3f}', '-movflags', '+faststart', tmp], check=True)
             os.replace(tmp, dst); results[tag] = dst
-        # chat copy < 25 MB: two-pass at a bitrate derived from the duration, 22 MB target, retry lower if over
-        for tgt in (22, 19, 16):
-            kbps = max(300, int((tgt * 8 * 1024) / dur) - 128)
-            pl = os.path.join(work, 'chat2pass')
-            common = ['-c:v', 'libx264', '-preset', 'medium', '-profile:v', 'high', '-b:v', f'{kbps}k', '-maxrate', f'{int(kbps * 1.3)}k',
-                      '-bufsize', f'{kbps * 2}k', '-vf', 'scale=in_range=auto:out_range=tv,format=yuv420p', '-pix_fmt', 'yuv420p',
-                      '-color_range', 'tv', '-passlogfile', pl]
-            subprocess.run(['ffmpeg', '-v', 'error', '-y', '-i', out] + common + ['-pass', '1', '-an', '-f', 'mp4', os.devnull], check=True)
-            subprocess.run(['ffmpeg', '-v', 'error', '-y', '-i', out] + common + ['-pass', '2', '-c:a', 'aac', '-b:a', '128k',
-                            '-movflags', '+faststart', chat + '.part.mp4'], check=True)
-            if os.path.getsize(chat + '.part.mp4') < 25 * 1048576: break
-        os.replace(chat + '.part.mp4', chat)
+        # chat copy < 25 MB — skip on --from-timeline (recovery out only; no chat derivative overwrite)
+        if not a.from_timeline:
+            for tgt in (22, 19, 16):
+                kbps = max(300, int((tgt * 8 * 1024) / dur) - 128)
+                pl = os.path.join(work, 'chat2pass')
+                common = ['-c:v', 'libx264', '-preset', 'medium', '-profile:v', 'high', '-b:v', f'{kbps}k', '-maxrate', f'{int(kbps * 1.3)}k',
+                          '-bufsize', f'{kbps * 2}k', '-vf', 'scale=in_range=auto:out_range=tv,format=yuv420p', '-pix_fmt', 'yuv420p',
+                          '-color_range', 'tv', '-passlogfile', pl]
+                subprocess.run(['ffmpeg', '-v', 'error', '-y', '-i', out] + common + ['-pass', '1', '-an', '-f', 'mp4', os.devnull], check=True)
+                subprocess.run(['ffmpeg', '-v', 'error', '-y', '-i', out] + common + ['-pass', '2', '-c:a', 'aac', '-b:a', '128k',
+                                '-movflags', '+faststart', chat + '.part.mp4'], check=True)
+                if os.path.getsize(chat + '.part.mp4') < 25 * 1048576: break
+            os.replace(chat + '.part.mp4', chat)
+        else:
+            chat = None; a.no_16x9 = True
         status['render_s'] = round(time.time() - rt)
         vr = GV.verify(out, audio, L, {}, os.path.join(work, 'verify_frames'))
         cs = os.path.join(work, 'contact_sheet.jpg')
@@ -1621,12 +1756,15 @@ def main():
             status['warnings'].append(f"text fit check failed: {fit_fail[:5]} truncated {trunc}")
             vr['ok'] = False; vr['checks']['text_fits'] = False
         else: vr['checks']['text_fits'] = True
+        body = shots[:-1] if len(shots) > 1 else shots
         status.update(ok=vr['ok'], verify=vr['checks'], sync=sync, sync_ok=sync_ok, spelling_unknown=bad, contact_sheet=cs,
                       shots=len(shots), avg_shot=round(end_t / max(1, len(shots) - 1), 2),
                       scenes=sum(1 for s in shots if s['src'][0] in ('clip', 'still')), clips_used=sum(1 for s in shots if s['src'][0] == 'clip'),
-                      stills_used=sum(1 for s in shots if s['src'][0] == 'still'), max_hold=round(max(s['t1'] - s['t0'] for s in shots[:-1]), 2),
+                      stills_used=sum(1 for s in shots if s['src'][0] == 'still'),
+                      max_hold=round(max((s['t1'] - s['t0']) for s in body), 2) if body else 0,
                       planner=P.get('planner'), wide=results.get('1920x1080'), chat=chat,
-                      chat_mb=round(os.path.getsize(chat) / 1048576, 1), elapsed_s=round(time.time() - t_start))
+                      chat_mb=(round(os.path.getsize(chat) / 1048576, 1) if chat and os.path.exists(chat) else None),
+                      elapsed_s=round(time.time() - t_start), recovery=bool(a.from_timeline))
         try:
             from real_gen_usage import usage_pct
             status['usage_after'] = usage_pct()
@@ -1637,13 +1775,15 @@ def main():
         for s_ in shots:
             if s_['src'][0] == 'gfx': tl[s_['src'][1]] = tl.get(s_['src'][1], 0) + 1
         status['templates'] = tl
-        try: DZ.record(day, DES, tl)
-        except Exception as e: status['warnings'].append(f'design history not saved: {e!r}')
-        G.save_json(status, sp)
+        if not a.from_timeline:
+            try: DZ.record(day, DES, tl)
+            except Exception as e: status['warnings'].append(f'design history not saved: {e!r}')
+        G.save_json(status, os.path.join(work, 'status_recovery.json') if a.from_timeline else sp)
         if not vr['ok']: raise RuntimeError(f"verification failed {vr['checks']}")
         print(f"GROK_VIDEO_STATUS=ok code=0 style=karaoke planner={P.get('planner')} out={out} chat={chat} wide={status['wide']} "
               f"elapsed={status['elapsed_s']}s shots={len(shots)} avg_shot={status['avg_shot']}s scenes={status['scenes']} "
               f"clips={status['clips_used']} sync_ok={int(sync_ok)} line_level={status.get('line_level_lines')}"
+              + (f" recovery=1" if a.from_timeline else "")
               + (f" warnings={len(status['warnings'])}: {' | '.join(status['warnings'])[:600]}" if status['warnings'] else ''), flush=True)
         sys.exit(0)
     except SystemExit:
@@ -1651,9 +1791,10 @@ def main():
     except Exception as e:
         why = f'{type(e).__name__}: {e}'
         G.log('karaoke error:\n' + traceback.format_exc()[-2000:])
-        status.update(ok=False, error=why, elapsed_s=round(time.time() - t_start)); G.save_json(status, sp)
+        status.update(ok=False, error=why, elapsed_s=round(time.time() - t_start))
+        G.save_json(status, os.path.join(work, 'status_recovery.json') if a.from_timeline else sp)
         for f in (out, chat, wide):
-            if os.path.exists(f) and os.path.getmtime(f) >= t_start:
+            if f and os.path.exists(f) and os.path.getmtime(f) >= t_start:
                 os.replace(f, os.path.splitext(f)[0] + '.failed.mp4')
         # a verification-only failure means all paid media already exists in work_karaoke. Falling back to the
         # Claudia/cine-real chain then burns 50+ min, hits the routine's time limit and loses post/sources. Stop here instead;
